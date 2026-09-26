@@ -1,4 +1,3 @@
-import React from 'react';
 import { EstadoMesa } from '@floor/shared';
 
 export function App() {
