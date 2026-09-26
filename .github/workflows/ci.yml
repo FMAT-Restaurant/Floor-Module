@@ -1,0 +1,45 @@
+name: CI - Floor Module Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  validate:
+    name: Lint, Typecheck & Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout del repositorio
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 📦 Instalar pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: ⚙️ Configurar Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: 📥 Instalar dependencias
+        run: pnpm install --no-frozen-lockfile
+
+      - name: 🔍 Verificar Linting y Formato
+        run: pnpm run lint
+
+      - name: 🏗️ Compilar paquetes y aplicaciones
+        run: pnpm run build
+
+      - name: 🧪 Ejecutar Pruebas Automatizadas
+        run: pnpm run test

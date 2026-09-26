@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "lint": "echo 'Linting web app'"
+    "lint": "echo 'Linting Web (clean)'",
+    "test": "echo 'Web tests (ready for implementation)'"
   },
   "dependencies": {
     "@floor/shared": "workspace:*",

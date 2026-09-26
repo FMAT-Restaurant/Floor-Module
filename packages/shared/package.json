@@ -2,10 +2,15 @@
   "name": "@floor/shared",
   "version": "1.0.0",
   "private": true,
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "lint": "echo 'No lint specified for shared package'"
+    "build": "tsc",
+    "lint": "echo 'No lint specified for @floor/shared'",
+    "test": "echo 'No tests specified for @floor/shared'"
   },
   "devDependencies": {
     "typescript": "^5.7.2"

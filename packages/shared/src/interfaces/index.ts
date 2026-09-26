@@ -1,4 +1,4 @@
-import { EstadoMesa, EstadoReserva, EstadoEspera, EstadoUnion } from '../enums/index.js';
+import { EstadoMesa, EstadoReserva, EstadoEspera, EstadoUnion } from '../enums';
 
 export interface Mesa {
   id_mesa: number | string;
