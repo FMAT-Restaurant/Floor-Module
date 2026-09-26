@@ -17,6 +17,7 @@ Floor-Module/
 │   └── shared/                  # Contratos (@floor/shared): Enums, DTOs, Eventos
 ├── docs/
 │   ├── Microservicio_Sala_Reservas.md  # Especificación de Dominio y Flujos
+│   ├── guia-visual-componentes.md      # Guía Visual y Design System v2.0 (UI Kit)
 │   └── adr/
 │       └── ADR-001-stack-y-monorepo.md # Decisión Formal de Arquitectura
 ├── docker-compose.yml           # PostgreSQL 16 y RabbitMQ locales
@@ -37,7 +38,7 @@ Floor-Module/
 * **Comunicación en Vivo:** WebSockets (Socket.io)
 * **Gestión Monorepo:** pnpm + Turborepo
 
-Para más detalles sobre las decisiones de diseño y trade-offs evaluados, consulta el [ADR-001](docs/adr/ADR-001-stack-y-monorepo.md) y la [Especificación Técnica](docs/Microservicio_Sala_Reservas.md).
+Para más detalles sobre las decisiones de diseño y trade-offs evaluados, consulta el [ADR-001](docs/adr/ADR-001-stack-y-monorepo.md), la [Especificación Técnica](docs/Microservicio_Sala_Reservas.md) y la [Guía Visual de Componentes](docs/guia-visual-componentes.md).
 
 ---
 
