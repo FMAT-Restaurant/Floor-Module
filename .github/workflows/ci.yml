@@ -26,28 +26,28 @@ jobs:
       pull-requests: read
 
     steps:
-      - name: 📥 Checkout del repositorio
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: 📦 Instalar pnpm
+      - name: Install pnpm
         uses: pnpm/action-setup@v4
 
-      - name: ⚙️ Configurar Node.js 20
+      - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'pnpm'
 
-      - name: 📥 Instalar dependencias
+      - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: 🔍 Verificar Linting y Formato
+      - name: Check linting and format
         run: pnpm run lint
 
-      - name: 🏗️ Compilar paquetes y aplicaciones
+      - name: Build packages and apps
         run: pnpm run build
 
-      - name: 🧪 Ejecutar Pruebas Automatizadas
+      - name: Run tests
         run: pnpm run test

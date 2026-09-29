@@ -4,7 +4,7 @@
 
 ---
 
-## 🏛️ Arquitectura del Repositorio (Monorepo)
+## Arquitectura del Repositorio (Monorepo)
 
 Este módulo está estructurado como un **Service-Level Monorepo** gestionado con `pnpm` workspaces y `Turborepo`:
 
@@ -28,7 +28,7 @@ Floor-Module/
 
 ---
 
-## 🛠️ Stack Tecnológico
+## Stack Tecnológico
 
 * **Lenguaje:** TypeScript 5.x (End-to-End)
 * **Backend:** Node.js con NestJS
@@ -42,7 +42,7 @@ Para más detalles sobre las decisiones de diseño y trade-offs evaluados, consu
 
 ---
 
-## 🚀 Inicio Rápido (Desarrollo Local)
+## Inicio Rápido (Desarrollo Local)
 
 ### 1. Requisitos Previos
 * [Node.js](https://nodejs.org/) (v20 o superior)
