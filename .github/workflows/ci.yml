@@ -9,11 +9,21 @@ on:
     branches:
       - main
       - develop
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * 0'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   validate:
     name: Lint, Typecheck & Build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
 
     steps:
       - name: 📥 Checkout del repositorio
@@ -23,7 +33,6 @@ jobs:
 
       - name: 📦 Instalar pnpm
         uses: pnpm/action-setup@v4
-
 
       - name: ⚙️ Configurar Node.js 20
         uses: actions/setup-node@v4
