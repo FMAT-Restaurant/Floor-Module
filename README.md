@@ -67,3 +67,24 @@ pnpm dev
 ```
 * **Frontend:** `http://localhost:3000`
 * **API Backend:** `http://localhost:3001`
+
+---
+
+## Flujo de Trabajo y Ramas (Git Workflow)
+
+1. **Rama Base:** Toda rama de trabajo se deriva directamente de `main` actualizada:
+   ```bash
+   git checkout main && git pull origin main
+   git checkout -b <tipo>/<ID>-<descripcion-corta>
+   ```
+   *Ejemplos de nomenclatura:*
+   * `chore/SH-001-tooling-calidad`
+   * `feat/BE-001-crud-mesas`
+   * `feat/FE-003-plano-sala-cards`
+   * `fix/BE-002-transicion-estados`
+
+2. **Commits:** Seguir Conventional Commits (`feat(api): ...`, `fix(web): ...`, `chore(tooling): ...`).
+3. **Pull Requests:**
+   * Abrir PR directamente hacia `main`.
+   * Enlazar el issue correspondiente en la descripción (ej. `Closes #1`).
+   * El pipeline de CI debe pasar en verde (`lint`, `build`, `test`) antes de integrar.
