@@ -17,8 +17,8 @@ export interface Reserva {
   telefono_contacto: string;
   cantidad_personas: number;
   fecha_reserva: string; // YYYY-MM-DD
-  hora_inicio: string;   // HH:mm
-  hora_fin: string;      // HH:mm
+  hora_inicio: string; // HH:mm
+  hora_fin: string; // HH:mm
   estado: EstadoReserva;
 }
 

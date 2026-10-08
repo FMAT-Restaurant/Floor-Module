@@ -11,7 +11,9 @@ export function App() {
               v1.0.0
             </span>
           </div>
-          <p className="text-sm text-slate-500 mt-1">Gestión de Sala, Mesas y Reservas en tiempo real</p>
+          <p className="text-sm text-slate-500 mt-1">
+            Gestión de Sala, Mesas y Reservas en tiempo real
+          </p>
         </div>
         <div className="flex gap-2">
           <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
@@ -28,7 +30,8 @@ export function App() {
 
       <main className="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm text-center">
         <p className="text-slate-600">
-          Andamiaje inicial del Monorepo configurado con éxito. Listo para integrar el estándar de diseño.
+          Andamiaje inicial del Monorepo configurado con éxito. Listo para integrar el estándar de
+          diseño.
         </p>
       </main>
     </div>

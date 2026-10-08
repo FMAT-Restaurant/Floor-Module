@@ -11,10 +11,15 @@
   ],
   "scripts": {
     "build": "tsc",
-    "lint": "echo 'No lint specified for @floor/shared'",
-    "test": "echo 'No tests specified for @floor/shared'"
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\"",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^5.0.3"
   }
 }
