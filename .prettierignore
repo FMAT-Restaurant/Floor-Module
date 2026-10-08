@@ -1,0 +1,11 @@
+node_modules
+dist
+build
+coverage
+.turbo
+pnpm-lock.yaml
+docs/
+agents/
+*.md
+.github/
+docker-compose.yml
