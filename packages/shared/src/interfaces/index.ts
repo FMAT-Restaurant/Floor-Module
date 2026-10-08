@@ -15,6 +15,7 @@ export interface Reserva {
   id_mesa: number | string;
   nombre_contacto: string;
   telefono_contacto: string;
+  cantidad_personas: number;
   fecha_reserva: string; // YYYY-MM-DD
   hora_inicio: string;   // HH:mm
   hora_fin: string;      // HH:mm

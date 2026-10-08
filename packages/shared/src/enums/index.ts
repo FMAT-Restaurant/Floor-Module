@@ -8,6 +8,7 @@ export enum EstadoReserva {
   CONFIRMADA = 'Confirmada',
   CANCELADA = 'Cancelada',
   COMPLETADA = 'Completada',
+  NO_SHOW = 'No-show',
 }
 
 export enum EstadoEspera {
