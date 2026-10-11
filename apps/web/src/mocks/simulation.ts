@@ -3,6 +3,8 @@ import {
   fixtureEsperaMesaDisponiblePayload,
   fixtureMesaEstadoActualizadoPayload,
   fixtureReservaProximaAlertaPayload,
+  FIXTURE_AUTH_USERS,
+  type AuthFixtureUser,
   type EsperaMesaDisponiblePayload,
   type MesaEstadoActualizadoPayload,
   type ReservaProximaAlertaPayload,
@@ -147,6 +149,27 @@ class SalaSimulationService {
   getDb(): ReturnType<MockDatabase['getState']> {
     return mockDb.getState();
   }
+
+  setAuth(userOrRole: string | AuthFixtureUser | null) {
+    if (userOrRole === null) {
+      mockDb.setMockAuth(null);
+      return;
+    }
+    if (typeof userOrRole === 'string') {
+      const found = Object.values(FIXTURE_AUTH_USERS).find(
+        (u) => u.roles === userOrRole || u.staffId === userOrRole,
+      );
+      if (found) {
+        mockDb.setMockAuth(found);
+        return;
+      }
+    }
+    mockDb.setMockAuth(userOrRole as AuthFixtureUser);
+  }
+
+  getAuth(): AuthFixtureUser | null {
+    return mockDb.getMockAuth();
+  }
 }
 
 export const mockSalaSimulation = new SalaSimulationService();
@@ -159,6 +182,8 @@ export interface FloorMockGlobalApi {
   simulateWaitingTableAlert: (mesaId?: string, esperaId?: string) => EsperaMesaDisponiblePayload;
   resetDatabase: () => void;
   getDbState: () => ReturnType<MockDatabase['getState']>;
+  setAuth: (userOrRole: string | AuthFixtureUser | null) => void;
+  getAuth: () => AuthFixtureUser | null;
 }
 
 declare global {
@@ -180,6 +205,8 @@ export function registerWindowMockApi() {
         mockSalaSimulation.simulateWaitingTableAlert(mesaId, esperaId),
       resetDatabase: () => mockSalaSimulation.resetDb(),
       getDbState: () => mockSalaSimulation.getDb(),
+      setAuth: (userOrRole) => mockSalaSimulation.setAuth(userOrRole),
+      getAuth: () => mockSalaSimulation.getAuth(),
     };
   }
 }

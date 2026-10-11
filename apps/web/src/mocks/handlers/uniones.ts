@@ -2,12 +2,22 @@ import { crearUnionSchema, listarUnionesQuerySchema, unionParamSchema } from '@f
 import { http, HttpResponse } from 'msw';
 import { mockDb } from '../db';
 import { mockSalaSimulation } from '../simulation';
-import { extractQueryParams, handleMockError, validationErrorResponse } from './utils';
+import {
+  extractQueryParams,
+  handleMockError,
+  ROLES_GESTION_SALA,
+  ROLES_LECTURA_GENERAL,
+  validateAuthHeaders,
+  validationErrorResponse,
+} from './utils';
 
 export const unionesHandlers = [
   // POST /sala/mesas/uniones
   http.post('*/sala/mesas/uniones', async ({ request }) => {
     try {
+      const auth = validateAuthHeaders(request, ROLES_GESTION_SALA);
+      if (!auth.ok) return auth.response;
+
       const body = await request.json().catch(() => null);
       const parsed = crearUnionSchema.safeParse(body);
       if (!parsed.success) {
@@ -32,8 +42,11 @@ export const unionesHandlers = [
   }),
 
   // POST /sala/mesas/uniones/:unionId/liberar
-  http.post('*/sala/mesas/uniones/:unionId/liberar', ({ params }) => {
+  http.post('*/sala/mesas/uniones/:unionId/liberar', ({ params, request }) => {
     try {
+      const auth = validateAuthHeaders(request, ROLES_GESTION_SALA);
+      if (!auth.ok) return auth.response;
+
       const paramValidation = unionParamSchema.safeParse({ unionId: params.unionId });
       if (!paramValidation.success) {
         return validationErrorResponse('unionId debe ser un UUID v4 válido', paramValidation.error);
@@ -59,6 +72,9 @@ export const unionesHandlers = [
   // GET /sala/mesas/uniones
   http.get('*/sala/mesas/uniones', ({ request }) => {
     try {
+      const auth = validateAuthHeaders(request, ROLES_LECTURA_GENERAL);
+      if (!auth.ok) return auth.response;
+
       const queryParams = extractQueryParams(request.url);
       const parsedQuery = listarUnionesQuerySchema.safeParse(queryParams);
       if (!parsedQuery.success) {

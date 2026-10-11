@@ -2,7 +2,12 @@ import { actualizarEstadoMesaSchema, mesaParamSchema, ocuparMesaSchema } from '@
 import { http, HttpResponse } from 'msw';
 import { mockDb } from '../db';
 import { mockSalaSimulation } from '../simulation';
-import { handleMockError, validationErrorResponse } from './utils';
+import {
+  handleMockError,
+  ROLES_OPERACION_MESA,
+  validateAuthHeaders,
+  validationErrorResponse,
+} from './utils';
 
 function validateMesaId(params: Record<string, string | readonly string[] | undefined>) {
   return mesaParamSchema.safeParse({ mesaId: params.mesaId });
@@ -12,6 +17,9 @@ export const cicloHandlers = [
   // POST /sala/mesas/:mesaId/ocupar
   http.post('*/sala/mesas/:mesaId/ocupar', async ({ params, request }) => {
     try {
+      const auth = validateAuthHeaders(request, ROLES_OPERACION_MESA);
+      if (!auth.ok) return auth.response;
+
       const paramValidation = validateMesaId(params);
       if (!paramValidation.success) {
         return validationErrorResponse('mesaId debe ser un UUID v4 válido', paramValidation.error);
@@ -43,6 +51,9 @@ export const cicloHandlers = [
   // PATCH /sala/mesas/:mesaId/estado
   http.patch('*/sala/mesas/:mesaId/estado', async ({ params, request }) => {
     try {
+      const auth = validateAuthHeaders(request, ROLES_OPERACION_MESA);
+      if (!auth.ok) return auth.response;
+
       const paramValidation = validateMesaId(params);
       if (!paramValidation.success) {
         return validationErrorResponse('mesaId debe ser un UUID v4 válido', paramValidation.error);

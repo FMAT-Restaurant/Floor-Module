@@ -6,7 +6,14 @@ import {
 } from '@floor/shared';
 import { http, HttpResponse } from 'msw';
 import { mockDb } from '../db';
-import { extractQueryParams, handleMockError, validationErrorResponse } from './utils';
+import {
+  extractQueryParams,
+  handleMockError,
+  ROLES_ADMIN_ONLY,
+  ROLES_LECTURA_GENERAL,
+  validateAuthHeaders,
+  validationErrorResponse,
+} from './utils';
 
 function validateMesaParam(params: Record<string, string | readonly string[] | undefined>) {
   return mesaParamSchema.safeParse({ mesaId: params.mesaId });
@@ -16,6 +23,9 @@ export const mesasHandlers = [
   // GET /sala/mesas
   http.get('*/sala/mesas', ({ request }) => {
     try {
+      const auth = validateAuthHeaders(request, ROLES_LECTURA_GENERAL);
+      if (!auth.ok) return auth.response;
+
       const queryParams = extractQueryParams(request.url);
       const parsedQuery = listarMesasQuerySchema.safeParse(queryParams);
       if (!parsedQuery.success) {
@@ -33,8 +43,11 @@ export const mesasHandlers = [
   }),
 
   // GET /sala/mesas/estado-en-vivo
-  http.get('*/sala/mesas/estado-en-vivo', () => {
+  http.get('*/sala/mesas/estado-en-vivo', ({ request }) => {
     try {
+      const auth = validateAuthHeaders(request, ROLES_LECTURA_GENERAL);
+      if (!auth.ok) return auth.response;
+
       const mesasEnVivo = mockDb.getMesasEnVivo();
       return HttpResponse.json(mesasEnVivo, { status: 200 });
     } catch (err) {
@@ -43,8 +56,11 @@ export const mesasHandlers = [
   }),
 
   // GET /sala/mesas/:mesaId
-  http.get('*/sala/mesas/:mesaId', ({ params }) => {
+  http.get('*/sala/mesas/:mesaId', ({ params, request }) => {
     try {
+      const auth = validateAuthHeaders(request, ROLES_LECTURA_GENERAL);
+      if (!auth.ok) return auth.response;
+
       const paramValidation = validateMesaParam(params);
       if (!paramValidation.success) {
         return validationErrorResponse('mesaId debe ser un UUID v4 válido', paramValidation.error);
@@ -60,6 +76,9 @@ export const mesasHandlers = [
   // POST /sala/mesas
   http.post('*/sala/mesas', async ({ request }) => {
     try {
+      const auth = validateAuthHeaders(request, ROLES_ADMIN_ONLY);
+      if (!auth.ok) return auth.response;
+
       const body = await request.json().catch(() => null);
       const parsed = crearMesaSchema.safeParse(body);
       if (!parsed.success) {
@@ -76,6 +95,9 @@ export const mesasHandlers = [
   // PATCH /sala/mesas/:mesaId
   http.patch('*/sala/mesas/:mesaId', async ({ params, request }) => {
     try {
+      const auth = validateAuthHeaders(request, ROLES_ADMIN_ONLY);
+      if (!auth.ok) return auth.response;
+
       const paramValidation = validateMesaParam(params);
       if (!paramValidation.success) {
         return validationErrorResponse('mesaId debe ser un UUID v4 válido', paramValidation.error);
@@ -95,8 +117,11 @@ export const mesasHandlers = [
   }),
 
   // DELETE /sala/mesas/:mesaId
-  http.delete('*/sala/mesas/:mesaId', ({ params }) => {
+  http.delete('*/sala/mesas/:mesaId', ({ params, request }) => {
     try {
+      const auth = validateAuthHeaders(request, ROLES_ADMIN_ONLY);
+      if (!auth.ok) return auth.response;
+
       const paramValidation = validateMesaParam(params);
       if (!paramValidation.success) {
         return validationErrorResponse('mesaId debe ser un UUID v4 válido', paramValidation.error);

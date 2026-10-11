@@ -6,12 +6,22 @@ import {
 } from '@floor/shared';
 import { http, HttpResponse } from 'msw';
 import { mockDb } from '../db';
-import { extractQueryParams, handleMockError, validationErrorResponse } from './utils';
+import {
+  extractQueryParams,
+  handleMockError,
+  ROLES_GESTION_SALA,
+  ROLES_LECTURA_GENERAL,
+  validateAuthHeaders,
+  validationErrorResponse,
+} from './utils';
 
 export const esperaHandlers = [
   // POST /sala/espera
   http.post('*/sala/espera', async ({ request }) => {
     try {
+      const auth = validateAuthHeaders(request, ROLES_GESTION_SALA);
+      if (!auth.ok) return auth.response;
+
       const body = await request.json().catch(() => null);
       const parsed = crearEsperaSchema.safeParse(body);
       if (!parsed.success) {
@@ -31,6 +41,9 @@ export const esperaHandlers = [
   // GET /sala/espera
   http.get('*/sala/espera', ({ request }) => {
     try {
+      const auth = validateAuthHeaders(request, ROLES_LECTURA_GENERAL);
+      if (!auth.ok) return auth.response;
+
       const queryParams = extractQueryParams(request.url);
       const parsedQuery = listarEsperaQuerySchema.safeParse(queryParams);
       if (!parsedQuery.success) {
@@ -50,6 +63,9 @@ export const esperaHandlers = [
   // PATCH /sala/espera/:esperaId/estado
   http.patch('*/sala/espera/:esperaId/estado', async ({ params, request }) => {
     try {
+      const auth = validateAuthHeaders(request, ROLES_GESTION_SALA);
+      if (!auth.ok) return auth.response;
+
       const paramValidation = esperaParamSchema.safeParse({ esperaId: params.esperaId });
       if (!paramValidation.success) {
         return validationErrorResponse(

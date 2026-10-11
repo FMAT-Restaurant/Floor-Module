@@ -1,12 +1,22 @@
 import { asignarMeseroSchema, listarAsignacionesQuerySchema, mesaParamSchema } from '@floor/shared';
 import { http, HttpResponse } from 'msw';
 import { mockDb } from '../db';
-import { extractQueryParams, handleMockError, validationErrorResponse } from './utils';
+import {
+  extractQueryParams,
+  handleMockError,
+  ROLES_GESTION_SALA,
+  ROLES_LECTURA_GENERAL,
+  validateAuthHeaders,
+  validationErrorResponse,
+} from './utils';
 
 export const meserosHandlers = [
   // PUT /sala/mesas/:mesaId/mesero
   http.put('*/sala/mesas/:mesaId/mesero', async ({ params, request }) => {
     try {
+      const auth = validateAuthHeaders(request, ROLES_GESTION_SALA);
+      if (!auth.ok) return auth.response;
+
       const paramValidation = mesaParamSchema.safeParse({ mesaId: params.mesaId });
       if (!paramValidation.success) {
         return validationErrorResponse('mesaId debe ser un UUID v4 válido', paramValidation.error);
@@ -28,6 +38,9 @@ export const meserosHandlers = [
   // GET /sala/asignaciones
   http.get('*/sala/asignaciones', ({ request }) => {
     try {
+      const auth = validateAuthHeaders(request, ROLES_LECTURA_GENERAL);
+      if (!auth.ok) return auth.response;
+
       const queryParams = extractQueryParams(request.url);
       const parsedQuery = listarAsignacionesQuerySchema.safeParse(queryParams);
       if (!parsedQuery.success) {

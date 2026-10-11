@@ -1,12 +1,15 @@
 import {
+  createGatewayAuthHeaders,
   EstadoEspera,
   EstadoMesa,
   EstadoReserva,
   EstadoUnion,
+  FIXTURE_AUTH_USERS,
   FIXTURE_MESA_IDS,
   FIXTURE_MESERO_IDS,
   FIXTURE_RESERVA_IDS,
   FIXTURE_UNION_IDS,
+  RoleEnum,
   type AsignacionDto,
   type EsperaDto,
   type HealthDto,
@@ -273,6 +276,34 @@ describe('MSW Integration: REST Endpoints and Realistic Mock Responses', () => {
       const lista: AsignacionDto[] = await resList.json();
       expect(lista.some((a) => a.mesaId === FIXTURE_MESA_IDS.MESA_1 && a.activo)).toBe(true);
     });
+
+    it('PUT /sala/mesas/:mesaId/mesero rejects non-UUID meseroId with 400 VALIDATION_ERROR', async () => {
+      const res = await fetch(
+        `http://localhost:3000/sala/mesas/${FIXTURE_MESA_IDS.MESA_1}/mesero`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ meseroId: 'mesero-invalido-123' }),
+        },
+      );
+      expect(res.status).toBe(400);
+      const err = await res.json();
+      expect(err.code).toBe('VALIDATION_ERROR');
+    });
+
+    it('PUT /sala/mesas/:mesaId/mesero with unknown UUID meseroId returns 404 MESERO_NO_ENCONTRADO', async () => {
+      const res = await fetch(
+        `http://localhost:3000/sala/mesas/${FIXTURE_MESA_IDS.MESA_1}/mesero`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ meseroId: '00000000-0000-4000-8000-000000000099' }),
+        },
+      );
+      expect(res.status).toBe(404);
+      const err = await res.json();
+      expect(err.code).toBe('MESERO_NO_ENCONTRADO');
+    });
   });
 
   describe('Reservas Endpoints (SPEC §5.4)', () => {
@@ -499,6 +530,111 @@ describe('MSW Integration: REST Endpoints and Realistic Mock Responses', () => {
       expect(typeof window.__FLOOR_MOCK__?.simulateWaitingTableAlert).toBe('function');
       expect(typeof window.__FLOOR_MOCK__?.resetDatabase).toBe('function');
       expect(typeof window.__FLOOR_MOCK__?.getDbState).toBe('function');
+      expect(typeof window.__FLOOR_MOCK__?.setAuth).toBe('function');
+      expect(typeof window.__FLOOR_MOCK__?.getAuth).toBe('function');
+    });
+  });
+
+  describe('Gateway Auth Headers & Authorization Matrix (SPEC §1 & §1.1)', () => {
+    it('requests with valid Gateway headers succeed', async () => {
+      const headers = createGatewayAuthHeaders(FIXTURE_AUTH_USERS.ADMIN);
+      const res = await fetch('http://localhost:3000/sala/mesas', { headers });
+      expect(res.status).toBe(200);
+    });
+
+    it('requests with invalid x-user-id return 401 NO_AUTENTICADO', async () => {
+      const res = await fetch('http://localhost:3000/sala/mesas', {
+        headers: {
+          'x-user-id': 'invalid-uuid-format',
+          'x-staff-id': 'ADMIN',
+          'x-user-roles': 'ADMINISTRADOR',
+        },
+      });
+      expect(res.status).toBe(401);
+      const body = await res.json();
+      expect(body.code).toBe('NO_AUTENTICADO');
+    });
+
+    it('requests with invalid x-staff-id return 401 NO_AUTENTICADO', async () => {
+      const res = await fetch('http://localhost:3000/sala/mesas', {
+        headers: {
+          'x-user-id': FIXTURE_AUTH_USERS.ADMIN.userId,
+          'x-staff-id': 'bad_staff_code',
+          'x-user-roles': 'ADMINISTRADOR',
+        },
+      });
+      expect(res.status).toBe(401);
+      const body = await res.json();
+      expect(body.code).toBe('NO_AUTENTICADO');
+    });
+
+    it('requests with x-password-temporary: true return 403 PASSWORD_CHANGE_REQUIRED', async () => {
+      const headers = createGatewayAuthHeaders(FIXTURE_AUTH_USERS.ADMIN, {
+        passwordTemporary: true,
+      });
+      const res = await fetch('http://localhost:3000/sala/mesas', { headers });
+      expect(res.status).toBe(403);
+      const body = await res.json();
+      expect(body.code).toBe('PASSWORD_CHANGE_REQUIRED');
+    });
+
+    it('MESERO role is forbidden from performing table CRUD (403 NO_AUTORIZADO)', async () => {
+      const headers = createGatewayAuthHeaders(FIXTURE_AUTH_USERS.MESERO_CARLOS);
+      const res = await fetch('http://localhost:3000/sala/mesas', {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ numeroMesa: 99, capacidad: 4, zona: 'Terraza' }),
+      });
+      expect(res.status).toBe(403);
+      const body = await res.json();
+      expect(body.code).toBe('NO_AUTORIZADO');
+    });
+
+    it('MESERO role cannot assign waiters, while HOST role can', async () => {
+      const meseroHeaders = createGatewayAuthHeaders(FIXTURE_AUTH_USERS.MESERO_CARLOS);
+      const resForbidden = await fetch(
+        `http://localhost:3000/sala/mesas/${FIXTURE_MESA_IDS.MESA_1}/mesero`,
+        {
+          method: 'PUT',
+          headers: { ...meseroHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ meseroId: FIXTURE_MESERO_IDS.ANA }),
+        },
+      );
+      expect(resForbidden.status).toBe(403);
+
+      const hostHeaders = createGatewayAuthHeaders(FIXTURE_AUTH_USERS.HOST);
+      const resOk = await fetch(
+        `http://localhost:3000/sala/mesas/${FIXTURE_MESA_IDS.MESA_1}/mesero`,
+        {
+          method: 'PUT',
+          headers: { ...hostHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ meseroId: FIXTURE_MESERO_IDS.ANA }),
+        },
+      );
+      expect(resOk.status).toBe(200);
+    });
+
+    it('returns 401 NO_AUTENTICADO when mockDb has no authenticated user and no headers sent', async () => {
+      mockDb.setMockAuth(null);
+      const res = await fetch('http://localhost:3000/sala/mesas');
+      expect(res.status).toBe(401);
+      const body = await res.json();
+      expect(body.code).toBe('NO_AUTENTICADO');
+    });
+
+    it('mockSalaSimulation.setAuth switches active mock role', async () => {
+      mockSalaSimulation.setAuth(RoleEnum.MESERO);
+      expect(mockDb.getMockAuth()?.roles).toBe(RoleEnum.MESERO);
+
+      const resForbidden = await fetch('http://localhost:3000/sala/mesas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ numeroMesa: 98, capacidad: 4, zona: 'Terraza' }),
+      });
+      expect(resForbidden.status).toBe(403);
+
+      mockSalaSimulation.setAuth(RoleEnum.ADMINISTRADOR);
+      expect(mockDb.getMockAuth()?.roles).toBe(RoleEnum.ADMINISTRADOR);
     });
   });
 });

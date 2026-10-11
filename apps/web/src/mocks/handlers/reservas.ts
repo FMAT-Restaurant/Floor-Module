@@ -8,7 +8,14 @@ import {
 } from '@floor/shared';
 import { http, HttpResponse } from 'msw';
 import { mockDb } from '../db';
-import { extractQueryParams, handleMockError, validationErrorResponse } from './utils';
+import {
+  extractQueryParams,
+  handleMockError,
+  ROLES_GESTION_SALA,
+  ROLES_LECTURA_GENERAL,
+  validateAuthHeaders,
+  validationErrorResponse,
+} from './utils';
 
 function validateReservaParam(params: Record<string, string | readonly string[] | undefined>) {
   return reservaParamSchema.safeParse({ reservaId: params.reservaId });
@@ -35,6 +42,9 @@ export const reservasHandlers = [
   // POST /sala/reservas
   http.post('*/sala/reservas', async ({ request }) => {
     try {
+      const auth = validateAuthHeaders(request, ROLES_GESTION_SALA);
+      if (!auth.ok) return auth.response;
+
       const body = await request.json().catch(() => null);
       const parsed = crearReservaSchema.safeParse(body);
       if (!parsed.success) {
@@ -51,6 +61,9 @@ export const reservasHandlers = [
   // GET /sala/reservas/disponibilidad
   http.get('*/sala/reservas/disponibilidad', ({ request }) => {
     try {
+      const auth = validateAuthHeaders(request, ROLES_LECTURA_GENERAL);
+      if (!auth.ok) return auth.response;
+
       const queryParams = extractQueryParams(request.url);
       const parsedQuery = consultarDisponibilidadQuerySchema.safeParse(queryParams);
       if (!parsedQuery.success) {
@@ -70,6 +83,9 @@ export const reservasHandlers = [
   // GET /sala/reservas
   http.get('*/sala/reservas', ({ request }) => {
     try {
+      const auth = validateAuthHeaders(request, ROLES_LECTURA_GENERAL);
+      if (!auth.ok) return auth.response;
+
       const queryParams = extractQueryParams(request.url);
       const parsedQuery = listarReservasQuerySchema.safeParse(queryParams);
       if (!parsedQuery.success) {
@@ -89,6 +105,9 @@ export const reservasHandlers = [
   // PATCH /sala/reservas/:reservaId
   http.patch('*/sala/reservas/:reservaId', async ({ params, request }) => {
     try {
+      const auth = validateAuthHeaders(request, ROLES_GESTION_SALA);
+      if (!auth.ok) return auth.response;
+
       const paramValidation = validateReservaParam(params);
       if (!paramValidation.success) {
         return validationErrorResponse(
@@ -111,7 +130,10 @@ export const reservasHandlers = [
   }),
 
   // POST /sala/reservas/:reservaId/cancelar
-  http.post('*/sala/reservas/:reservaId/cancelar', ({ params }) => {
+  http.post('*/sala/reservas/:reservaId/cancelar', ({ params, request }) => {
+    const auth = validateAuthHeaders(request, ROLES_GESTION_SALA);
+    if (!auth.ok) return auth.response;
+
     return handleReservaStatusChange(
       params,
       (id) => mockDb.cancelarReserva(id),
@@ -120,7 +142,10 @@ export const reservasHandlers = [
   }),
 
   // POST /sala/reservas/:reservaId/no-show
-  http.post('*/sala/reservas/:reservaId/no-show', ({ params }) => {
+  http.post('*/sala/reservas/:reservaId/no-show', ({ params, request }) => {
+    const auth = validateAuthHeaders(request, ROLES_GESTION_SALA);
+    if (!auth.ok) return auth.response;
+
     return handleReservaStatusChange(
       params,
       (id) => mockDb.noShowReserva(id),

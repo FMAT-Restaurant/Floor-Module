@@ -3,12 +3,14 @@ import {
   EstadoMesa,
   EstadoReserva,
   EstadoUnion,
+  FIXTURE_AUTH_USERS,
   fixtureAsignaciones,
   fixtureListaEspera,
   fixtureMesasEnVivo,
   fixtureMeserosCatalogo,
   fixtureReservas,
   fixtureUniones,
+  type AuthFixtureUser,
   type ActualizarMesaRequestDto,
   type ActualizarReservaRequestDto,
   type AsignacionDto,
@@ -102,6 +104,7 @@ export class MockDatabase {
   private reservas: ReservaDto[] = [];
   private uniones: UnionDto[] = [];
   private espera: EsperaDto[] = [];
+  private currentAuthUser: AuthFixtureUser | null = null;
 
   constructor() {
     this.reset();
@@ -114,6 +117,15 @@ export class MockDatabase {
     this.reservas = clone(fixtureReservas);
     this.uniones = clone(fixtureUniones);
     this.espera = clone(fixtureListaEspera);
+    this.currentAuthUser = clone(FIXTURE_AUTH_USERS.ADMIN);
+  }
+
+  getMockAuth(): AuthFixtureUser | null {
+    return this.currentAuthUser ? clone(this.currentAuthUser) : null;
+  }
+
+  setMockAuth(user: AuthFixtureUser | null): void {
+    this.currentAuthUser = user ? clone(user) : null;
   }
 
   getState() {
@@ -124,6 +136,7 @@ export class MockDatabase {
       reservas: clone(this.reservas),
       uniones: clone(this.uniones),
       espera: clone(this.espera),
+      auth: this.getMockAuth(),
     };
   }
 
@@ -381,6 +394,15 @@ export class MockDatabase {
     const mesa = this.mesas.find((m) => m.mesaId === mesaId && m.activo);
     if (!mesa) {
       throw new MockApiError(404, 'MESA_NO_ENCONTRADA', `Mesa ${mesaId} no encontrada`);
+    }
+
+    const meseroExiste = this.meseros.some((m) => m.meseroId === meseroId && m.activo);
+    if (!meseroExiste) {
+      throw new MockApiError(
+        404,
+        'MESERO_NO_ENCONTRADO',
+        `Mesero ${meseroId} no encontrado o inactivo`,
+      );
     }
 
     const now = new Date().toISOString();
