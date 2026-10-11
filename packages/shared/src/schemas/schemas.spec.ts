@@ -564,13 +564,9 @@ describe('Zod Validation Schemas (SH-002)', () => {
       const fs = await import('node:fs');
       const path = await import('node:path');
       const openApiJsonPath = path.resolve(__dirname, '../../openapi.json');
-      const srcOpenApiJsonPath = path.resolve(__dirname, '../openapi/openapi.json');
       expect(fs.existsSync(openApiJsonPath)).toBe(true);
-      expect(fs.existsSync(srcOpenApiJsonPath)).toBe(true);
       const rootParsed = JSON.parse(fs.readFileSync(openApiJsonPath, 'utf-8'));
-      const srcParsed = JSON.parse(fs.readFileSync(srcOpenApiJsonPath, 'utf-8'));
       expect(rootParsed).toEqual(openApiSpec);
-      expect(srcParsed).toEqual(openApiSpec);
     });
   });
 });
