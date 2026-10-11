@@ -9,3 +9,7 @@ export type {
   MesaEstadoActualizadoPayload,
   ReservaProximaAlertaPayload,
 } from './events';
+
+export * from './schemas';
+
+export * from './openapi';
