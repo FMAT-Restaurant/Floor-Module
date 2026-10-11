@@ -1,4 +1,3 @@
-import type { z } from 'zod';
 import { HttpResponse } from 'msw';
 import { MockApiError } from '../db';
 
@@ -11,7 +10,7 @@ export function extractQueryParams(urlStr: string): Record<string, string> {
   return queryParams;
 }
 
-export function validationErrorResponse(message: string, error: z.ZodError) {
+export function validationErrorResponse(message: string, error: { flatten: () => unknown }) {
   return HttpResponse.json(
     {
       statusCode: 400,
