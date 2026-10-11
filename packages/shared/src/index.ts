@@ -1,4 +1,4 @@
-export { EstadoMesa, EstadoReserva, EstadoEspera, EstadoUnion } from './enums';
+export { EstadoMesa, EstadoReserva, EstadoEspera, EstadoUnion, RoleEnum } from './enums';
 
 export { EVENT_TOPICS } from './events';
 

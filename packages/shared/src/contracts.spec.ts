@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { EstadoMesa, EstadoReserva, EstadoEspera, EstadoUnion, EVENT_TOPICS } from './index';
+import {
+  EstadoMesa,
+  EstadoReserva,
+  EstadoEspera,
+  EstadoUnion,
+  RoleEnum,
+  EVENT_TOPICS,
+} from './index';
 
 describe('Shared Domain Contracts', () => {
   it('should maintain exact domain values for EstadoMesa enum', () => {
@@ -25,6 +32,14 @@ describe('Shared Domain Contracts', () => {
   it('should maintain exact domain values for EstadoUnion enum', () => {
     expect(EstadoUnion.ACTIVA).toBe('Activa');
     expect(EstadoUnion.DISUELTA).toBe('Disuelta');
+  });
+
+  it('should maintain exact domain values for RoleEnum', () => {
+    expect(RoleEnum.ADMINISTRADOR).toBe('ADMINISTRADOR');
+    expect(RoleEnum.HOST).toBe('HOST');
+    expect(RoleEnum.ALMACENISTA).toBe('ALMACENISTA');
+    expect(RoleEnum.MESERO).toBe('MESERO');
+    expect(RoleEnum.CHEF_MASTER).toBe('CHEF_MASTER');
   });
 
   it('should declare correct AMQP routing keys for domain events', () => {

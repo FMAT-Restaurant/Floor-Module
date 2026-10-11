@@ -202,12 +202,13 @@ Construir EsperaModule para registrar comensales en espera presencial. Conectar 
 ### Epica BE-8: Seguridad, Observabilidad y Suite Transversal
 
 #### BE-011: Implementar guards de autenticacion, roles, correlacion y health check
-Implementar IdentityGuard y RolesGuard para consumir la identidad provista por el Gateway, CorrelationInterceptor para propagar x-correlation-id en logs JSON estructurados, y el endpoint GET /health verificando PostgreSQL y RabbitMQ.
+Implementar IdentityGuard y RolesGuard para consumir la identidad provista por el Gateway (o validar JWT HS256 localmente con JWT_SECRET=fmat-restaurant-auth-secret-key-2026), rechazar contraseñas provisionales (X-Password-Temporary), CorrelationInterceptor para propagar x-correlation-id en logs JSON estructurados, y el endpoint GET /health verificando PostgreSQL y RabbitMQ.
 - Requisitos: RNF-006, RNF-007, RNF-011, SPEC.md seccion 1, seccion 5.7, ARCHITECTURE.md seccion 8 y seccion 9
 - Dependencias: BE-001, BE-004
 - Criterios de aceptacion:
-  - Peticiones sin cabeceras de identidad requeridas son rechazadas con 401.
-  - Roles no autorizados reciben 403 segun la matriz de autorizacion de SPEC.md seccion 1.1.
+  - Peticiones sin cabeceras de identidad requeridas (X-User-Id, X-User-Roles) ni token Bearer valido son rechazadas con 401.
+  - Peticiones con X-Password-Temporary: true son rechazadas con 403 PASSWORD_CHANGE_REQUIRED.
+  - Roles no autorizados reciben 403 segun la matriz de autorizacion con roles canonicos (ADMINISTRADOR, HOST, MESERO, ROL_CAPITAN).
   - Toda peticion incluye x-correlation-id en logs y respuesta.
   - GET /health reporta estado 200 con chequeos de conexion a PostgreSQL y canal AMQP de RabbitMQ.
 - Pruebas requeridas: Pruebas unitarias de guards y pruebas de integracion de seguridad y salud.
@@ -425,9 +426,9 @@ El plan se estructura en 3 hitos de desarrollo iterativo. Backend y Frontend ava
 ## Brechas Detectadas, Riesgos de Planificacion y Decisiones Pendientes
 
 ### Brechas Detectadas
-1. Contrato de cabeceras de autenticacion del Gateway (Q4): No esta definido el nombre exacto de las cabeceras HTTP que propagara el Gateway (por ejemplo x-user-id vs sub, x-user-roles en JSON o separado por comas). La tarea BE-011 asume x-user-id y x-user-roles de forma provisional.
-2. Formato de identificador de mesero externo (Q2): No se ha confirmado si id_mesero es un UUID o un identificador alfanumerico arbitrario del proveedor de Auth. Las entidades y esquemas lo tratan como varchar(64).
-3. Transporte de WebSockets a traves del API Gateway: No se describe si el API Gateway del restaurante manejara el upgrade a WebSockets y la validacion de tokens en el handshake, o si el frontend se conectara directamente al puerto 3001 del microservicio de Sala.
+1. *(Resuelto)* Contrato de cabeceras de autenticacion del Gateway (Q4): Resuelto con el equipo de Auth. El Gateway inyecta `X-User-Id` (UUID v4 de `sub`), `X-Staff-Id` (`staffId`, ej: `"M000104"`), `X-User-Roles` (separado por comas) y `X-Password-Temporary`. En desarrollo local independiente sin Gateway, `@floor/api` valida JWT directamente con `HS256` y `JWT_SECRET=fmat-restaurant-auth-secret-key-2026`.
+2. *(Resuelto)* Formato de identificador de mesero externo (Q2): Resuelto. `id_mesero` / `meseroId` es estrictamente UUID v4 correspondiente al claim `sub`. Para comandas e impresion visible se propaga opcionalmente `staffId` (`X-Staff-Id`).
+3. Transporte de WebSockets y Handshake: El cliente transmite el token en `auth: { token: 'Bearer <token>' }` (o query param fallback `?token=...`) al conectarse a Socket.io en `/sala`.
 
 ### Riesgos de Planificacion
 1. Dependencia de PostgreSQL 16 con extension btree_gist en entornos CI: Las pruebas de integracion que validen la restriccion EXCLUDE requieren una instancia real de PostgreSQL con privilegios para habilitar la extension. Ejecutar CI puramente en memoria fallara si no se levanta un contenedor de PostgreSQL como service container en GitHub Actions.
@@ -435,5 +436,4 @@ El plan se estructura en 3 hitos de desarrollo iterativo. Backend y Frontend ava
 3. Latencia del Outbox Relay: Si el relay de outbox se implementa mediante sondeo a base de datos (polling), podria comprometer el cumplimiento de RNF-002 (propagacion en menos de 2 segundos) si el intervalo de revision es muy alto. Se recomienda disparar el relay inmediatamente tras cada commit local mediante EventEmitter de NestJS, usando la tabla outbox como respaldo de persistencia y reintento.
 
 ### Tareas Dependientes de Decisiones Abiertas
-- BE-011 depende de la confirmacion formal del equipo de Auth y Gateway sobre las cabeceras de identidad y la lista de roles del sistema.
-- BE-003 y BE-006 dependen de la confirmacion del formato final de id_mesero.
+- Ninguna tarea bloqueada. El 100 % de las decisiones de integracion con Auth, contratos de roles, identificadores UUID v4 y cabeceras de identidad se encuentran resueltas para BE-003, BE-006, BE-011 y las tareas compartidas.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EstadoEspera, EstadoMesa, EstadoReserva, EstadoUnion } from '../enums';
+import { EstadoEspera, EstadoMesa, EstadoReserva, EstadoUnion, RoleEnum } from '../enums';
 import {
   actualizarEstadoEsperaSchema,
   actualizarEstadoMesaSchema,
@@ -15,6 +15,7 @@ import {
   crearReservaSchema,
   crearUnionSchema,
   esperaDtoSchema,
+  gatewayAuthHeadersSchema,
   healthDtoSchema,
   listarAsignacionesQuerySchema,
   listarEsperaQuerySchema,
@@ -28,6 +29,7 @@ import {
   ocuparMesaSchema,
   openApiSpec,
   reservaDtoSchema,
+  roleSchema,
   unionDtoSchema,
 } from '../index';
 
@@ -161,11 +163,14 @@ describe('Zod Validation Schemas (SH-002)', () => {
       expect(result.success).toBe(true);
     });
 
-    it('debe rechazar ocuparMesaSchema con comensales <= 0 o meseroId inválido', () => {
+    it('debe rechazar ocuparMesaSchema con comensales <= 0 o meseroId no UUID (ej. "mesero-1")', () => {
       expect(ocuparMesaSchema.safeParse({ comensales: 0, meseroId: MOCK_UUID_1 }).success).toBe(
         false,
       );
       expect(ocuparMesaSchema.safeParse({ comensales: 2, meseroId: 'invalido' }).success).toBe(
+        false,
+      );
+      expect(ocuparMesaSchema.safeParse({ comensales: 2, meseroId: 'mesero-1' }).success).toBe(
         false,
       );
     });
@@ -195,12 +200,13 @@ describe('Zod Validation Schemas (SH-002)', () => {
   });
 
   describe('Meseros Schemas', () => {
-    it('debe validar asignarMeseroSchema con meseroId UUID', () => {
+    it('debe validar asignarMeseroSchema con meseroId UUID y rechazar no-UUID', () => {
       expect(asignarMeseroSchema.safeParse({ meseroId: MOCK_UUID_1 }).success).toBe(true);
       expect(asignarMeseroSchema.safeParse({ meseroId: '123' }).success).toBe(false);
+      expect(asignarMeseroSchema.safeParse({ meseroId: 'mesero-1' }).success).toBe(false);
     });
 
-    it('debe validar y coercer listarAsignacionesQuerySchema', () => {
+    it('debe validar y coercer listarAsignacionesQuerySchema y rechazar meseroId no UUID', () => {
       const result = listarAsignacionesQuerySchema.safeParse({
         meseroId: MOCK_UUID_1,
         activo: 'false',
@@ -209,6 +215,11 @@ describe('Zod Validation Schemas (SH-002)', () => {
       if (result.success) {
         expect(result.data.activo).toBe(false);
       }
+      expect(
+        listarAsignacionesQuerySchema.safeParse({
+          meseroId: 'mesero-1',
+        }).success,
+      ).toBe(false);
     });
 
     it('debe validar asignacionDtoSchema', () => {
@@ -385,6 +396,15 @@ describe('Zod Validation Schemas (SH-002)', () => {
       expect(result.success).toBe(false);
     });
 
+    it('debe rechazar crearUnionSchema si meseroId no es UUID (ej. "mesero-1")', () => {
+      const payload = {
+        mesasIds: [MOCK_UUID_1, MOCK_UUID_2],
+        totalPersonas: 6,
+        meseroId: 'mesero-1',
+      };
+      expect(crearUnionSchema.safeParse(payload).success).toBe(false);
+    });
+
     it('debe validar unionDtoSchema y listarUnionesQuerySchema', () => {
       const union = {
         unionId: MOCK_UUID_1,
@@ -497,6 +517,114 @@ describe('Zod Validation Schemas (SH-002)', () => {
     });
   });
 
+  describe('Auth & Gateway Identity Schemas', () => {
+    it('debe validar roles canónicos definidos en RoleEnum', () => {
+      const rolesCanonicos = [
+        RoleEnum.ADMINISTRADOR,
+        RoleEnum.HOST,
+        RoleEnum.ALMACENISTA,
+        RoleEnum.MESERO,
+        RoleEnum.CHEF_MASTER,
+      ];
+      for (const rol of rolesCanonicos) {
+        expect(roleSchema.safeParse(rol).success).toBe(true);
+      }
+    });
+
+    it('debe validar roles dinámicos que comiencen con ROL_', () => {
+      expect(roleSchema.safeParse('ROL_CAPITAN').success).toBe(true);
+      expect(roleSchema.safeParse('ROL_SUPERVISOR_1').success).toBe(true);
+      expect(roleSchema.safeParse('ROL_GERENTE_GENERAL').success).toBe(true);
+    });
+
+    it('debe rechazar roles inválidos o en minúsculas', () => {
+      expect(roleSchema.safeParse('').success).toBe(false);
+      expect(roleSchema.safeParse('mesero').success).toBe(false);
+      expect(roleSchema.safeParse('INVITADO').success).toBe(false);
+      expect(roleSchema.safeParse('ROL_').success).toBe(false);
+      expect(roleSchema.safeParse('rol_capitan').success).toBe(false);
+      expect(roleSchema.safeParse('ROL_invalido').success).toBe(false);
+    });
+
+    it('debe validar gatewayAuthHeadersSchema con cabeceras requeridas y opcionales', () => {
+      const validHeaders = {
+        'x-user-id': MOCK_UUID_1,
+        'x-staff-id': 'M000104',
+        'x-user-roles': 'MESERO',
+        'x-password-temporary': 'false',
+      };
+      const result = gatewayAuthHeadersSchema.safeParse(validHeaders);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data).toEqual(validHeaders);
+      }
+    });
+
+    it('debe validar formatos de x-staff-id como ADMIN, ADM000001 o letra seguida de 6 dígitos', () => {
+      const base = {
+        'x-user-id': MOCK_UUID_1,
+        'x-user-roles': 'ADMINISTRADOR',
+      };
+      expect(gatewayAuthHeadersSchema.safeParse({ ...base, 'x-staff-id': 'ADMIN' }).success).toBe(
+        true,
+      );
+      expect(
+        gatewayAuthHeadersSchema.safeParse({ ...base, 'x-staff-id': 'ADM000001' }).success,
+      ).toBe(true);
+      expect(gatewayAuthHeadersSchema.safeParse({ ...base, 'x-staff-id': 'H000012' }).success).toBe(
+        true,
+      );
+    });
+
+    it('debe permitir omitir x-password-temporary en gatewayAuthHeadersSchema', () => {
+      const headers = {
+        'x-user-id': MOCK_UUID_1,
+        'x-staff-id': 'M000104',
+        'x-user-roles': 'MESERO',
+      };
+      expect(gatewayAuthHeadersSchema.safeParse(headers).success).toBe(true);
+    });
+
+    it('debe rechazar gatewayAuthHeadersSchema con x-user-id no UUID', () => {
+      const headers = {
+        'x-user-id': 'mesero-1',
+        'x-staff-id': 'M000104',
+        'x-user-roles': 'MESERO',
+      };
+      expect(gatewayAuthHeadersSchema.safeParse(headers).success).toBe(false);
+    });
+
+    it('debe rechazar gatewayAuthHeadersSchema con x-staff-id o roles inválidos', () => {
+      const base = {
+        'x-user-id': MOCK_UUID_1,
+        'x-user-roles': 'MESERO',
+      };
+      expect(gatewayAuthHeadersSchema.safeParse({ ...base, 'x-staff-id': '104' }).success).toBe(
+        false,
+      );
+      expect(gatewayAuthHeadersSchema.safeParse({ ...base, 'x-staff-id': 'mesero' }).success).toBe(
+        false,
+      );
+      expect(gatewayAuthHeadersSchema.safeParse({ ...base, 'x-staff-id': 'M12345' }).success).toBe(
+        false,
+      );
+      expect(
+        gatewayAuthHeadersSchema.safeParse({
+          'x-user-id': MOCK_UUID_1,
+          'x-staff-id': 'M000104',
+          'x-user-roles': '',
+        }).success,
+      ).toBe(false);
+      expect(
+        gatewayAuthHeadersSchema.safeParse({
+          ...base,
+          'x-staff-id': 'M000104',
+          'x-password-temporary': 'invalido',
+        }).success,
+      ).toBe(false);
+    });
+  });
+
   describe('OpenAPI 3.0 Specification', () => {
     it('debe cumplir con la especificación OpenAPI 3.0.3 y contener todos los paths requeridos', () => {
       expect(openApiSpec.openapi).toBe('3.0.3');
@@ -531,6 +659,8 @@ describe('Zod Validation Schemas (SH-002)', () => {
     it('debe declarar todos los esquemas de componentes requeridos', () => {
       const expectedSchemas = [
         'ApiErrorResponse',
+        'Role',
+        'GatewayAuthHeaders',
         'MesaDto',
         'MesaEnVivoDto',
         'CrearMesaRequestDto',
@@ -560,10 +690,35 @@ describe('Zod Validation Schemas (SH-002)', () => {
       }
     });
 
+    it('debe declarar el esquema de seguridad bearerAuth y cabeceras de Gateway', () => {
+      expect(openApiSpec.components.securitySchemes).toHaveProperty('bearerAuth');
+      expect(openApiSpec.components.securitySchemes.bearerAuth).toMatchObject({
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+      });
+
+      const expectedHeaders = [
+        'HeaderUserId',
+        'HeaderStaffId',
+        'HeaderUserRoles',
+        'HeaderPasswordTemporary',
+      ];
+      for (const headerParam of expectedHeaders) {
+        expect(openApiSpec.components.parameters).toHaveProperty(headerParam);
+      }
+
+      expect(openApiSpec.components.responses).toHaveProperty('Unauthorized');
+      expect(openApiSpec.components.responses).toHaveProperty('Forbidden');
+    });
+
     it('debe mantener sincronizado el archivo openapi.json con openApiSpec', async () => {
       const fs = await import('node:fs');
       const path = await import('node:path');
       const openApiJsonPath = path.resolve(__dirname, '../../openapi.json');
+      if (process.env.UPDATE_OPENAPI === '1') {
+        fs.writeFileSync(openApiJsonPath, JSON.stringify(openApiSpec, null, 2) + '\n');
+      }
       expect(fs.existsSync(openApiJsonPath)).toBe(true);
       const rootParsed = JSON.parse(fs.readFileSync(openApiJsonPath, 'utf-8'));
       expect(rootParsed).toEqual(openApiSpec);
