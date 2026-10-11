@@ -15,7 +15,12 @@ Satisface: RNF-007, RNF-008, RNF-009, RNF-011
 - **Base path:** `/sala` (enrutado por el API Gateway). Puerto local de la API: `3001`.
 - **Formato:** JSON UTF-8. Campos en la API y eventos en `camelCase`; columnas de BD en `snake_case`.
 - **Fechas:** ISO-8601. Instantes en UTC con offset (`2026-10-07T20:30:00Z`); `fecha` como `YYYY-MM-DD`, `hora` como `HH:mm` en la zona horaria del restaurante.
-- **Identidad:** el Gateway valida el JWT y propaga la identidad y roles en cabeceras HTTP (formato pendiente con Auth: Q4). Sala responde 401 si faltan credenciales o identidad válida.
+- **Identidad:** El API Gateway valida el JWT y propaga la identidad mediante cabeceras HTTP sanitizadas (modelo Anti-Spoofing, `REQ-AUTH-019`). En desarrollo local independiente sin Gateway, Sala valida directamente el JWT mediante Guard con `HS256` y clave `JWT_SECRET=fmat-restaurant-auth-secret-key-2026`:
+  - `X-User-Id`: UUID v4 del usuario (claim canónico `sub`).
+  - `X-Staff-Id`: Código de nómina del usuario (claim `staffId`, ej: `"M000104"` o `"ADMIN"`).
+  - `X-User-Roles`: Lista de roles autorizados separada por comas (ej: `"MESERO"` o `"HOST,MESERO"`).
+  - `X-Password-Temporary`: Booleano en texto (`"true"` \| `"false"`, derivado de `mustChangePassword`). Si es `"true"`, el Gateway rechaza con HTTP 403 `PASSWORD_CHANGE_REQUIRED` antes de llegar a Sala.
+  Sala responde 401 si falta identidad válida o 403 si el rol no tiene permisos para la acción.
 - **Correlación:** cabecera `x-correlation-id` (se genera si no viene); se propaga en logs, respuestas y en los metadatos de eventos AMQP.
 - **Tamaño máximo de request:** 64 KB → 413.
 - **Formato de error estándar:**
@@ -32,25 +37,25 @@ Satisface: RNF-007, RNF-008, RNF-009, RNF-011
 | HTTP | Uso |
 |---|---|
 | 400 | Validación de esquema, tipos o payload inválido (`VALIDACION`, `UNION_INVALIDA`). |
-| 401 | Falta identidad propagada por el Gateway (`NO_AUTENTICADO`). |
-| 403 | Rol sin permiso para la acción (`NO_AUTORIZADO`). |
+| 401 | Falta identidad propagada por el Gateway o token inválido (`NO_AUTENTICADO`). |
+| 403 | Rol sin permiso para la acción o contraseña provisional (`NO_AUTORIZADO`, `PASSWORD_CHANGE_REQUIRED`). |
 | 404 | Recurso inexistente o inactivo (`MESA_NO_ENCONTRADA`, `RESERVA_NO_ENCONTRADA`, `UNION_NO_ENCONTRADA`, `ESPERA_NO_ENCONTRADA`). |
 | 409 | Conflicto de estado, disponibilidad o concurrencia (`MESA_NO_DISPONIBLE`, `RESERVA_SOLAPADA`, `TRANSICION_INVALIDA`, `MESA_EN_UNION`, `NUMERO_MESA_DUPLICADO`, `ZONA_INCOMPATIBLE`, `RESERVA_PROXIMA_PRESENTE`, `SOBRECUPO_DETECTADO`). |
 | 413 | Payload excede 64 KB. |
 | 500 | Error no controlado (`ERROR_INTERNO`), sin filtrar detalles internos de persistencia. |
 
-### 1.1 Matriz de autorización (Base para integración con Auth)
+### 1.1 Matriz de autorización (Roles canónicos de Auth)
 
-| Acción | Admin | Capitán | Mesero | Hostess | Limpieza |
-|---|:-:|:-:|:-:|:-:|:-:|
-| CRUD mesas | ✔ | | | | |
-| Consultar plano / reservas / espera | ✔ | ✔ | ✔ | ✔ | ✔ |
-| Ocupar mesa (normal o forzada) | ✔ | ✔ | ✔ | ✔ | |
-| Cambiar estado físico | ✔ | ✔ | ✔ | | ✔ |
-| Asignar / reasignar mesero | ✔ | ✔ | | | |
-| Reservas (crear/reprogramar/cancelar/no-show)| ✔ | ✔ | | ✔ | |
-| Uniones (crear y liberar) | ✔ | ✔ | | ✔ | |
-| Lista de espera | ✔ | ✔ | | ✔ | |
+| Acción | `ADMINISTRADOR` | `HOST` | `MESERO` | `ROL_CAPITAN` |
+|---|:---:|:---:|:---:|:---:|
+| CRUD mesas | ✔ | | | |
+| Consultar plano / reservas / espera | ✔ | ✔ | ✔ | ✔ |
+| Ocupar mesa (normal o forzada) | ✔ | ✔ | ✔ | ✔ |
+| Cambiar estado físico (`Ocupada` ↔ `Limpieza` ↔ `Libre`) | ✔ | ✔ | ✔ | ✔ |
+| Asignar / reasignar mesero | ✔ | ✔ | | ✔ |
+| Reservas (crear/reprogramar/cancelar/no-show) | ✔ | ✔ | | ✔ |
+| Uniones (crear y liberar) | ✔ | ✔ | | ✔ |
+| Lista de espera | ✔ | ✔ | | ✔ |
 
 ---
 
@@ -110,7 +115,7 @@ WHERE (estado = 'Confirmada');
 |---|---|---|
 | `id_asignacion` | UUID | PK. |
 | `id_mesa` | UUID | FK → `Mesa`. |
-| `id_mesero` | varchar(64) | Referencia externa del personal (claim `sub` de Auth). |
+| `id_mesero` | UUID | Identificador canónico del personal (claim `sub` de Auth, UUID v4). |
 | `fecha_hora_inicio` | timestamptz | No nulo. |
 | `fecha_hora_fin` | timestamptz null | `> fecha_hora_inicio`. |
 | `activo` | boolean | Índice único parcial `(id_mesa) WHERE activo`. |
@@ -265,7 +270,7 @@ type MesaEnVivoDto = MesaDto & {
 ```ts
 type OcuparMesaRequestDto = {
   comensales: number;
-  meseroId: string;
+  meseroId: string;          // UUID v4 estricto (claim sub de Auth)
   reservaId?: string;
   esperaId?: string;
   forzarOcupacion?: boolean; // Permite ocupar mesa con reserva próxima dentro de ventana de 30m
@@ -284,7 +289,7 @@ type OcuparMesaRequestDto = {
 type AsignacionDto = {
   asignacionId: string;
   mesaId: string;
-  meseroId: string;
+  meseroId: string;          // UUID v4 estricto (claim sub de Auth)
   fechaHoraInicio: string;
   fechaHoraFin: string | null;
   activo: boolean;
@@ -340,7 +345,7 @@ type ReservaDto = {
 type CrearUnionRequestDto = {
   mesasIds: string[];
   totalPersonas: number;
-  meseroId: string;
+  meseroId: string;          // UUID v4 estricto (claim sub de Auth)
   forzarOcupacion?: boolean; // Si alguna mesa tiene reserva próxima en 30m
   forzarSobrecupo?: boolean;  // Si totalPersonas > suma capacidades
 };
@@ -402,6 +407,15 @@ Cabeceras AMQP obligatorias:
 - `delivery-mode`: `2` (mensajes persistentes).
 
 ### 6.2 WebSocket (Socket.io en `/sala`)
+
+**Autenticación en Handshake:**
+El cliente Socket.io envía el token de acceso en el objeto `auth`:
+```ts
+const socket = io('/sala', {
+  auth: { token: 'Bearer <token_jwt>' }
+});
+```
+(O como fallback en query param `?token=<token_jwt>`). El Gateway valida el token mediante `JWT_SECRET` (`HS256`) y asocia la identidad del usuario (`sub`) y roles al socket.
 
 | Evento | Payload | Destinatarios |
 |---|---|---|

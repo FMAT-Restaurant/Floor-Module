@@ -217,10 +217,10 @@ Prioridad MoSCoW: **M** = Must, **S** = Should, **C** = Could, **W** = Won't (es
 
 ## 7. Supuestos
 
-- S-01: El API Gateway valida el JWT y entrega a Sala la identidad (`sub`) y rol del usuario.
-- S-02: `id_mesero` corresponde al claim `sub` del JWT emitido por Auth (pendiente de confirmar formato exacto, Q2).
+- S-01: El API Gateway valida el JWT y entrega a Sala la identidad y roles mediante cabeceras sanitizadas (`X-User-Id`, `X-Staff-Id`, `X-User-Roles`, `X-Password-Temporary`).
+- S-02: `id_mesero` (y `meseroId`) corresponde estrictamente al claim `sub` (UUID v4) del JWT emitido por Auth. Para identificación y comandas visibles en salón se cuenta secundariamente con el código de nómina `staffId` (`X-Staff-Id`, máscara `XYYYYYY`, ej: `"M000104"`).
 - S-03: Sala genera el `sessionId` (UUID v4) al emitir `sala.dining_session.iniciada` (confirmado por equipo).
-- S-04: Un único restaurante (sin multi-tenant) por instancia del servicio.
+- S-04: Un único restaurante (sin multi-tenant) por instancia del servicio. Confirmado formalmente por las reglas de negocio de Auth (`BR-AUTH-013` y `BR-AUTH-017`): no existe multiplicidad de empresas ni claim `restaurantId`.
 - S-05: Una mesa tiene a lo sumo un mesero activo asignado a la vez.
 - S-06: La zona horaria operativa es única por restaurante y conocida por el servicio.
 - S-07: Órdenes y Cocina y Cuenta y Pagos son consumidores idempotentes de `sala.dining_session.iniciada`.
@@ -249,7 +249,7 @@ Prioridad MoSCoW: **M** = Must, **S** = Should, **C** = Could, **W** = Won't (es
 | `sessionId` | UUID v4 generado por Sala al ocupar mesa o crear unión, compartido por Cocina y Pagos como correlación. |
 | No-show | Estado de reserva cuando el cliente no se presenta tras el tiempo de tolerancia posterior a la `hora_inicio`. |
 | Ventana de anticipación | Minutos antes de `hora_inicio` en que se activa el indicador/alerta de reserva próxima (30 min base). |
-| API Gateway | Punto de entrada que valida JWT y enruta a Sala. |
+| API Gateway | Punto de entrada que valida JWT, sanitiza cabeceras y enruta a Sala. |
 | Broker | Message broker RabbitMQ para eventos de integración. |
 | Shell | Contenedor frontend global que aloja navegación y autenticación. |
 
@@ -260,7 +260,9 @@ Prioridad MoSCoW: **M** = Must, **S** = Should, **C** = Could, **W** = Won't (es
 | ID | Tema | Decisión tomada |
 |---|---|---|
 | Q1 | `sessionId` Dining Session | **Sala genera el UUID v4** al emitir `sala.dining_session.iniciada`. |
+| Q2 | Identificador de mesero (`id_mesero`) | **UUID v4 estricto**, obtenido del claim `sub` del JWT emitido por Auth. Para despliegue operativo visible se propaga también `staffId` (`X-Staff-Id`, máscara `XYYYYYY`). |
 | Q3 / Q9 | Ventana de Reserva Próxima | **30 minutos de base**, configurable mediante variable de entorno (`RESERVA_PROXIMA_VENTANA_MINUTOS`). |
+| Q4 | Contrato Gateway y Roles Auth | **API Gateway inyecta:** `X-User-Id` (UUID v4), `X-Staff-Id` (string código nómina), `X-User-Roles` (string separado por comas) y `X-Password-Temporary` (`true`/`false`). En local directo, Sala valida JWT con clave simétrica `HS256` y `JWT_SECRET=fmat-restaurant-auth-secret-key-2026`. Catálogo canónico de roles de Auth: `ADMINISTRADOR`, `HOST`, `ALMACENISTA`, `MESERO`, `CHEF_MASTER` (más roles dinámicos `ROL_*` como `ROL_CAPITAN`). |
 | Q5 | Sobrecupo (`comensales > capacidad`) | **Permitido con advertencia / confirmación explícita** en API (`forzarSobrecupo: true`) y UI. |
 | Q6 | Personas en `Reserva` | **Agregado formalmente** `cantidad_personas: number` a `Reserva` en `@floor/shared` y modelo. |
 | Q7 | Contigüidad en uniones | **Validar que pertenezcan a la misma zona** (`zona`). |
@@ -273,7 +275,4 @@ Prioridad MoSCoW: **M** = Must, **S** = Should, **C** = Could, **W** = Won't (es
 
 ### 10.2 Preguntas abiertas pendientes
 
-| ID | Pregunta | Afecta |
-|---|---|---|
-| Q2 | ¿`id_mesero` en `AsignacionMesero` es UUID o string derivado del claim `sub` del JWT? | RF-010, RF-011 |
-| Q4 | Contrato exacto de cabeceras de identidad propagadas por el API Gateway (ej. `x-user-id`, `x-user-roles`) y matriz final de roles con el equipo de Auth. | RNF-007 |
+*No hay preguntas abiertas pendientes. El 100 % de los contratos arquitectónicos, convenciones JWT y reglas de negocio han sido resueltos.*

@@ -178,10 +178,16 @@ salaModule/
 
 ## 8. Autenticación y autorización
 
-- **Autenticación:** delegada al API Gateway / Auth. Sala no almacena contraseñas ni valida JWT directamente.
-- **Identidad en Sala:** Gateway inyecta identidad del usuario y roles. Contrato de cabeceras pendiente de confirmación formal con el equipo de Auth (Q4).
-- **Autorización:** `RolesGuard` aplica la matriz de permisos de SPEC §1.1.
-- **WebSocket:** handshake con identidad inyectada; clientes se unen a salas (`plano`, `recepcion`) según sus permisos.
+- **Autenticación perimetral:** El API Gateway valida la firma (`HS256`) y expiración del JWT emitido por Auth, y aplica sanitización perimetral anti-spoofing (`REQ-AUTH-019`), eliminando cabeceras `X-User-*` provenientes de clientes externos.
+- **Identidad propagada a Sala:** El Gateway inyecta hacia la red interna las siguientes cabeceras verificadas:
+  - `X-User-Id`: UUID v4 del usuario (claim `sub`).
+  - `X-Staff-Id`: Código de nómina del empleado con máscara fija `XYYYYYY` (ej: `"M000104"`) o `"ADMIN"` / `"ADM000001"`.
+  - `X-User-Roles`: Lista de roles asignados separada por comas (ej: `"MESERO"` o `"HOST,MESERO"`).
+  - `X-Password-Temporary`: Booleano en texto (`"true"` / `"false"`). Si es `"true"`, el Gateway rechaza con HTTP 403 `PASSWORD_CHANGE_REQUIRED` antes de llegar a Sala.
+- **Desarrollo local independiente:** En ausencia del Gateway perimetral, `@floor/api` implementa un `JwtAuthGuard` local que valida el encabezado `Authorization: Bearer <token>` mediante la clave simétrica compartida `JWT_SECRET=fmat-restaurant-auth-secret-key-2026` (`HS256`).
+- **Autorización:** `RolesGuard` aplica la matriz de permisos de SPEC §1.1 contrastando con los roles canónicos (`ADMINISTRADOR`, `HOST`, `MESERO`, `ROL_CAPITAN`).
+- **WebSocket:** El cliente envía el token en el handshake dentro del objeto `auth: { token: 'Bearer <token>' }` (o query param fallback `?token=...`). El gateway valida el token y vincula la identidad y roles al socket.
+- **Sincronización asíncrona de personal (RabbitMQ):** Auth publica eventos en el topic exchange `restaurant.staff.events` con routing keys `staff.*` (`staff.created`, `staff.roles.updated`, `staff.status.changed`, `staff.deleted`) con payload `{ userId, staffId, firstName, lastName, roles, isActive }`, evitando llamadas síncronas HTTP entre servicios.
 
 ## 9. Observabilidad
 
@@ -249,10 +255,10 @@ salaModule/
 - *Descartadas:* publicación síncrona sin persistencia intermedia.
 - *Consecuencias:* garantía de entrega at-least-once.
 
-**ADR-007 — Autenticación delegada al API Gateway** · Aceptado · Motivado por RNF-007
-- *Contexto:* Auth y Gateway gestionan firmas JWT y tokens de acceso centralizados.
-- *Decisión:* Sala confía en la identidad propagada por el Gateway y valida roles internamente.
-- *Consecuencias:* requiere mantener contrato claro de cabeceras de autorización.
+**ADR-007 — Autenticación delegada al API Gateway con fallback local HS256** · Aceptado · Motivado por RNF-007
+- *Contexto:* Auth y Gateway gestionan firmas JWT y tokens de acceso centralizados para toda la plataforma.
+- *Decisión:* Sala confía en las cabeceras sanitizadas inyectadas por el Gateway (`X-User-Id`, `X-Staff-Id`, `X-User-Roles`, `X-Password-Temporary`). Para desarrollo local desacoplado, `@floor/api` valida directamente tokens `HS256` con `JWT_SECRET=fmat-restaurant-auth-secret-key-2026`.
+- *Consecuencias:* Arquitectura sin estado, desacoplamiento de credenciales y compatibilidad transparente entre desarrollo local y despliegue perimetral.
 
 **ADR-008 — Liberación de mesas sólo por confirmación operativa** · Aceptado · Motivado por RNF-014
 - *Contexto:* el cobro de la cuenta no significa que los comensales hayan abandonado físicamente la mesa.
