@@ -25,7 +25,8 @@ export interface Reserva {
 export interface AsignacionMesero {
   id_asignacion: string;
   id_mesa: number | string;
-  id_mesero: string; // Auth external ID
+  /** Identificador canónico del personal (claim sub de Auth, UUID v4). */
+  id_mesero: string;
   fecha_hora_inicio: string;
   fecha_hora_fin?: string | null;
   activo: boolean;

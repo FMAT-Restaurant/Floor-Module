@@ -15,6 +15,11 @@
       "description": "Entorno de desarrollo local directo"
     }
   ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
   "tags": [
     {
       "name": "Mesas",
@@ -53,6 +58,18 @@
         "description": "Obtiene el listado de mesas con filtros opcionales por zona, estado o inactivas.",
         "operationId": "listarMesas",
         "parameters": [
+          {
+            "$ref": "#/components/parameters/HeaderUserId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderStaffId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderUserRoles"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderPasswordTemporary"
+          },
           {
             "name": "zona",
             "in": "query",
@@ -101,6 +118,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
           }
         }
       },
@@ -109,6 +129,20 @@
         "summary": "Crear mesa",
         "description": "Registra una nueva mesa física en el plano.",
         "operationId": "crearMesa",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/HeaderUserId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderStaffId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderUserRoles"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderPasswordTemporary"
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -163,6 +197,20 @@
         "summary": "Consultar estado en vivo de mesas",
         "description": "Obtiene el estado completo en tiempo real de todas las mesas para el plano de sala.",
         "operationId": "listarMesasEnVivo",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/HeaderUserId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderStaffId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderUserRoles"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderPasswordTemporary"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Estado en vivo de mesas",
@@ -179,6 +227,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
           }
         }
       }
@@ -197,6 +248,18 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "$ref": "#/components/parameters/HeaderUserId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderStaffId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderUserRoles"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderPasswordTemporary"
           }
         ],
         "responses": {
@@ -209,6 +272,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -228,6 +297,18 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "$ref": "#/components/parameters/HeaderUserId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderStaffId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderUserRoles"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderPasswordTemporary"
           }
         ],
         "requestBody": {
@@ -254,6 +335,12 @@
           "400": {
             "$ref": "#/components/responses/BadRequest"
           },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -275,11 +362,29 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "$ref": "#/components/parameters/HeaderUserId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderStaffId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderUserRoles"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderPasswordTemporary"
           }
         ],
         "responses": {
           "204": {
             "description": "Mesa desactivada exitosamente"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -312,6 +417,18 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "$ref": "#/components/parameters/HeaderUserId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderStaffId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderUserRoles"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderPasswordTemporary"
           }
         ],
         "requestBody": {
@@ -337,6 +454,12 @@
           },
           "400": {
             "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -369,6 +492,18 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "$ref": "#/components/parameters/HeaderUserId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderStaffId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderUserRoles"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderPasswordTemporary"
           }
         ],
         "requestBody": {
@@ -395,6 +530,12 @@
           "400": {
             "$ref": "#/components/responses/BadRequest"
           },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -418,6 +559,18 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "$ref": "#/components/parameters/HeaderUserId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderStaffId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderUserRoles"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderPasswordTemporary"
           }
         ],
         "requestBody": {
@@ -444,6 +597,12 @@
           "400": {
             "$ref": "#/components/responses/BadRequest"
           },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           }
@@ -456,6 +615,18 @@
         "summary": "Listar asignaciones de mesero",
         "operationId": "listarAsignaciones",
         "parameters": [
+          {
+            "$ref": "#/components/parameters/HeaderUserId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderStaffId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderUserRoles"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderPasswordTemporary"
+          },
           {
             "name": "meseroId",
             "in": "query",
@@ -488,6 +659,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
           }
         }
       }
@@ -498,6 +675,18 @@
         "summary": "Listar reservas",
         "operationId": "listarReservas",
         "parameters": [
+          {
+            "$ref": "#/components/parameters/HeaderUserId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderStaffId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderUserRoles"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderPasswordTemporary"
+          },
           {
             "name": "fecha",
             "in": "query",
@@ -539,6 +728,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
           }
         }
       },
@@ -546,6 +741,20 @@
         "tags": ["Reservas"],
         "summary": "Crear reserva",
         "operationId": "crearReserva",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/HeaderUserId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderStaffId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderUserRoles"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderPasswordTemporary"
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -569,6 +778,12 @@
           },
           "400": {
             "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -597,6 +812,18 @@
         "summary": "Consultar disponibilidad para reserva",
         "operationId": "consultarDisponibilidad",
         "parameters": [
+          {
+            "$ref": "#/components/parameters/HeaderUserId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderStaffId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderUserRoles"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderPasswordTemporary"
+          },
           {
             "name": "fecha",
             "in": "query",
@@ -651,6 +878,12 @@
           },
           "400": {
             "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
           }
         }
       }
@@ -669,6 +902,18 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "$ref": "#/components/parameters/HeaderUserId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderStaffId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderUserRoles"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderPasswordTemporary"
           }
         ],
         "requestBody": {
@@ -695,6 +940,12 @@
           "400": {
             "$ref": "#/components/responses/BadRequest"
           },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -718,6 +969,18 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "$ref": "#/components/parameters/HeaderUserId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderStaffId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderUserRoles"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderPasswordTemporary"
           }
         ],
         "responses": {
@@ -730,6 +993,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -754,6 +1023,18 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "$ref": "#/components/parameters/HeaderUserId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderStaffId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderUserRoles"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderPasswordTemporary"
           }
         ],
         "responses": {
@@ -766,6 +1047,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -782,6 +1069,18 @@
         "summary": "Listar uniones de mesas",
         "operationId": "listarUniones",
         "parameters": [
+          {
+            "$ref": "#/components/parameters/HeaderUserId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderStaffId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderUserRoles"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderPasswordTemporary"
+          },
           {
             "name": "estado",
             "in": "query",
@@ -806,6 +1105,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
           }
         }
       },
@@ -813,6 +1118,20 @@
         "tags": ["Uniones"],
         "summary": "Crear unión atómica de mesas",
         "operationId": "crearUnion",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/HeaderUserId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderStaffId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderUserRoles"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderPasswordTemporary"
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -836,6 +1155,12 @@
           },
           "400": {
             "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -867,6 +1192,18 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "$ref": "#/components/parameters/HeaderUserId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderStaffId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderUserRoles"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderPasswordTemporary"
           }
         ],
         "responses": {
@@ -879,6 +1216,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -895,6 +1238,18 @@
         "summary": "Listar comensales en espera",
         "operationId": "listarEspera",
         "parameters": [
+          {
+            "$ref": "#/components/parameters/HeaderUserId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderStaffId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderUserRoles"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderPasswordTemporary"
+          },
           {
             "name": "estado",
             "in": "query",
@@ -918,6 +1273,12 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
           }
         }
       },
@@ -925,6 +1286,20 @@
         "tags": ["Lista de Espera"],
         "summary": "Registrar comensal en lista de espera",
         "operationId": "crearEspera",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/HeaderUserId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderStaffId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderUserRoles"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderPasswordTemporary"
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -948,6 +1323,12 @@
           },
           "400": {
             "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
           }
         }
       }
@@ -966,6 +1347,18 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "$ref": "#/components/parameters/HeaderUserId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderStaffId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderUserRoles"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderPasswordTemporary"
           }
         ],
         "requestBody": {
@@ -992,6 +1385,12 @@
           "400": {
             "$ref": "#/components/responses/BadRequest"
           },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
@@ -1006,6 +1405,7 @@
         "tags": ["Operación"],
         "summary": "Verificar salud del microservicio",
         "operationId": "verificarSalud",
+        "security": [],
         "responses": {
           "200": {
             "description": "Servicio operando correctamente",
@@ -1026,17 +1426,58 @@
   },
   "components": {
     "securitySchemes": {
-      "BearerAuth": {
+      "bearerAuth": {
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "JWT",
-        "description": "Token JWT validado y propagado por el API Gateway"
+        "description": "Token JWT validado y propagado por el API Gateway (HS256)"
       },
       "CorrelationId": {
         "type": "apiKey",
         "in": "header",
         "name": "x-correlation-id",
         "description": "Identificador de correlación para observabilidad"
+      }
+    },
+    "parameters": {
+      "HeaderUserId": {
+        "name": "X-User-Id",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "description": "UUID v4 canónico del usuario autenticado (claim sub de Auth)"
+      },
+      "HeaderStaffId": {
+        "name": "X-Staff-Id",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "pattern": "^([A-Z][0-9]{6}|ADMIN|ADM[0-9]{6})$"
+        },
+        "description": "Código de nómina del usuario (claim staffId, ej. M000104, ADMIN o ADM000001)"
+      },
+      "HeaderUserRoles": {
+        "name": "X-User-Roles",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string"
+        },
+        "description": "Lista de roles autorizados separada por comas (ej. MESERO o HOST,MESERO)"
+      },
+      "HeaderPasswordTemporary": {
+        "name": "X-Password-Temporary",
+        "in": "header",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "enum": ["true", "false"]
+        },
+        "description": "Indicador de contraseña provisional en texto (true | false). Si es true, el Gateway rechaza con 403 PASSWORD_CHANGE_REQUIRED"
       }
     },
     "responses": {
@@ -1051,21 +1492,44 @@
         }
       },
       "Unauthorized": {
-        "description": "Faltan credenciales o identidad no propagada",
+        "description": "Falta identidad propagada por el Gateway o token inválido",
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/ApiErrorResponse"
+              "$ref": "#/components/schemas/ApiErrorResponse",
+              "example": {
+                "statusCode": 401,
+                "code": "NO_AUTENTICADO",
+                "message": "Credenciales inválidas o faltantes"
+              }
             }
           }
         }
       },
       "Forbidden": {
-        "description": "El rol autenticado carece de permisos para la acción",
+        "description": "Rol sin permiso para la acción o contraseña provisional",
         "content": {
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/ApiErrorResponse"
+            },
+            "examples": {
+              "noAutorizado": {
+                "summary": "Rol sin permiso para la acción",
+                "value": {
+                  "statusCode": 403,
+                  "code": "NO_AUTORIZADO",
+                  "message": "El rol no cuenta con permisos suficientes para la acción"
+                }
+              },
+              "passwordChangeRequired": {
+                "summary": "Contraseña provisional requerida",
+                "value": {
+                  "statusCode": 403,
+                  "code": "PASSWORD_CHANGE_REQUIRED",
+                  "message": "Debe cambiar su contraseña provisional antes de operar en el sistema"
+                }
+              }
             }
           }
         }
@@ -1131,6 +1595,35 @@
           "details": {
             "type": "object",
             "additionalProperties": true
+          }
+        }
+      },
+      "Role": {
+        "type": "string",
+        "pattern": "^(ADMINISTRADOR|HOST|ALMACENISTA|MESERO|CHEF_MASTER|ROL_[A-Z0-9_]+)$",
+        "description": "Rol canónico del sistema o rol dinámico con prefijo ROL_",
+        "example": "MESERO"
+      },
+      "GatewayAuthHeaders": {
+        "type": "object",
+        "required": ["x-user-id", "x-staff-id", "x-user-roles"],
+        "properties": {
+          "x-user-id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "x-staff-id": {
+            "type": "string",
+            "pattern": "^([A-Z][0-9]{6}|ADMIN|ADM[0-9]{6})$",
+            "example": "M000104"
+          },
+          "x-user-roles": {
+            "type": "string",
+            "example": "MESERO"
+          },
+          "x-password-temporary": {
+            "type": "string",
+            "enum": ["true", "false"]
           }
         }
       },
