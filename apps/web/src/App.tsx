@@ -1,6 +1,9 @@
 import { EstadoMesa } from '@floor/shared';
+import { useSalaSocket } from './hooks';
 
 export function App() {
+  const { isConnected } = useSalaSocket();
+
   return (
     <div className="min-h-screen bg-canvas text-text">
       <div className="max-w-6xl mx-auto p-6 space-y-6">
@@ -11,6 +14,17 @@ export function App() {
               <span className="text-xs bg-primary-soft text-primary font-semibold px-2.5 py-0.5 rounded-full border border-primary/20">
                 v1.0.0
               </span>
+              {isConnected ? (
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium bg-emerald-50 text-emerald-800 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  En vivo
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium bg-amber-50 text-amber-800 px-2.5 py-0.5 rounded-full border border-amber-200">
+                  <span className="w-2 h-2 rounded-full bg-amber-500" />
+                  Reconectando
+                </span>
+              )}
             </div>
             <p className="text-sm text-muted mt-1">
               Gestión de Sala, Mesas y Reservas en tiempo real

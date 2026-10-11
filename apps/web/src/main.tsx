@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import ReactDOM from 'react-dom/client';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './api/queryClient';
+import { SalaSocketProvider } from './context';
 import App from './App';
 import './index.css';
 
@@ -16,7 +17,9 @@ void prepareApp().then(() => {
   ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
     <StrictMode>
       <QueryClientProvider client={queryClient}>
-        <App />
+        <SalaSocketProvider>
+          <App />
+        </SalaSocketProvider>
       </QueryClientProvider>
     </StrictMode>,
   );
