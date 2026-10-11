@@ -58,27 +58,40 @@ export function handleMockError(err: unknown, defaultMessage: string) {
   );
 }
 
-export function validateAuthHeaders(
-  request: Request,
-  allowedRoles?: string[],
-): { ok: true; auth: ValidatedAuthContext } | { ok: false; response: Response } {
+function parseExplicitGatewayHeaders(request: Request) {
   const headerUserId = request.headers.get('x-user-id');
   const headerStaffId = request.headers.get('x-staff-id');
   const headerUserRoles = request.headers.get('x-user-roles');
   const headerPasswordTemp = request.headers.get('x-password-temporary');
 
-  const hasExplicitAuth =
+  const isExplicit =
     headerUserId !== null ||
     headerStaffId !== null ||
     headerUserRoles !== null ||
     headerPasswordTemp !== null;
 
-  let userId: string;
-  let staffId: string;
-  let userRolesRaw: string;
+  const payload: Record<string, string> = {};
+  if (headerUserId !== null) payload['x-user-id'] = headerUserId;
+  if (headerStaffId !== null) payload['x-staff-id'] = headerStaffId;
+  if (headerUserRoles !== null) payload['x-user-roles'] = headerUserRoles;
+  if (headerPasswordTemp !== null) payload['x-password-temporary'] = headerPasswordTemp;
 
-  if (hasExplicitAuth) {
-    if (headerPasswordTemp === 'true') {
+  return {
+    isExplicit,
+    isTemporaryPassword: headerPasswordTemp === 'true',
+    payload,
+  };
+}
+
+function resolveUserIdentity(
+  request: Request,
+):
+  | { ok: true; userId: string; staffId: string; userRolesRaw: string }
+  | { ok: false; response: Response } {
+  const explicit = parseExplicitGatewayHeaders(request);
+
+  if (explicit.isExplicit) {
+    if (explicit.isTemporaryPassword) {
       return {
         ok: false,
         response: HttpResponse.json(
@@ -92,13 +105,7 @@ export function validateAuthHeaders(
       };
     }
 
-    const headersPayload: Record<string, string> = {};
-    if (headerUserId !== null) headersPayload['x-user-id'] = headerUserId;
-    if (headerStaffId !== null) headersPayload['x-staff-id'] = headerStaffId;
-    if (headerUserRoles !== null) headersPayload['x-user-roles'] = headerUserRoles;
-    if (headerPasswordTemp !== null) headersPayload['x-password-temporary'] = headerPasswordTemp;
-
-    const parsed = gatewayAuthHeadersSchema.safeParse(headersPayload);
+    const parsed = gatewayAuthHeadersSchema.safeParse(explicit.payload);
     if (!parsed.success) {
       return {
         ok: false,
@@ -114,53 +121,67 @@ export function validateAuthHeaders(
       };
     }
 
-    userId = parsed.data['x-user-id'];
-    staffId = parsed.data['x-staff-id'];
-    userRolesRaw = parsed.data['x-user-roles'];
-  } else {
-    const currentMock = mockDb.getMockAuth();
-    if (!currentMock) {
-      return {
-        ok: false,
-        response: HttpResponse.json(
-          {
-            statusCode: 401,
-            code: 'NO_AUTENTICADO',
-            message: 'Credenciales inválidas o faltantes',
-          },
-          { status: 401 },
-        ),
-      };
-    }
-    userId = currentMock.userId;
-    staffId = currentMock.staffId;
-    userRolesRaw = currentMock.roles;
+    return {
+      ok: true,
+      userId: parsed.data['x-user-id'],
+      staffId: parsed.data['x-staff-id'],
+      userRolesRaw: parsed.data['x-user-roles'],
+    };
   }
 
-  const roles = userRolesRaw
-    .split(',')
-    .map((r) => r.trim())
-    .filter(Boolean);
-
-  if (allowedRoles && allowedRoles.length > 0) {
-    const isAuthorized = roles.some((r) => allowedRoles.includes(r));
-    if (!isAuthorized) {
-      return {
-        ok: false,
-        response: HttpResponse.json(
-          {
-            statusCode: 403,
-            code: 'NO_AUTORIZADO',
-            message: 'El rol no cuenta con permisos suficientes para la acción',
-          },
-          { status: 403 },
-        ),
-      };
-    }
+  const currentMock = mockDb.getMockAuth();
+  if (!currentMock) {
+    return {
+      ok: false,
+      response: HttpResponse.json(
+        {
+          statusCode: 401,
+          code: 'NO_AUTENTICADO',
+          message: 'Credenciales inválidas o faltantes',
+        },
+        { status: 401 },
+      ),
+    };
   }
 
   return {
     ok: true,
-    auth: { userId, staffId, roles },
+    userId: currentMock.userId,
+    staffId: currentMock.staffId,
+    userRolesRaw: currentMock.roles,
+  };
+}
+
+export function validateAuthHeaders(
+  request: Request,
+  allowedRoles?: string[],
+): { ok: true; auth: ValidatedAuthContext } | { ok: false; response: Response } {
+  const identity = resolveUserIdentity(request);
+  if (!identity.ok) {
+    return identity;
+  }
+
+  const roles = identity.userRolesRaw
+    .split(',')
+    .map((r) => r.trim())
+    .filter(Boolean);
+
+  if (allowedRoles?.length && !roles.some((r) => allowedRoles.includes(r))) {
+    return {
+      ok: false,
+      response: HttpResponse.json(
+        {
+          statusCode: 403,
+          code: 'NO_AUTORIZADO',
+          message: 'El rol no cuenta con permisos suficientes para la acción',
+        },
+        { status: 403 },
+      ),
+    };
+  }
+
+  return {
+    ok: true,
+    auth: { userId: identity.userId, staffId: identity.staffId, roles },
   };
 }
