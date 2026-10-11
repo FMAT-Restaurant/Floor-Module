@@ -99,3 +99,10 @@ export {
 } from './espera';
 
 export { healthDtoSchema, type HealthDto } from './operacion';
+
+export {
+  gatewayAuthHeadersSchema,
+  roleSchema,
+  type GatewayAuthHeadersDto,
+  type RoleDto,
+} from './auth';

@@ -22,3 +22,11 @@ export enum EstadoUnion {
   ACTIVA = 'Activa',
   DISUELTA = 'Disuelta',
 }
+
+export enum RoleEnum {
+  ADMINISTRADOR = 'ADMINISTRADOR',
+  HOST = 'HOST',
+  ALMACENISTA = 'ALMACENISTA',
+  MESERO = 'MESERO',
+  CHEF_MASTER = 'CHEF_MASTER',
+}

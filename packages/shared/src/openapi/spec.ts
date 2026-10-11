@@ -36,6 +36,18 @@ const forbiddenRef = { $ref: '#/components/responses/Forbidden' } as const;
 const notFoundRef = { $ref: '#/components/responses/NotFound' } as const;
 const conflictRef = { $ref: '#/components/responses/Conflict' } as const;
 
+const authResponses = {
+  '401': unauthorizedRef,
+  '403': forbiddenRef,
+} as const;
+
+const gatewayAuthHeaderRefs = [
+  { $ref: '#/components/parameters/HeaderUserId' },
+  { $ref: '#/components/parameters/HeaderStaffId' },
+  { $ref: '#/components/parameters/HeaderUserRoles' },
+  { $ref: '#/components/parameters/HeaderPasswordTemporary' },
+] as const;
+
 const uuidProperty = { type: 'string' as const, format: 'uuid' as const };
 const nullableUuidProperty = {
   type: 'string' as const,
@@ -76,6 +88,11 @@ export const openApiSpec = {
       description: 'Entorno de desarrollo local directo',
     },
   ],
+  security: [
+    {
+      bearerAuth: [],
+    },
+  ],
   tags: [
     { name: 'Mesas', description: 'Gestión y catálogo de mesas físicas' },
     {
@@ -97,6 +114,7 @@ export const openApiSpec = {
           'Obtiene el listado de mesas con filtros opcionales por zona, estado o inactivas.',
         operationId: 'listarMesas',
         parameters: [
+          ...gatewayAuthHeaderRefs,
           {
             name: 'zona',
             in: 'query',
@@ -124,7 +142,7 @@ export const openApiSpec = {
             '#/components/schemas/MesaDto',
             'Listado de mesas obtenido exitosamente',
           ),
-          '401': unauthorizedRef,
+          ...authResponses,
         },
       },
       post: {
@@ -132,12 +150,12 @@ export const openApiSpec = {
         summary: 'Crear mesa',
         description: 'Registra una nueva mesa física en el plano.',
         operationId: 'crearMesa',
+        parameters: [...gatewayAuthHeaderRefs],
         requestBody: jsonRequestBody('#/components/schemas/CrearMesaRequestDto'),
         responses: {
           '201': jsonResponse('#/components/schemas/MesaDto', 'Mesa creada exitosamente'),
           '400': badRequestRef,
-          '401': unauthorizedRef,
-          '403': forbiddenRef,
+          ...authResponses,
           '409': {
             description: 'Número de mesa duplicado',
             content: jsonContent({
@@ -159,9 +177,10 @@ export const openApiSpec = {
         description:
           'Obtiene el estado completo en tiempo real de todas las mesas para el plano de sala.',
         operationId: 'listarMesasEnVivo',
+        parameters: [...gatewayAuthHeaderRefs],
         responses: {
           '200': jsonArrayResponse('#/components/schemas/MesaEnVivoDto', 'Estado en vivo de mesas'),
-          '401': unauthorizedRef,
+          ...authResponses,
         },
       },
     },
@@ -170,9 +189,10 @@ export const openApiSpec = {
         tags: ['Mesas'],
         summary: 'Consultar detalle de mesa',
         operationId: 'obtenerMesaPorId',
-        parameters: [uuidPathParam('mesaId')],
+        parameters: [uuidPathParam('mesaId'), ...gatewayAuthHeaderRefs],
         responses: {
           '200': jsonResponse('#/components/schemas/MesaDto', 'Mesa encontrada'),
+          ...authResponses,
           '404': notFoundRef,
         },
       },
@@ -180,11 +200,12 @@ export const openApiSpec = {
         tags: ['Mesas'],
         summary: 'Actualizar mesa',
         operationId: 'actualizarMesa',
-        parameters: [uuidPathParam('mesaId')],
+        parameters: [uuidPathParam('mesaId'), ...gatewayAuthHeaderRefs],
         requestBody: jsonRequestBody('#/components/schemas/ActualizarMesaRequestDto'),
         responses: {
           '200': jsonResponse('#/components/schemas/MesaDto', 'Mesa actualizada exitosamente'),
           '400': badRequestRef,
+          ...authResponses,
           '404': notFoundRef,
           '409': conflictRef,
         },
@@ -193,9 +214,10 @@ export const openApiSpec = {
         tags: ['Mesas'],
         summary: 'Desactivar mesa',
         operationId: 'desactivarMesa',
-        parameters: [uuidPathParam('mesaId')],
+        parameters: [uuidPathParam('mesaId'), ...gatewayAuthHeaderRefs],
         responses: {
           '204': { description: 'Mesa desactivada exitosamente' },
+          ...authResponses,
           '404': notFoundRef,
           '409': {
             description: 'Conflicto: mesa ocupada o unida a otra',
@@ -211,7 +233,7 @@ export const openApiSpec = {
         description:
           'Transiciona una mesa a Ocupada, asocia mesero y emite evento de inicio de dining session.',
         operationId: 'ocuparMesa',
-        parameters: [uuidPathParam('mesaId')],
+        parameters: [uuidPathParam('mesaId'), ...gatewayAuthHeaderRefs],
         requestBody: jsonRequestBody('#/components/schemas/OcuparMesaRequestDto'),
         responses: {
           '200': jsonResponse(
@@ -219,6 +241,7 @@ export const openApiSpec = {
             'Mesa ocupada exitosamente',
           ),
           '400': badRequestRef,
+          ...authResponses,
           '404': notFoundRef,
           '409': {
             description: 'Conflicto por mesa no disponible, sobrecupo o reserva próxima',
@@ -233,7 +256,7 @@ export const openApiSpec = {
         summary: 'Cambiar estado físico de mesa',
         description: 'Transición controlada entre Libre y Limpieza pendiente.',
         operationId: 'actualizarEstadoMesa',
-        parameters: [uuidPathParam('mesaId')],
+        parameters: [uuidPathParam('mesaId'), ...gatewayAuthHeaderRefs],
         requestBody: jsonRequestBody('#/components/schemas/ActualizarEstadoMesaRequestDto'),
         responses: {
           '200': jsonResponse(
@@ -241,6 +264,7 @@ export const openApiSpec = {
             'Estado actualizado exitosamente',
           ),
           '400': badRequestRef,
+          ...authResponses,
           '404': notFoundRef,
           '409': conflictRef,
         },
@@ -251,11 +275,12 @@ export const openApiSpec = {
         tags: ['Meseros'],
         summary: 'Asignar mesero a mesa',
         operationId: 'asignarMeseroAMesa',
-        parameters: [uuidPathParam('mesaId')],
+        parameters: [uuidPathParam('mesaId'), ...gatewayAuthHeaderRefs],
         requestBody: jsonRequestBody('#/components/schemas/AsignarMeseroRequestDto'),
         responses: {
           '200': jsonResponse('#/components/schemas/AsignacionDto', 'Mesero asignado exitosamente'),
           '400': badRequestRef,
+          ...authResponses,
           '404': notFoundRef,
         },
       },
@@ -266,6 +291,7 @@ export const openApiSpec = {
         summary: 'Listar asignaciones de mesero',
         operationId: 'listarAsignaciones',
         parameters: [
+          ...gatewayAuthHeaderRefs,
           {
             name: 'meseroId',
             in: 'query',
@@ -281,6 +307,7 @@ export const openApiSpec = {
         ],
         responses: {
           '200': jsonArrayResponse('#/components/schemas/AsignacionDto', 'Listado de asignaciones'),
+          ...authResponses,
         },
       },
     },
@@ -290,6 +317,7 @@ export const openApiSpec = {
         summary: 'Listar reservas',
         operationId: 'listarReservas',
         parameters: [
+          ...gatewayAuthHeaderRefs,
           {
             name: 'fecha',
             in: 'query',
@@ -311,12 +339,14 @@ export const openApiSpec = {
         ],
         responses: {
           '200': jsonArrayResponse('#/components/schemas/ReservaDto', 'Listado de reservas'),
+          ...authResponses,
         },
       },
       post: {
         tags: ['Reservas'],
         summary: 'Crear reserva',
         operationId: 'crearReserva',
+        parameters: [...gatewayAuthHeaderRefs],
         requestBody: jsonRequestBody('#/components/schemas/CrearReservaRequestDto'),
         responses: {
           '201': jsonResponse(
@@ -324,6 +354,7 @@ export const openApiSpec = {
             'Reserva creada exitosamente',
           ),
           '400': badRequestRef,
+          ...authResponses,
           '404': notFoundRef,
           '409': {
             description: 'Reserva solapada con otra reserva existente',
@@ -345,6 +376,7 @@ export const openApiSpec = {
         summary: 'Consultar disponibilidad para reserva',
         operationId: 'consultarDisponibilidad',
         parameters: [
+          ...gatewayAuthHeaderRefs,
           {
             name: 'fecha',
             in: 'query',
@@ -376,6 +408,7 @@ export const openApiSpec = {
             'Mesas disponibles que cumplen los criterios',
           ),
           '400': badRequestRef,
+          ...authResponses,
         },
       },
     },
@@ -384,11 +417,12 @@ export const openApiSpec = {
         tags: ['Reservas'],
         summary: 'Modificar reserva',
         operationId: 'actualizarReserva',
-        parameters: [uuidPathParam('reservaId')],
+        parameters: [uuidPathParam('reservaId'), ...gatewayAuthHeaderRefs],
         requestBody: jsonRequestBody('#/components/schemas/ActualizarReservaRequestDto'),
         responses: {
           '200': jsonResponse('#/components/schemas/ReservaDto', 'Reserva modificada exitosamente'),
           '400': badRequestRef,
+          ...authResponses,
           '404': notFoundRef,
           '409': conflictRef,
         },
@@ -399,9 +433,10 @@ export const openApiSpec = {
         tags: ['Reservas'],
         summary: 'Cancelar reserva',
         operationId: 'cancelarReserva',
-        parameters: [uuidPathParam('reservaId')],
+        parameters: [uuidPathParam('reservaId'), ...gatewayAuthHeaderRefs],
         responses: {
           '200': jsonResponse('#/components/schemas/ReservaDto', 'Reserva cancelada exitosamente'),
+          ...authResponses,
           '404': notFoundRef,
           '409': conflictRef,
         },
@@ -412,9 +447,10 @@ export const openApiSpec = {
         tags: ['Reservas'],
         summary: 'Marcar no-show en reserva',
         operationId: 'marcarNoShowReserva',
-        parameters: [uuidPathParam('reservaId')],
+        parameters: [uuidPathParam('reservaId'), ...gatewayAuthHeaderRefs],
         responses: {
           '200': jsonResponse('#/components/schemas/ReservaDto', 'Reserva marcada como No-show'),
+          ...authResponses,
           '404': notFoundRef,
           '409': conflictRef,
         },
@@ -426,6 +462,7 @@ export const openApiSpec = {
         summary: 'Listar uniones de mesas',
         operationId: 'listarUniones',
         parameters: [
+          ...gatewayAuthHeaderRefs,
           {
             name: 'estado',
             in: 'query',
@@ -439,12 +476,14 @@ export const openApiSpec = {
         ],
         responses: {
           '200': jsonArrayResponse('#/components/schemas/UnionDto', 'Listado de uniones'),
+          ...authResponses,
         },
       },
       post: {
         tags: ['Uniones'],
         summary: 'Crear unión atómica de mesas',
         operationId: 'crearUnion',
+        parameters: [...gatewayAuthHeaderRefs],
         requestBody: jsonRequestBody('#/components/schemas/CrearUnionRequestDto'),
         responses: {
           '201': jsonResponse(
@@ -452,6 +491,7 @@ export const openApiSpec = {
             'Unión creada exitosamente',
           ),
           '400': badRequestRef,
+          ...authResponses,
           '404': notFoundRef,
           '409': {
             description:
@@ -466,12 +506,13 @@ export const openApiSpec = {
         tags: ['Uniones'],
         summary: 'Liberar / disolver unión de mesas',
         operationId: 'liberarUnion',
-        parameters: [uuidPathParam('unionId')],
+        parameters: [uuidPathParam('unionId'), ...gatewayAuthHeaderRefs],
         responses: {
           '200': jsonResponse(
             '#/components/schemas/LiberarUnionResponseDto',
             'Unión disuelta exitosamente',
           ),
+          ...authResponses,
           '404': notFoundRef,
           '409': conflictRef,
         },
@@ -483,6 +524,7 @@ export const openApiSpec = {
         summary: 'Listar comensales en espera',
         operationId: 'listarEspera',
         parameters: [
+          ...gatewayAuthHeaderRefs,
           {
             name: 'estado',
             in: 'query',
@@ -495,12 +537,14 @@ export const openApiSpec = {
             '#/components/schemas/EsperaDto',
             'Listado de espera ordenado por hora de llegada',
           ),
+          ...authResponses,
         },
       },
       post: {
         tags: ['Lista de Espera'],
         summary: 'Registrar comensal en lista de espera',
         operationId: 'crearEspera',
+        parameters: [...gatewayAuthHeaderRefs],
         requestBody: jsonRequestBody('#/components/schemas/CrearEsperaRequestDto'),
         responses: {
           '201': jsonResponse(
@@ -508,6 +552,7 @@ export const openApiSpec = {
             'Registro en espera creado exitosamente',
           ),
           '400': badRequestRef,
+          ...authResponses,
         },
       },
     },
@@ -516,11 +561,12 @@ export const openApiSpec = {
         tags: ['Lista de Espera'],
         summary: 'Actualizar estado de comensal en espera',
         operationId: 'actualizarEstadoEspera',
-        parameters: [uuidPathParam('esperaId')],
+        parameters: [uuidPathParam('esperaId'), ...gatewayAuthHeaderRefs],
         requestBody: jsonRequestBody('#/components/schemas/ActualizarEstadoEsperaRequestDto'),
         responses: {
           '200': jsonResponse('#/components/schemas/EsperaDto', 'Estado actualizado exitosamente'),
           '400': badRequestRef,
+          ...authResponses,
           '404': notFoundRef,
           '409': conflictRef,
         },
@@ -531,6 +577,7 @@ export const openApiSpec = {
         tags: ['Operación'],
         summary: 'Verificar salud del microservicio',
         operationId: 'verificarSalud',
+        security: [],
         responses: {
           '200': jsonResponse('#/components/schemas/HealthDto', 'Servicio operando correctamente'),
           '503': {
@@ -543,11 +590,11 @@ export const openApiSpec = {
   },
   components: {
     securitySchemes: {
-      BearerAuth: {
+      bearerAuth: {
         type: 'http',
         scheme: 'bearer',
         bearerFormat: 'JWT',
-        description: 'Token JWT validado y propagado por el API Gateway',
+        description: 'Token JWT validado y propagado por el API Gateway (HS256)',
       },
       CorrelationId: {
         type: 'apiKey',
@@ -556,18 +603,81 @@ export const openApiSpec = {
         description: 'Identificador de correlación para observabilidad',
       },
     },
+    parameters: {
+      HeaderUserId: {
+        name: 'X-User-Id',
+        in: 'header',
+        required: true,
+        schema: uuidProperty,
+        description: 'UUID v4 canónico del usuario autenticado (claim sub de Auth)',
+      },
+      HeaderStaffId: {
+        name: 'X-Staff-Id',
+        in: 'header',
+        required: true,
+        schema: {
+          type: 'string',
+          pattern: '^([A-Z][0-9]{6}|ADMIN|ADM[0-9]{6})$',
+        },
+        description: 'Código de nómina del usuario (claim staffId, ej. M000104, ADMIN o ADM000001)',
+      },
+      HeaderUserRoles: {
+        name: 'X-User-Roles',
+        in: 'header',
+        required: true,
+        schema: { type: 'string' },
+        description: 'Lista de roles autorizados separada por comas (ej. MESERO o HOST,MESERO)',
+      },
+      HeaderPasswordTemporary: {
+        name: 'X-Password-Temporary',
+        in: 'header',
+        required: false,
+        schema: { type: 'string', enum: ['true', 'false'] },
+        description:
+          'Indicador de contraseña provisional en texto (true | false). Si es true, el Gateway rechaza con 403 PASSWORD_CHANGE_REQUIRED',
+      },
+    },
     responses: {
       BadRequest: {
         description: 'Solicitud inválida o payload no conforme',
         content: jsonContent({ $ref: '#/components/schemas/ApiErrorResponse' }),
       },
       Unauthorized: {
-        description: 'Faltan credenciales o identidad no propagada',
-        content: jsonContent({ $ref: '#/components/schemas/ApiErrorResponse' }),
+        description: 'Falta identidad propagada por el Gateway o token inválido',
+        content: jsonContent({
+          $ref: '#/components/schemas/ApiErrorResponse',
+          example: {
+            statusCode: 401,
+            code: 'NO_AUTENTICADO',
+            message: 'Credenciales inválidas o faltantes',
+          },
+        }),
       },
       Forbidden: {
-        description: 'El rol autenticado carece de permisos para la acción',
-        content: jsonContent({ $ref: '#/components/schemas/ApiErrorResponse' }),
+        description: 'Rol sin permiso para la acción o contraseña provisional',
+        content: {
+          'application/json': {
+            schema: { $ref: '#/components/schemas/ApiErrorResponse' },
+            examples: {
+              noAutorizado: {
+                summary: 'Rol sin permiso para la acción',
+                value: {
+                  statusCode: 403,
+                  code: 'NO_AUTORIZADO',
+                  message: 'El rol no cuenta con permisos suficientes para la acción',
+                },
+              },
+              passwordChangeRequired: {
+                summary: 'Contraseña provisional requerida',
+                value: {
+                  statusCode: 403,
+                  code: 'PASSWORD_CHANGE_REQUIRED',
+                  message: 'Debe cambiar su contraseña provisional antes de operar en el sistema',
+                },
+              },
+            },
+          },
+        },
       },
       NotFound: {
         description: 'El recurso solicitado no existe o se encuentra inactivo',
@@ -598,6 +708,26 @@ export const openApiSpec = {
             example: 'La mesa se encuentra ocupada o en limpieza',
           },
           details: { type: 'object', additionalProperties: true },
+        },
+      },
+      Role: {
+        type: 'string',
+        pattern: '^(ADMINISTRADOR|HOST|ALMACENISTA|MESERO|CHEF_MASTER|ROL_[A-Z0-9_]+)$',
+        description: 'Rol canónico del sistema o rol dinámico con prefijo ROL_',
+        example: 'MESERO',
+      },
+      GatewayAuthHeaders: {
+        type: 'object',
+        required: ['x-user-id', 'x-staff-id', 'x-user-roles'],
+        properties: {
+          'x-user-id': uuidProperty,
+          'x-staff-id': {
+            type: 'string',
+            pattern: '^([A-Z][0-9]{6}|ADMIN|ADM[0-9]{6})$',
+            example: 'M000104',
+          },
+          'x-user-roles': { type: 'string', example: 'MESERO' },
+          'x-password-temporary': { type: 'string', enum: ['true', 'false'] },
         },
       },
       MesaDto: {
