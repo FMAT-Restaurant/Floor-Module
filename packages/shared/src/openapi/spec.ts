@@ -1,4 +1,62 @@
-import { EstadoEspera, EstadoMesa, EstadoReserva, EstadoUnion } from '../enums';
+import { EstadoEspera, EstadoMesa, EstadoReserva, EstadoUnion } from '../enums/index.js';
+
+const uuidPathParam = (name: string, description?: string) => ({
+  name,
+  in: 'path' as const,
+  required: true,
+  schema: { type: 'string' as const, format: 'uuid' as const },
+  ...(description ? { description } : {}),
+});
+
+const jsonContent = (schema: unknown) => ({
+  'application/json': { schema },
+});
+
+const jsonResponse = (schemaRef: string, description: string) => ({
+  description,
+  content: jsonContent({ $ref: schemaRef }),
+});
+
+const jsonArrayResponse = (schemaRef: string, description: string) => ({
+  description,
+  content: jsonContent({
+    type: 'array' as const,
+    items: { $ref: schemaRef },
+  }),
+});
+
+const jsonRequestBody = (schemaRef: string) => ({
+  required: true,
+  content: jsonContent({ $ref: schemaRef }),
+});
+
+const badRequestRef = { $ref: '#/components/responses/BadRequest' } as const;
+const unauthorizedRef = { $ref: '#/components/responses/Unauthorized' } as const;
+const forbiddenRef = { $ref: '#/components/responses/Forbidden' } as const;
+const notFoundRef = { $ref: '#/components/responses/NotFound' } as const;
+const conflictRef = { $ref: '#/components/responses/Conflict' } as const;
+
+const uuidProperty = { type: 'string' as const, format: 'uuid' as const };
+const nullableUuidProperty = {
+  type: 'string' as const,
+  format: 'uuid' as const,
+  nullable: true,
+};
+const positiveIntProperty = { type: 'integer' as const, minimum: 1 };
+const dateTimeProperty = { type: 'string' as const, format: 'date-time' as const };
+const nullableDateTimeProperty = {
+  type: 'string' as const,
+  format: 'date-time' as const,
+  nullable: true,
+};
+const datePatternProperty = { type: 'string' as const, pattern: '^\\d{4}-\\d{2}-\\d{2}$' };
+const timePatternProperty = {
+  type: 'string' as const,
+  pattern: '^(?:[01]\\d|2[0-3]):[0-5]\\d$',
+};
+const phonePatternProperty = { type: 'string' as const, pattern: '^[0-9 +()-]{7,20}$' };
+const clientNameProperty = { type: 'string' as const, minLength: 1, maxLength: 100 };
+const zoneNameProperty = { type: 'string' as const, minLength: 1, maxLength: 50 };
 
 export const openApiSpec = {
   openapi: '3.0.3',
@@ -43,7 +101,7 @@ export const openApiSpec = {
             name: 'zona',
             in: 'query',
             required: false,
-            schema: { type: 'string', minLength: 1, maxLength: 50 },
+            schema: zoneNameProperty,
             description: 'Filtrar por zona del restaurante',
           },
           {
@@ -62,18 +120,11 @@ export const openApiSpec = {
           },
         ],
         responses: {
-          '200': {
-            description: 'Listado de mesas obtenido exitosamente',
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'array',
-                  items: { $ref: '#/components/schemas/MesaDto' },
-                },
-              },
-            },
-          },
-          '401': { $ref: '#/components/responses/Unauthorized' },
+          '200': jsonArrayResponse(
+            '#/components/schemas/MesaDto',
+            'Listado de mesas obtenido exitosamente',
+          ),
+          '401': unauthorizedRef,
         },
       },
       post: {
@@ -81,38 +132,22 @@ export const openApiSpec = {
         summary: 'Crear mesa',
         description: 'Registra una nueva mesa física en el plano.',
         operationId: 'crearMesa',
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: { $ref: '#/components/schemas/CrearMesaRequestDto' },
-            },
-          },
-        },
+        requestBody: jsonRequestBody('#/components/schemas/CrearMesaRequestDto'),
         responses: {
-          '201': {
-            description: 'Mesa creada exitosamente',
-            content: {
-              'application/json': {
-                schema: { $ref: '#/components/schemas/MesaDto' },
-              },
-            },
-          },
-          '400': { $ref: '#/components/responses/BadRequest' },
-          '401': { $ref: '#/components/responses/Unauthorized' },
-          '403': { $ref: '#/components/responses/Forbidden' },
+          '201': jsonResponse('#/components/schemas/MesaDto', 'Mesa creada exitosamente'),
+          '400': badRequestRef,
+          '401': unauthorizedRef,
+          '403': forbiddenRef,
           '409': {
             description: 'Número de mesa duplicado',
-            content: {
-              'application/json': {
-                schema: { $ref: '#/components/schemas/ApiErrorResponse' },
-                example: {
-                  statusCode: 409,
-                  code: 'NUMERO_MESA_DUPLICADO',
-                  message: 'Ya existe una mesa activa con ese número',
-                },
+            content: jsonContent({
+              $ref: '#/components/schemas/ApiErrorResponse',
+              example: {
+                statusCode: 409,
+                code: 'NUMERO_MESA_DUPLICADO',
+                message: 'Ya existe una mesa activa con ese número',
               },
-            },
+            }),
           },
         },
       },
@@ -125,18 +160,8 @@ export const openApiSpec = {
           'Obtiene el estado completo en tiempo real de todas las mesas para el plano de sala.',
         operationId: 'listarMesasEnVivo',
         responses: {
-          '200': {
-            description: 'Estado en vivo de mesas',
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'array',
-                  items: { $ref: '#/components/schemas/MesaEnVivoDto' },
-                },
-              },
-            },
-          },
-          '401': { $ref: '#/components/responses/Unauthorized' },
+          '200': jsonArrayResponse('#/components/schemas/MesaEnVivoDto', 'Estado en vivo de mesas'),
+          '401': unauthorizedRef,
         },
       },
     },
@@ -145,82 +170,36 @@ export const openApiSpec = {
         tags: ['Mesas'],
         summary: 'Consultar detalle de mesa',
         operationId: 'obtenerMesaPorId',
-        parameters: [
-          {
-            name: 'mesaId',
-            in: 'path',
-            required: true,
-            schema: { type: 'string', format: 'uuid' },
-          },
-        ],
+        parameters: [uuidPathParam('mesaId')],
         responses: {
-          '200': {
-            description: 'Mesa encontrada',
-            content: {
-              'application/json': {
-                schema: { $ref: '#/components/schemas/MesaDto' },
-              },
-            },
-          },
-          '404': { $ref: '#/components/responses/NotFound' },
+          '200': jsonResponse('#/components/schemas/MesaDto', 'Mesa encontrada'),
+          '404': notFoundRef,
         },
       },
       patch: {
         tags: ['Mesas'],
         summary: 'Actualizar mesa',
         operationId: 'actualizarMesa',
-        parameters: [
-          {
-            name: 'mesaId',
-            in: 'path',
-            required: true,
-            schema: { type: 'string', format: 'uuid' },
-          },
-        ],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: { $ref: '#/components/schemas/ActualizarMesaRequestDto' },
-            },
-          },
-        },
+        parameters: [uuidPathParam('mesaId')],
+        requestBody: jsonRequestBody('#/components/schemas/ActualizarMesaRequestDto'),
         responses: {
-          '200': {
-            description: 'Mesa actualizada exitosamente',
-            content: {
-              'application/json': {
-                schema: { $ref: '#/components/schemas/MesaDto' },
-              },
-            },
-          },
-          '400': { $ref: '#/components/responses/BadRequest' },
-          '404': { $ref: '#/components/responses/NotFound' },
-          '409': { $ref: '#/components/responses/Conflict' },
+          '200': jsonResponse('#/components/schemas/MesaDto', 'Mesa actualizada exitosamente'),
+          '400': badRequestRef,
+          '404': notFoundRef,
+          '409': conflictRef,
         },
       },
       delete: {
         tags: ['Mesas'],
         summary: 'Desactivar mesa',
         operationId: 'desactivarMesa',
-        parameters: [
-          {
-            name: 'mesaId',
-            in: 'path',
-            required: true,
-            schema: { type: 'string', format: 'uuid' },
-          },
-        ],
+        parameters: [uuidPathParam('mesaId')],
         responses: {
           '204': { description: 'Mesa desactivada exitosamente' },
-          '404': { $ref: '#/components/responses/NotFound' },
+          '404': notFoundRef,
           '409': {
             description: 'Conflicto: mesa ocupada o unida a otra',
-            content: {
-              'application/json': {
-                schema: { $ref: '#/components/schemas/ApiErrorResponse' },
-              },
-            },
+            content: jsonContent({ $ref: '#/components/schemas/ApiErrorResponse' }),
           },
         },
       },
@@ -232,40 +211,18 @@ export const openApiSpec = {
         description:
           'Transiciona una mesa a Ocupada, asocia mesero y emite evento de inicio de dining session.',
         operationId: 'ocuparMesa',
-        parameters: [
-          {
-            name: 'mesaId',
-            in: 'path',
-            required: true,
-            schema: { type: 'string', format: 'uuid' },
-          },
-        ],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: { $ref: '#/components/schemas/OcuparMesaRequestDto' },
-            },
-          },
-        },
+        parameters: [uuidPathParam('mesaId')],
+        requestBody: jsonRequestBody('#/components/schemas/OcuparMesaRequestDto'),
         responses: {
-          '200': {
-            description: 'Mesa ocupada exitosamente',
-            content: {
-              'application/json': {
-                schema: { $ref: '#/components/schemas/OcuparMesaResponseDto' },
-              },
-            },
-          },
-          '400': { $ref: '#/components/responses/BadRequest' },
-          '404': { $ref: '#/components/responses/NotFound' },
+          '200': jsonResponse(
+            '#/components/schemas/OcuparMesaResponseDto',
+            'Mesa ocupada exitosamente',
+          ),
+          '400': badRequestRef,
+          '404': notFoundRef,
           '409': {
             description: 'Conflicto por mesa no disponible, sobrecupo o reserva próxima',
-            content: {
-              'application/json': {
-                schema: { $ref: '#/components/schemas/ApiErrorResponse' },
-              },
-            },
+            content: jsonContent({ $ref: '#/components/schemas/ApiErrorResponse' }),
           },
         },
       },
@@ -276,34 +233,16 @@ export const openApiSpec = {
         summary: 'Cambiar estado físico de mesa',
         description: 'Transición controlada entre Libre y Limpieza pendiente.',
         operationId: 'actualizarEstadoMesa',
-        parameters: [
-          {
-            name: 'mesaId',
-            in: 'path',
-            required: true,
-            schema: { type: 'string', format: 'uuid' },
-          },
-        ],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: { $ref: '#/components/schemas/ActualizarEstadoMesaRequestDto' },
-            },
-          },
-        },
+        parameters: [uuidPathParam('mesaId')],
+        requestBody: jsonRequestBody('#/components/schemas/ActualizarEstadoMesaRequestDto'),
         responses: {
-          '200': {
-            description: 'Estado actualizado exitosamente',
-            content: {
-              'application/json': {
-                schema: { $ref: '#/components/schemas/ActualizarEstadoMesaResponseDto' },
-              },
-            },
-          },
-          '400': { $ref: '#/components/responses/BadRequest' },
-          '404': { $ref: '#/components/responses/NotFound' },
-          '409': { $ref: '#/components/responses/Conflict' },
+          '200': jsonResponse(
+            '#/components/schemas/ActualizarEstadoMesaResponseDto',
+            'Estado actualizado exitosamente',
+          ),
+          '400': badRequestRef,
+          '404': notFoundRef,
+          '409': conflictRef,
         },
       },
     },
@@ -312,33 +251,12 @@ export const openApiSpec = {
         tags: ['Meseros'],
         summary: 'Asignar mesero a mesa',
         operationId: 'asignarMeseroAMesa',
-        parameters: [
-          {
-            name: 'mesaId',
-            in: 'path',
-            required: true,
-            schema: { type: 'string', format: 'uuid' },
-          },
-        ],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: { $ref: '#/components/schemas/AsignarMeseroRequestDto' },
-            },
-          },
-        },
+        parameters: [uuidPathParam('mesaId')],
+        requestBody: jsonRequestBody('#/components/schemas/AsignarMeseroRequestDto'),
         responses: {
-          '200': {
-            description: 'Mesero asignado exitosamente',
-            content: {
-              'application/json': {
-                schema: { $ref: '#/components/schemas/AsignacionDto' },
-              },
-            },
-          },
-          '400': { $ref: '#/components/responses/BadRequest' },
-          '404': { $ref: '#/components/responses/NotFound' },
+          '200': jsonResponse('#/components/schemas/AsignacionDto', 'Mesero asignado exitosamente'),
+          '400': badRequestRef,
+          '404': notFoundRef,
         },
       },
     },
@@ -352,7 +270,7 @@ export const openApiSpec = {
             name: 'meseroId',
             in: 'query',
             required: false,
-            schema: { type: 'string', format: 'uuid' },
+            schema: uuidProperty,
           },
           {
             name: 'activo',
@@ -362,17 +280,7 @@ export const openApiSpec = {
           },
         ],
         responses: {
-          '200': {
-            description: 'Listado de asignaciones',
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'array',
-                  items: { $ref: '#/components/schemas/AsignacionDto' },
-                },
-              },
-            },
-          },
+          '200': jsonArrayResponse('#/components/schemas/AsignacionDto', 'Listado de asignaciones'),
         },
       },
     },
@@ -386,13 +294,13 @@ export const openApiSpec = {
             name: 'fecha',
             in: 'query',
             required: false,
-            schema: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
+            schema: datePatternProperty,
           },
           {
             name: 'mesaId',
             in: 'query',
             required: false,
-            schema: { type: 'string', format: 'uuid' },
+            schema: uuidProperty,
           },
           {
             name: 'estado',
@@ -402,54 +310,31 @@ export const openApiSpec = {
           },
         ],
         responses: {
-          '200': {
-            description: 'Listado de reservas',
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'array',
-                  items: { $ref: '#/components/schemas/ReservaDto' },
-                },
-              },
-            },
-          },
+          '200': jsonArrayResponse('#/components/schemas/ReservaDto', 'Listado de reservas'),
         },
       },
       post: {
         tags: ['Reservas'],
         summary: 'Crear reserva',
         operationId: 'crearReserva',
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: { $ref: '#/components/schemas/CrearReservaRequestDto' },
-            },
-          },
-        },
+        requestBody: jsonRequestBody('#/components/schemas/CrearReservaRequestDto'),
         responses: {
-          '201': {
-            description: 'Reserva creada exitosamente',
-            content: {
-              'application/json': {
-                schema: { $ref: '#/components/schemas/CrearReservaResponseDto' },
-              },
-            },
-          },
-          '400': { $ref: '#/components/responses/BadRequest' },
-          '404': { $ref: '#/components/responses/NotFound' },
+          '201': jsonResponse(
+            '#/components/schemas/CrearReservaResponseDto',
+            'Reserva creada exitosamente',
+          ),
+          '400': badRequestRef,
+          '404': notFoundRef,
           '409': {
             description: 'Reserva solapada con otra reserva existente',
-            content: {
-              'application/json': {
-                schema: { $ref: '#/components/schemas/ApiErrorResponse' },
-                example: {
-                  statusCode: 409,
-                  code: 'RESERVA_SOLAPADA',
-                  message: 'La mesa ya cuenta con una reserva en ese rango de horario',
-                },
+            content: jsonContent({
+              $ref: '#/components/schemas/ApiErrorResponse',
+              example: {
+                statusCode: 409,
+                code: 'RESERVA_SOLAPADA',
+                message: 'La mesa ya cuenta con una reserva en ese rango de horario',
               },
-            },
+            }),
           },
         },
       },
@@ -464,13 +349,13 @@ export const openApiSpec = {
             name: 'fecha',
             in: 'query',
             required: true,
-            schema: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
+            schema: datePatternProperty,
           },
           {
             name: 'horaInicio',
             in: 'query',
             required: true,
-            schema: { type: 'string', pattern: '^(?:[01]\\d|2[0-3]):[0-5]\\d$' },
+            schema: timePatternProperty,
           },
           {
             name: 'duracion',
@@ -482,22 +367,15 @@ export const openApiSpec = {
             name: 'personas',
             in: 'query',
             required: true,
-            schema: { type: 'integer', minimum: 1 },
+            schema: positiveIntProperty,
           },
         ],
         responses: {
-          '200': {
-            description: 'Mesas disponibles que cumplen los criterios',
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'array',
-                  items: { $ref: '#/components/schemas/MesaDto' },
-                },
-              },
-            },
-          },
-          '400': { $ref: '#/components/responses/BadRequest' },
+          '200': jsonArrayResponse(
+            '#/components/schemas/MesaDto',
+            'Mesas disponibles que cumplen los criterios',
+          ),
+          '400': badRequestRef,
         },
       },
     },
@@ -506,34 +384,13 @@ export const openApiSpec = {
         tags: ['Reservas'],
         summary: 'Modificar reserva',
         operationId: 'actualizarReserva',
-        parameters: [
-          {
-            name: 'reservaId',
-            in: 'path',
-            required: true,
-            schema: { type: 'string', format: 'uuid' },
-          },
-        ],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: { $ref: '#/components/schemas/ActualizarReservaRequestDto' },
-            },
-          },
-        },
+        parameters: [uuidPathParam('reservaId')],
+        requestBody: jsonRequestBody('#/components/schemas/ActualizarReservaRequestDto'),
         responses: {
-          '200': {
-            description: 'Reserva modificada exitosamente',
-            content: {
-              'application/json': {
-                schema: { $ref: '#/components/schemas/ReservaDto' },
-              },
-            },
-          },
-          '400': { $ref: '#/components/responses/BadRequest' },
-          '404': { $ref: '#/components/responses/NotFound' },
-          '409': { $ref: '#/components/responses/Conflict' },
+          '200': jsonResponse('#/components/schemas/ReservaDto', 'Reserva modificada exitosamente'),
+          '400': badRequestRef,
+          '404': notFoundRef,
+          '409': conflictRef,
         },
       },
     },
@@ -542,25 +399,11 @@ export const openApiSpec = {
         tags: ['Reservas'],
         summary: 'Cancelar reserva',
         operationId: 'cancelarReserva',
-        parameters: [
-          {
-            name: 'reservaId',
-            in: 'path',
-            required: true,
-            schema: { type: 'string', format: 'uuid' },
-          },
-        ],
+        parameters: [uuidPathParam('reservaId')],
         responses: {
-          '200': {
-            description: 'Reserva cancelada exitosamente',
-            content: {
-              'application/json': {
-                schema: { $ref: '#/components/schemas/ReservaDto' },
-              },
-            },
-          },
-          '404': { $ref: '#/components/responses/NotFound' },
-          '409': { $ref: '#/components/responses/Conflict' },
+          '200': jsonResponse('#/components/schemas/ReservaDto', 'Reserva cancelada exitosamente'),
+          '404': notFoundRef,
+          '409': conflictRef,
         },
       },
     },
@@ -569,25 +412,11 @@ export const openApiSpec = {
         tags: ['Reservas'],
         summary: 'Marcar no-show en reserva',
         operationId: 'marcarNoShowReserva',
-        parameters: [
-          {
-            name: 'reservaId',
-            in: 'path',
-            required: true,
-            schema: { type: 'string', format: 'uuid' },
-          },
-        ],
+        parameters: [uuidPathParam('reservaId')],
         responses: {
-          '200': {
-            description: 'Reserva marcada como No-show',
-            content: {
-              'application/json': {
-                schema: { $ref: '#/components/schemas/ReservaDto' },
-              },
-            },
-          },
-          '404': { $ref: '#/components/responses/NotFound' },
-          '409': { $ref: '#/components/responses/Conflict' },
+          '200': jsonResponse('#/components/schemas/ReservaDto', 'Reserva marcada como No-show'),
+          '404': notFoundRef,
+          '409': conflictRef,
         },
       },
     },
@@ -609,50 +438,25 @@ export const openApiSpec = {
           },
         ],
         responses: {
-          '200': {
-            description: 'Listado de uniones',
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'array',
-                  items: { $ref: '#/components/schemas/UnionDto' },
-                },
-              },
-            },
-          },
+          '200': jsonArrayResponse('#/components/schemas/UnionDto', 'Listado de uniones'),
         },
       },
       post: {
         tags: ['Uniones'],
         summary: 'Crear unión atómica de mesas',
         operationId: 'crearUnion',
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: { $ref: '#/components/schemas/CrearUnionRequestDto' },
-            },
-          },
-        },
+        requestBody: jsonRequestBody('#/components/schemas/CrearUnionRequestDto'),
         responses: {
-          '201': {
-            description: 'Unión creada exitosamente',
-            content: {
-              'application/json': {
-                schema: { $ref: '#/components/schemas/CrearUnionResponseDto' },
-              },
-            },
-          },
-          '400': { $ref: '#/components/responses/BadRequest' },
-          '404': { $ref: '#/components/responses/NotFound' },
+          '201': jsonResponse(
+            '#/components/schemas/CrearUnionResponseDto',
+            'Unión creada exitosamente',
+          ),
+          '400': badRequestRef,
+          '404': notFoundRef,
           '409': {
             description:
               'Conflicto por mesa no disponible, zona incompatible, sobrecupo o reserva próxima',
-            content: {
-              'application/json': {
-                schema: { $ref: '#/components/schemas/ApiErrorResponse' },
-              },
-            },
+            content: jsonContent({ $ref: '#/components/schemas/ApiErrorResponse' }),
           },
         },
       },
@@ -662,25 +466,14 @@ export const openApiSpec = {
         tags: ['Uniones'],
         summary: 'Liberar / disolver unión de mesas',
         operationId: 'liberarUnion',
-        parameters: [
-          {
-            name: 'unionId',
-            in: 'path',
-            required: true,
-            schema: { type: 'string', format: 'uuid' },
-          },
-        ],
+        parameters: [uuidPathParam('unionId')],
         responses: {
-          '200': {
-            description: 'Unión disuelta exitosamente',
-            content: {
-              'application/json': {
-                schema: { $ref: '#/components/schemas/LiberarUnionResponseDto' },
-              },
-            },
-          },
-          '404': { $ref: '#/components/responses/NotFound' },
-          '409': { $ref: '#/components/responses/Conflict' },
+          '200': jsonResponse(
+            '#/components/schemas/LiberarUnionResponseDto',
+            'Unión disuelta exitosamente',
+          ),
+          '404': notFoundRef,
+          '409': conflictRef,
         },
       },
     },
@@ -698,41 +491,23 @@ export const openApiSpec = {
           },
         ],
         responses: {
-          '200': {
-            description: 'Listado de espera ordenado por hora de llegada',
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'array',
-                  items: { $ref: '#/components/schemas/EsperaDto' },
-                },
-              },
-            },
-          },
+          '200': jsonArrayResponse(
+            '#/components/schemas/EsperaDto',
+            'Listado de espera ordenado por hora de llegada',
+          ),
         },
       },
       post: {
         tags: ['Lista de Espera'],
         summary: 'Registrar comensal en lista de espera',
         operationId: 'crearEspera',
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: { $ref: '#/components/schemas/CrearEsperaRequestDto' },
-            },
-          },
-        },
+        requestBody: jsonRequestBody('#/components/schemas/CrearEsperaRequestDto'),
         responses: {
-          '201': {
-            description: 'Registro en espera creado exitosamente',
-            content: {
-              'application/json': {
-                schema: { $ref: '#/components/schemas/EsperaDto' },
-              },
-            },
-          },
-          '400': { $ref: '#/components/responses/BadRequest' },
+          '201': jsonResponse(
+            '#/components/schemas/EsperaDto',
+            'Registro en espera creado exitosamente',
+          ),
+          '400': badRequestRef,
         },
       },
     },
@@ -741,34 +516,13 @@ export const openApiSpec = {
         tags: ['Lista de Espera'],
         summary: 'Actualizar estado de comensal en espera',
         operationId: 'actualizarEstadoEspera',
-        parameters: [
-          {
-            name: 'esperaId',
-            in: 'path',
-            required: true,
-            schema: { type: 'string', format: 'uuid' },
-          },
-        ],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': {
-              schema: { $ref: '#/components/schemas/ActualizarEstadoEsperaRequestDto' },
-            },
-          },
-        },
+        parameters: [uuidPathParam('esperaId')],
+        requestBody: jsonRequestBody('#/components/schemas/ActualizarEstadoEsperaRequestDto'),
         responses: {
-          '200': {
-            description: 'Estado actualizado exitosamente',
-            content: {
-              'application/json': {
-                schema: { $ref: '#/components/schemas/EsperaDto' },
-              },
-            },
-          },
-          '400': { $ref: '#/components/responses/BadRequest' },
-          '404': { $ref: '#/components/responses/NotFound' },
-          '409': { $ref: '#/components/responses/Conflict' },
+          '200': jsonResponse('#/components/schemas/EsperaDto', 'Estado actualizado exitosamente'),
+          '400': badRequestRef,
+          '404': notFoundRef,
+          '409': conflictRef,
         },
       },
     },
@@ -778,14 +532,7 @@ export const openApiSpec = {
         summary: 'Verificar salud del microservicio',
         operationId: 'verificarSalud',
         responses: {
-          '200': {
-            description: 'Servicio operando correctamente',
-            content: {
-              'application/json': {
-                schema: { $ref: '#/components/schemas/HealthDto' },
-              },
-            },
-          },
+          '200': jsonResponse('#/components/schemas/HealthDto', 'Servicio operando correctamente'),
           '503': {
             description:
               'Alguna dependencia crítica (Base de Datos o RabbitMQ) se encuentra inactiva',
@@ -812,59 +559,31 @@ export const openApiSpec = {
     responses: {
       BadRequest: {
         description: 'Solicitud inválida o payload no conforme',
-        content: {
-          'application/json': {
-            schema: { $ref: '#/components/schemas/ApiErrorResponse' },
-          },
-        },
+        content: jsonContent({ $ref: '#/components/schemas/ApiErrorResponse' }),
       },
       Unauthorized: {
         description: 'Faltan credenciales o identidad no propagada',
-        content: {
-          'application/json': {
-            schema: { $ref: '#/components/schemas/ApiErrorResponse' },
-          },
-        },
+        content: jsonContent({ $ref: '#/components/schemas/ApiErrorResponse' }),
       },
       Forbidden: {
         description: 'El rol autenticado carece de permisos para la acción',
-        content: {
-          'application/json': {
-            schema: { $ref: '#/components/schemas/ApiErrorResponse' },
-          },
-        },
+        content: jsonContent({ $ref: '#/components/schemas/ApiErrorResponse' }),
       },
       NotFound: {
         description: 'El recurso solicitado no existe o se encuentra inactivo',
-        content: {
-          'application/json': {
-            schema: { $ref: '#/components/schemas/ApiErrorResponse' },
-          },
-        },
+        content: jsonContent({ $ref: '#/components/schemas/ApiErrorResponse' }),
       },
       Conflict: {
         description: 'Conflicto de estado, concurrencia o regla de dominio',
-        content: {
-          'application/json': {
-            schema: { $ref: '#/components/schemas/ApiErrorResponse' },
-          },
-        },
+        content: jsonContent({ $ref: '#/components/schemas/ApiErrorResponse' }),
       },
       PayloadTooLarge: {
         description: 'El tamaño de la petición excede el límite máximo de 64 KB',
-        content: {
-          'application/json': {
-            schema: { $ref: '#/components/schemas/ApiErrorResponse' },
-          },
-        },
+        content: jsonContent({ $ref: '#/components/schemas/ApiErrorResponse' }),
       },
       InternalServerError: {
         description: 'Error no controlado del servidor',
-        content: {
-          'application/json': {
-            schema: { $ref: '#/components/schemas/ApiErrorResponse' },
-          },
-        },
+        content: jsonContent({ $ref: '#/components/schemas/ApiErrorResponse' }),
       },
     },
     schemas: {
@@ -893,15 +612,15 @@ export const openApiSpec = {
           'activo',
         ],
         properties: {
-          mesaId: { type: 'string', format: 'uuid' },
-          numeroMesa: { type: 'integer', minimum: 1 },
-          capacidad: { type: 'integer', minimum: 1 },
-          zona: { type: 'string', minLength: 1, maxLength: 50 },
+          mesaId: uuidProperty,
+          numeroMesa: positiveIntProperty,
+          capacidad: positiveIntProperty,
+          zona: zoneNameProperty,
           estadoFisico: {
             type: 'string',
             enum: Object.values(EstadoMesa),
           },
-          unionId: { type: 'string', format: 'uuid', nullable: true },
+          unionId: nullableUuidProperty,
           activo: { type: 'boolean' },
         },
       },
@@ -913,12 +632,8 @@ export const openApiSpec = {
             required: ['tieneReservaProxima', 'ocupadaDesde', 'meseroId'],
             properties: {
               tieneReservaProxima: { type: 'boolean' },
-              ocupadaDesde: {
-                type: 'string',
-                format: 'date-time',
-                nullable: true,
-              },
-              meseroId: { type: 'string', format: 'uuid', nullable: true },
+              ocupadaDesde: nullableDateTimeProperty,
+              meseroId: nullableUuidProperty,
             },
           },
         ],
@@ -928,18 +643,18 @@ export const openApiSpec = {
         required: ['numeroMesa', 'capacidad', 'zona'],
         additionalProperties: false,
         properties: {
-          numeroMesa: { type: 'integer', minimum: 1 },
-          capacidad: { type: 'integer', minimum: 1 },
-          zona: { type: 'string', minLength: 1, maxLength: 50 },
+          numeroMesa: positiveIntProperty,
+          capacidad: positiveIntProperty,
+          zona: zoneNameProperty,
         },
       },
       ActualizarMesaRequestDto: {
         type: 'object',
         additionalProperties: false,
         properties: {
-          numeroMesa: { type: 'integer', minimum: 1 },
-          capacidad: { type: 'integer', minimum: 1 },
-          zona: { type: 'string', minLength: 1, maxLength: 50 },
+          numeroMesa: positiveIntProperty,
+          capacidad: positiveIntProperty,
+          zona: zoneNameProperty,
         },
       },
       OcuparMesaRequestDto: {
@@ -947,10 +662,10 @@ export const openApiSpec = {
         required: ['comensales', 'meseroId'],
         additionalProperties: false,
         properties: {
-          comensales: { type: 'integer', minimum: 1 },
-          meseroId: { type: 'string', format: 'uuid' },
-          reservaId: { type: 'string', format: 'uuid' },
-          esperaId: { type: 'string', format: 'uuid' },
+          comensales: positiveIntProperty,
+          meseroId: uuidProperty,
+          reservaId: uuidProperty,
+          esperaId: uuidProperty,
           forzarOcupacion: { type: 'boolean' },
           forzarSobrecupo: { type: 'boolean' },
         },
@@ -959,9 +674,9 @@ export const openApiSpec = {
         type: 'object',
         required: ['mesaId', 'estado', 'sessionId'],
         properties: {
-          mesaId: { type: 'string', format: 'uuid' },
+          mesaId: uuidProperty,
           estado: { type: 'string', enum: [EstadoMesa.OCUPADA] },
-          sessionId: { type: 'string', format: 'uuid' },
+          sessionId: uuidProperty,
           advertencias: {
             type: 'array',
             items: { type: 'string' },
@@ -983,7 +698,7 @@ export const openApiSpec = {
         type: 'object',
         required: ['mesaId', 'estado'],
         properties: {
-          mesaId: { type: 'string', format: 'uuid' },
+          mesaId: uuidProperty,
           estado: { type: 'string', enum: Object.values(EstadoMesa) },
         },
       },
@@ -992,7 +707,7 @@ export const openApiSpec = {
         required: ['meseroId'],
         additionalProperties: false,
         properties: {
-          meseroId: { type: 'string', format: 'uuid' },
+          meseroId: uuidProperty,
         },
       },
       AsignacionDto: {
@@ -1006,15 +721,11 @@ export const openApiSpec = {
           'activo',
         ],
         properties: {
-          asignacionId: { type: 'string', format: 'uuid' },
-          mesaId: { type: 'string', format: 'uuid' },
-          meseroId: { type: 'string', format: 'uuid' },
-          fechaHoraInicio: { type: 'string', format: 'date-time' },
-          fechaHoraFin: {
-            type: 'string',
-            format: 'date-time',
-            nullable: true,
-          },
+          asignacionId: uuidProperty,
+          mesaId: uuidProperty,
+          meseroId: uuidProperty,
+          fechaHoraInicio: dateTimeProperty,
+          fechaHoraFin: nullableDateTimeProperty,
           activo: { type: 'boolean' },
         },
       },
@@ -1023,24 +734,18 @@ export const openApiSpec = {
         required: ['mesaId', 'fecha', 'horaInicio', 'duracion', 'cantidadPersonas', 'cliente'],
         additionalProperties: false,
         properties: {
-          mesaId: { type: 'string', format: 'uuid' },
-          fecha: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
-          horaInicio: {
-            type: 'string',
-            pattern: '^(?:[01]\\d|2[0-3]):[0-5]\\d$',
-          },
+          mesaId: uuidProperty,
+          fecha: datePatternProperty,
+          horaInicio: timePatternProperty,
           duracion: { type: 'integer', minimum: 15, maximum: 480 },
-          cantidadPersonas: { type: 'integer', minimum: 1 },
+          cantidadPersonas: positiveIntProperty,
           cliente: {
             type: 'object',
             required: ['nombre', 'tel'],
             additionalProperties: false,
             properties: {
-              nombre: { type: 'string', minLength: 1, maxLength: 100 },
-              tel: {
-                type: 'string',
-                pattern: '^[0-9 +()-]{7,20}$',
-              },
+              nombre: clientNameProperty,
+              tel: phonePatternProperty,
             },
           },
         },
@@ -1049,8 +754,8 @@ export const openApiSpec = {
         type: 'object',
         required: ['reservaId', 'mesaId', 'estado'],
         properties: {
-          reservaId: { type: 'string', format: 'uuid' },
-          mesaId: { type: 'string', format: 'uuid' },
+          reservaId: uuidProperty,
+          mesaId: uuidProperty,
           estado: { type: 'string', enum: [EstadoReserva.CONFIRMADA] },
         },
       },
@@ -1058,14 +763,11 @@ export const openApiSpec = {
         type: 'object',
         additionalProperties: false,
         properties: {
-          mesaId: { type: 'string', format: 'uuid' },
-          fecha: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
-          horaInicio: {
-            type: 'string',
-            pattern: '^(?:[01]\\d|2[0-3]):[0-5]\\d$',
-          },
+          mesaId: uuidProperty,
+          fecha: datePatternProperty,
+          horaInicio: timePatternProperty,
           duracion: { type: 'integer', minimum: 15, maximum: 480 },
-          cantidadPersonas: { type: 'integer', minimum: 1 },
+          cantidadPersonas: positiveIntProperty,
         },
       },
       ReservaDto: {
@@ -1082,20 +784,14 @@ export const openApiSpec = {
           'estado',
         ],
         properties: {
-          reservaId: { type: 'string', format: 'uuid' },
-          mesaId: { type: 'string', format: 'uuid' },
-          nombreContacto: { type: 'string', minLength: 1, maxLength: 100 },
-          telefonoContacto: { type: 'string', pattern: '^[0-9 +()-]{7,20}$' },
-          cantidadPersonas: { type: 'integer', minimum: 1 },
-          fecha: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
-          horaInicio: {
-            type: 'string',
-            pattern: '^(?:[01]\\d|2[0-3]):[0-5]\\d$',
-          },
-          horaFin: {
-            type: 'string',
-            pattern: '^(?:[01]\\d|2[0-3]):[0-5]\\d$',
-          },
+          reservaId: uuidProperty,
+          mesaId: uuidProperty,
+          nombreContacto: clientNameProperty,
+          telefonoContacto: phonePatternProperty,
+          cantidadPersonas: positiveIntProperty,
+          fecha: datePatternProperty,
+          horaInicio: timePatternProperty,
+          horaFin: timePatternProperty,
           estado: {
             type: 'string',
             enum: Object.values(EstadoReserva),
@@ -1111,10 +807,10 @@ export const openApiSpec = {
             type: 'array',
             minItems: 2,
             uniqueItems: true,
-            items: { type: 'string', format: 'uuid' },
+            items: uuidProperty,
           },
-          totalPersonas: { type: 'integer', minimum: 1 },
-          meseroId: { type: 'string', format: 'uuid' },
+          totalPersonas: positiveIntProperty,
+          meseroId: uuidProperty,
           forzarOcupacion: { type: 'boolean' },
           forzarSobrecupo: { type: 'boolean' },
         },
@@ -1123,13 +819,13 @@ export const openApiSpec = {
         type: 'object',
         required: ['unionId', 'mesasIds', 'estado', 'sessionId'],
         properties: {
-          unionId: { type: 'string', format: 'uuid' },
+          unionId: uuidProperty,
           mesasIds: {
             type: 'array',
-            items: { type: 'string', format: 'uuid' },
+            items: uuidProperty,
           },
           estado: { type: 'string', enum: [EstadoMesa.OCUPADA] },
-          sessionId: { type: 'string', format: 'uuid' },
+          sessionId: uuidProperty,
         },
       },
       LiberarUnionResponseDto: {
@@ -1138,7 +834,7 @@ export const openApiSpec = {
         properties: {
           mesasIds: {
             type: 'array',
-            items: { type: 'string', format: 'uuid' },
+            items: uuidProperty,
           },
           estado: { type: 'string', enum: [EstadoMesa.LIMPIEZA_PENDIENTE] },
         },
@@ -1147,22 +843,18 @@ export const openApiSpec = {
         type: 'object',
         required: ['unionId', 'zona', 'mesasIds', 'estado', 'fechaCreacion', 'fechaDisolucion'],
         properties: {
-          unionId: { type: 'string', format: 'uuid' },
-          zona: { type: 'string', minLength: 1, maxLength: 50 },
+          unionId: uuidProperty,
+          zona: zoneNameProperty,
           mesasIds: {
             type: 'array',
-            items: { type: 'string', format: 'uuid' },
+            items: uuidProperty,
           },
           estado: {
             type: 'string',
             enum: Object.values(EstadoUnion),
           },
-          fechaCreacion: { type: 'string', format: 'date-time' },
-          fechaDisolucion: {
-            type: 'string',
-            format: 'date-time',
-            nullable: true,
-          },
+          fechaCreacion: dateTimeProperty,
+          fechaDisolucion: nullableDateTimeProperty,
         },
       },
       CrearEsperaRequestDto: {
@@ -1170,12 +862,9 @@ export const openApiSpec = {
         required: ['nombreCliente', 'telefonoContacto', 'cantidadPersonas'],
         additionalProperties: false,
         properties: {
-          nombreCliente: { type: 'string', minLength: 1, maxLength: 100 },
-          telefonoContacto: {
-            type: 'string',
-            pattern: '^[0-9 +()-]{7,20}$',
-          },
-          cantidadPersonas: { type: 'integer', minimum: 1 },
+          nombreCliente: clientNameProperty,
+          telefonoContacto: phonePatternProperty,
+          cantidadPersonas: positiveIntProperty,
         },
       },
       ActualizarEstadoEsperaRequestDto: {
@@ -1201,23 +890,16 @@ export const openApiSpec = {
           'idMesaAsignada',
         ],
         properties: {
-          esperaId: { type: 'string', format: 'uuid' },
-          nombreCliente: { type: 'string', minLength: 1, maxLength: 100 },
-          telefonoContacto: {
-            type: 'string',
-            pattern: '^[0-9 +()-]{7,20}$',
-          },
-          cantidadPersonas: { type: 'integer', minimum: 1 },
-          horaLlegada: { type: 'string', format: 'date-time' },
+          esperaId: uuidProperty,
+          nombreCliente: clientNameProperty,
+          telefonoContacto: phonePatternProperty,
+          cantidadPersonas: positiveIntProperty,
+          horaLlegada: dateTimeProperty,
           estado: {
             type: 'string',
             enum: Object.values(EstadoEspera),
           },
-          idMesaAsignada: {
-            type: 'string',
-            format: 'uuid',
-            nullable: true,
-          },
+          idMesaAsignada: nullableUuidProperty,
         },
       },
       HealthDto: {

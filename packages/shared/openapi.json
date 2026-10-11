@@ -144,12 +144,12 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                },
-                "example": {
-                  "statusCode": 409,
-                  "code": "NUMERO_MESA_DUPLICADO",
-                  "message": "Ya existe una mesa activa con ese número"
+                  "$ref": "#/components/schemas/ApiErrorResponse",
+                  "example": {
+                    "statusCode": 409,
+                    "code": "NUMERO_MESA_DUPLICADO",
+                    "message": "Ya existe una mesa activa con ese número"
+                  }
                 }
               }
             }
@@ -578,12 +578,12 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                },
-                "example": {
-                  "statusCode": 409,
-                  "code": "RESERVA_SOLAPADA",
-                  "message": "La mesa ya cuenta con una reserva en ese rango de horario"
+                  "$ref": "#/components/schemas/ApiErrorResponse",
+                  "example": {
+                    "statusCode": 409,
+                    "code": "RESERVA_SOLAPADA",
+                    "message": "La mesa ya cuenta con una reserva en ese rango de horario"
+                  }
                 }
               }
             }
