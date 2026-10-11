@@ -36,7 +36,7 @@ export function SalaSocketProvider({
   onMesaEstadoActualizado,
   onReservaProximaAlerta,
   onEsperaMesaDisponible,
-}: SalaSocketProviderProps) {
+}: Readonly<SalaSocketProviderProps>) {
   const queryClient = useSafeQueryClient(propQueryClient);
 
   const [socket, setSocket] = useState<Socket | null>(() => customSocket ?? null);

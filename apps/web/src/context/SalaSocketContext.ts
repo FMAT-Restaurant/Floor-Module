@@ -42,6 +42,14 @@ export interface SalaSocketProviderProps {
 
 export const SalaSocketContext = createContext<UseSalaSocketReturn | null>(null);
 
+function stripTrailingSlashes(str: string): string {
+  let result = str;
+  while (result.endsWith('/')) {
+    result = result.slice(0, -1);
+  }
+  return result;
+}
+
 export function getSalaSocketUrl(customBaseUrl?: string): string {
   let base = customBaseUrl || import.meta.env.VITE_WS_URL;
   if (!base) {
@@ -51,7 +59,7 @@ export function getSalaSocketUrl(customBaseUrl?: string): string {
       base = 'http://localhost:3000';
     }
   }
-  const cleanBase = base.replace(/\/+$/, '');
+  const cleanBase = stripTrailingSlashes(base);
   if (cleanBase.endsWith('/sala')) {
     return cleanBase;
   }
