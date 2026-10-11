@@ -2,12 +2,16 @@ import { describe, expect, it } from 'vitest';
 import {
   asignacionDtoSchema,
   esperaDtoSchema,
+  gatewayAuthHeadersSchema,
   mesaDtoSchema,
   mesaEnVivoDtoSchema,
   reservaDtoSchema,
+  roleSchema,
   unionDtoSchema,
 } from '../schemas';
 import {
+  createGatewayAuthHeaders,
+  FIXTURE_AUTH_USERS,
   fixtureAsignaciones,
   fixtureEsperaMesaDisponiblePayload,
   fixtureListaEspera,
@@ -84,5 +88,27 @@ describe('Shared Fixtures Contract Conformance', () => {
     expect(fixtureReservaProximaAlertaPayload.reservaId).toBeDefined();
     expect(fixtureEsperaMesaDisponiblePayload.mesaId).toBeDefined();
     expect(fixtureEsperaMesaDisponiblePayload.cliente.nombre).toBeDefined();
+  });
+
+  it('all FIXTURE_AUTH_USERS have valid UUIDs, staff IDs, roles and can generate valid gateway headers', () => {
+    const users = Object.values(FIXTURE_AUTH_USERS);
+    expect(users.length).toBeGreaterThanOrEqual(4);
+
+    users.forEach((user) => {
+      // Validate roles
+      const roleParsed = roleSchema.safeParse(user.roles);
+      expect(roleParsed.success).toBe(true);
+
+      // Validate gateway headers without temporary password
+      const headers = createGatewayAuthHeaders(user);
+      const headersParsed = gatewayAuthHeadersSchema.safeParse(headers);
+      expect(headersParsed.success).toBe(true);
+
+      // Validate gateway headers with temporary password
+      const tempHeaders = createGatewayAuthHeaders(user, { passwordTemporary: true });
+      const tempParsed = gatewayAuthHeadersSchema.safeParse(tempHeaders);
+      expect(tempParsed.success).toBe(true);
+      expect(tempHeaders['x-password-temporary']).toBe('true');
+    });
   });
 });
