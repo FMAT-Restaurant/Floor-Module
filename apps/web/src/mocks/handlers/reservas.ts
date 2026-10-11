@@ -4,9 +4,32 @@ import {
   crearReservaSchema,
   listarReservasQuerySchema,
   reservaParamSchema,
+  type ReservaDto,
 } from '@floor/shared';
 import { http, HttpResponse } from 'msw';
-import { MockApiError, mockDb } from '../db';
+import { mockDb } from '../db';
+import { extractQueryParams, handleMockError, validationErrorResponse } from './utils';
+
+function validateReservaParam(params: Record<string, string | readonly string[] | undefined>) {
+  return reservaParamSchema.safeParse({ reservaId: params.reservaId });
+}
+
+function handleReservaStatusChange(
+  params: Record<string, string | readonly string[] | undefined>,
+  action: (id: string) => ReservaDto,
+  errorMsg: string,
+) {
+  try {
+    const paramValidation = validateReservaParam(params);
+    if (!paramValidation.success) {
+      return validationErrorResponse('reservaId debe ser un UUID v4 válido', paramValidation.error);
+    }
+    const result = action(paramValidation.data.reservaId);
+    return HttpResponse.json(result, { status: 200 });
+  } catch (err) {
+    return handleMockError(err, errorMsg);
+  }
+}
 
 export const reservasHandlers = [
   // POST /sala/reservas
@@ -15,202 +38,93 @@ export const reservasHandlers = [
       const body = await request.json().catch(() => null);
       const parsed = crearReservaSchema.safeParse(body);
       if (!parsed.success) {
-        return HttpResponse.json(
-          {
-            statusCode: 400,
-            code: 'VALIDATION_ERROR',
-            message: 'Datos inválidos para crear reserva',
-            details: parsed.error.flatten(),
-          },
-          { status: 400 },
-        );
+        return validationErrorResponse('Datos inválidos para crear reserva', parsed.error);
       }
 
       const creada = mockDb.crearReserva(parsed.data);
       return HttpResponse.json(creada, { status: 201 });
     } catch (err) {
-      if (err instanceof MockApiError) {
-        return HttpResponse.json(err.toResponse(), { status: err.statusCode });
-      }
-      return HttpResponse.json(
-        { statusCode: 500, code: 'INTERNAL_ERROR', message: 'Error al crear reserva' },
-        { status: 500 },
-      );
+      return handleMockError(err, 'Error al crear reserva');
     }
   }),
 
-  // GET /sala/reservas/disponibilidad (Must be before GET /sala/reservas)
+  // GET /sala/reservas/disponibilidad
   http.get('*/sala/reservas/disponibilidad', ({ request }) => {
     try {
-      const url = new URL(request.url);
-      const queryParams: Record<string, string> = {};
-      url.searchParams.forEach((val, key) => {
-        queryParams[key] = val;
-      });
-
+      const queryParams = extractQueryParams(request.url);
       const parsedQuery = consultarDisponibilidadQuerySchema.safeParse(queryParams);
       if (!parsedQuery.success) {
-        return HttpResponse.json(
-          {
-            statusCode: 400,
-            code: 'VALIDATION_ERROR',
-            message: 'Parámetros requeridos inválidos para disponibilidad',
-            details: parsedQuery.error.flatten(),
-          },
-          { status: 400 },
+        return validationErrorResponse(
+          'Parámetros requeridos inválidos para disponibilidad',
+          parsedQuery.error,
         );
       }
 
       const disponibles = mockDb.getDisponibilidad(parsedQuery.data);
       return HttpResponse.json(disponibles, { status: 200 });
     } catch (err) {
-      if (err instanceof MockApiError) {
-        return HttpResponse.json(err.toResponse(), { status: err.statusCode });
-      }
-      return HttpResponse.json(
-        { statusCode: 500, code: 'INTERNAL_ERROR', message: 'Error al consultar disponibilidad' },
-        { status: 500 },
-      );
+      return handleMockError(err, 'Error al consultar disponibilidad');
     }
   }),
 
   // GET /sala/reservas
   http.get('*/sala/reservas', ({ request }) => {
     try {
-      const url = new URL(request.url);
-      const queryParams: Record<string, string> = {};
-      url.searchParams.forEach((val, key) => {
-        queryParams[key] = val;
-      });
-
+      const queryParams = extractQueryParams(request.url);
       const parsedQuery = listarReservasQuerySchema.safeParse(queryParams);
       if (!parsedQuery.success) {
-        return HttpResponse.json(
-          {
-            statusCode: 400,
-            code: 'VALIDATION_ERROR',
-            message: 'Parámetros de consulta inválidos para reservas',
-            details: parsedQuery.error.flatten(),
-          },
-          { status: 400 },
+        return validationErrorResponse(
+          'Parámetros de consulta inválidos para reservas',
+          parsedQuery.error,
         );
       }
 
       const reservas = mockDb.getReservas(parsedQuery.data);
       return HttpResponse.json(reservas, { status: 200 });
     } catch (err) {
-      if (err instanceof MockApiError) {
-        return HttpResponse.json(err.toResponse(), { status: err.statusCode });
-      }
-      return HttpResponse.json(
-        { statusCode: 500, code: 'INTERNAL_ERROR', message: 'Error al listar reservas' },
-        { status: 500 },
-      );
+      return handleMockError(err, 'Error al listar reservas');
     }
   }),
 
   // PATCH /sala/reservas/:reservaId
   http.patch('*/sala/reservas/:reservaId', async ({ params, request }) => {
     try {
-      const paramValidation = reservaParamSchema.safeParse({ reservaId: params.reservaId });
+      const paramValidation = validateReservaParam(params);
       if (!paramValidation.success) {
-        return HttpResponse.json(
-          {
-            statusCode: 400,
-            code: 'VALIDATION_ERROR',
-            message: 'reservaId debe ser un UUID v4 válido',
-            details: paramValidation.error.flatten(),
-          },
-          { status: 400 },
+        return validationErrorResponse(
+          'reservaId debe ser un UUID v4 válido',
+          paramValidation.error,
         );
       }
 
       const body = await request.json().catch(() => null);
       const parsed = actualizarReservaSchema.safeParse(body);
       if (!parsed.success) {
-        return HttpResponse.json(
-          {
-            statusCode: 400,
-            code: 'VALIDATION_ERROR',
-            message: 'Datos inválidos para actualizar reserva',
-            details: parsed.error.flatten(),
-          },
-          { status: 400 },
-        );
+        return validationErrorResponse('Datos inválidos para actualizar reserva', parsed.error);
       }
 
       const actualizada = mockDb.actualizarReserva(paramValidation.data.reservaId, parsed.data);
       return HttpResponse.json(actualizada, { status: 200 });
     } catch (err) {
-      if (err instanceof MockApiError) {
-        return HttpResponse.json(err.toResponse(), { status: err.statusCode });
-      }
-      return HttpResponse.json(
-        { statusCode: 500, code: 'INTERNAL_ERROR', message: 'Error al actualizar reserva' },
-        { status: 500 },
-      );
+      return handleMockError(err, 'Error al actualizar reserva');
     }
   }),
 
   // POST /sala/reservas/:reservaId/cancelar
   http.post('*/sala/reservas/:reservaId/cancelar', ({ params }) => {
-    try {
-      const paramValidation = reservaParamSchema.safeParse({ reservaId: params.reservaId });
-      if (!paramValidation.success) {
-        return HttpResponse.json(
-          {
-            statusCode: 400,
-            code: 'VALIDATION_ERROR',
-            message: 'reservaId debe ser un UUID v4 válido',
-            details: paramValidation.error.flatten(),
-          },
-          { status: 400 },
-        );
-      }
-
-      const cancelada = mockDb.cancelarReserva(paramValidation.data.reservaId);
-      return HttpResponse.json(cancelada, { status: 200 });
-    } catch (err) {
-      if (err instanceof MockApiError) {
-        return HttpResponse.json(err.toResponse(), { status: err.statusCode });
-      }
-      return HttpResponse.json(
-        { statusCode: 500, code: 'INTERNAL_ERROR', message: 'Error al cancelar reserva' },
-        { status: 500 },
-      );
-    }
+    return handleReservaStatusChange(
+      params,
+      (id) => mockDb.cancelarReserva(id),
+      'Error al cancelar reserva',
+    );
   }),
 
   // POST /sala/reservas/:reservaId/no-show
   http.post('*/sala/reservas/:reservaId/no-show', ({ params }) => {
-    try {
-      const paramValidation = reservaParamSchema.safeParse({ reservaId: params.reservaId });
-      if (!paramValidation.success) {
-        return HttpResponse.json(
-          {
-            statusCode: 400,
-            code: 'VALIDATION_ERROR',
-            message: 'reservaId debe ser un UUID v4 válido',
-            details: paramValidation.error.flatten(),
-          },
-          { status: 400 },
-        );
-      }
-
-      const noShow = mockDb.noShowReserva(paramValidation.data.reservaId);
-      return HttpResponse.json(noShow, { status: 200 });
-    } catch (err) {
-      if (err instanceof MockApiError) {
-        return HttpResponse.json(err.toResponse(), { status: err.statusCode });
-      }
-      return HttpResponse.json(
-        {
-          statusCode: 500,
-          code: 'INTERNAL_ERROR',
-          message: 'Error al marcar reserva como No-show',
-        },
-        { status: 500 },
-      );
-    }
+    return handleReservaStatusChange(
+      params,
+      (id) => mockDb.noShowReserva(id),
+      'Error al marcar reserva como No-show',
+    );
   }),
 ];

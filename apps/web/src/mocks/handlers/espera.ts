@@ -5,7 +5,8 @@ import {
   listarEsperaQuerySchema,
 } from '@floor/shared';
 import { http, HttpResponse } from 'msw';
-import { MockApiError, mockDb } from '../db';
+import { mockDb } from '../db';
+import { extractQueryParams, handleMockError, validationErrorResponse } from './utils';
 
 export const esperaHandlers = [
   // POST /sala/espera
@@ -14,62 +15,35 @@ export const esperaHandlers = [
       const body = await request.json().catch(() => null);
       const parsed = crearEsperaSchema.safeParse(body);
       if (!parsed.success) {
-        return HttpResponse.json(
-          {
-            statusCode: 400,
-            code: 'VALIDATION_ERROR',
-            message: 'Datos inválidos para registrar en lista de espera',
-            details: parsed.error.flatten(),
-          },
-          { status: 400 },
+        return validationErrorResponse(
+          'Datos inválidos para registrar en lista de espera',
+          parsed.error,
         );
       }
 
       const creada = mockDb.crearEspera(parsed.data);
       return HttpResponse.json(creada, { status: 201 });
     } catch (err) {
-      if (err instanceof MockApiError) {
-        return HttpResponse.json(err.toResponse(), { status: err.statusCode });
-      }
-      return HttpResponse.json(
-        { statusCode: 500, code: 'INTERNAL_ERROR', message: 'Error al registrar en espera' },
-        { status: 500 },
-      );
+      return handleMockError(err, 'Error al registrar en espera');
     }
   }),
 
   // GET /sala/espera
   http.get('*/sala/espera', ({ request }) => {
     try {
-      const url = new URL(request.url);
-      const queryParams: Record<string, string> = {};
-      url.searchParams.forEach((val, key) => {
-        queryParams[key] = val;
-      });
-
+      const queryParams = extractQueryParams(request.url);
       const parsedQuery = listarEsperaQuerySchema.safeParse(queryParams);
       if (!parsedQuery.success) {
-        return HttpResponse.json(
-          {
-            statusCode: 400,
-            code: 'VALIDATION_ERROR',
-            message: 'Parámetros de consulta inválidos para lista de espera',
-            details: parsedQuery.error.flatten(),
-          },
-          { status: 400 },
+        return validationErrorResponse(
+          'Parámetros de consulta inválidos para lista de espera',
+          parsedQuery.error,
         );
       }
 
       const lista = mockDb.getEspera(parsedQuery.data);
       return HttpResponse.json(lista, { status: 200 });
     } catch (err) {
-      if (err instanceof MockApiError) {
-        return HttpResponse.json(err.toResponse(), { status: err.statusCode });
-      }
-      return HttpResponse.json(
-        { statusCode: 500, code: 'INTERNAL_ERROR', message: 'Error al consultar lista de espera' },
-        { status: 500 },
-      );
+      return handleMockError(err, 'Error al consultar lista de espera');
     }
   }),
 
@@ -78,28 +52,18 @@ export const esperaHandlers = [
     try {
       const paramValidation = esperaParamSchema.safeParse({ esperaId: params.esperaId });
       if (!paramValidation.success) {
-        return HttpResponse.json(
-          {
-            statusCode: 400,
-            code: 'VALIDATION_ERROR',
-            message: 'esperaId debe ser un UUID v4 válido',
-            details: paramValidation.error.flatten(),
-          },
-          { status: 400 },
+        return validationErrorResponse(
+          'esperaId debe ser un UUID v4 válido',
+          paramValidation.error,
         );
       }
 
       const body = await request.json().catch(() => null);
       const parsed = actualizarEstadoEsperaSchema.safeParse(body);
       if (!parsed.success) {
-        return HttpResponse.json(
-          {
-            statusCode: 400,
-            code: 'VALIDATION_ERROR',
-            message: 'Estado inválido. Solo se permite "Sentado", "Cancelado" o "En espera"',
-            details: parsed.error.flatten(),
-          },
-          { status: 400 },
+        return validationErrorResponse(
+          'Estado inválido. Solo se permite "Sentado", "Cancelado" o "En espera"',
+          parsed.error,
         );
       }
 
@@ -109,13 +73,7 @@ export const esperaHandlers = [
       );
       return HttpResponse.json(actualizada, { status: 200 });
     } catch (err) {
-      if (err instanceof MockApiError) {
-        return HttpResponse.json(err.toResponse(), { status: err.statusCode });
-      }
-      return HttpResponse.json(
-        { statusCode: 500, code: 'INTERNAL_ERROR', message: 'Error al actualizar espera' },
-        { status: 500 },
-      );
+      return handleMockError(err, 'Error al actualizar espera');
     }
   }),
 ];

@@ -1,7 +1,8 @@
 import { crearUnionSchema, listarUnionesQuerySchema, unionParamSchema } from '@floor/shared';
 import { http, HttpResponse } from 'msw';
-import { MockApiError, mockDb } from '../db';
+import { mockDb } from '../db';
 import { mockSalaSimulation } from '../simulation';
+import { extractQueryParams, handleMockError, validationErrorResponse } from './utils';
 
 export const unionesHandlers = [
   // POST /sala/mesas/uniones
@@ -10,20 +11,10 @@ export const unionesHandlers = [
       const body = await request.json().catch(() => null);
       const parsed = crearUnionSchema.safeParse(body);
       if (!parsed.success) {
-        return HttpResponse.json(
-          {
-            statusCode: 400,
-            code: 'VALIDATION_ERROR',
-            message: 'Datos inválidos para crear unión',
-            details: parsed.error.flatten(),
-          },
-          { status: 400 },
-        );
+        return validationErrorResponse('Datos inválidos para crear unión', parsed.error);
       }
 
       const creada = mockDb.crearUnion(parsed.data);
-
-      // Disparar evento para cada mesa de la unión
       const now = new Date().toISOString();
       for (const mesaId of creada.mesasIds) {
         mockSalaSimulation.emitMesaEstadoActualizado({
@@ -36,13 +27,7 @@ export const unionesHandlers = [
 
       return HttpResponse.json(creada, { status: 201 });
     } catch (err) {
-      if (err instanceof MockApiError) {
-        return HttpResponse.json(err.toResponse(), { status: err.statusCode });
-      }
-      return HttpResponse.json(
-        { statusCode: 500, code: 'INTERNAL_ERROR', message: 'Error al crear unión' },
-        { status: 500 },
-      );
+      return handleMockError(err, 'Error al crear unión');
     }
   }),
 
@@ -51,20 +36,10 @@ export const unionesHandlers = [
     try {
       const paramValidation = unionParamSchema.safeParse({ unionId: params.unionId });
       if (!paramValidation.success) {
-        return HttpResponse.json(
-          {
-            statusCode: 400,
-            code: 'VALIDATION_ERROR',
-            message: 'unionId debe ser un UUID v4 válido',
-            details: paramValidation.error.flatten(),
-          },
-          { status: 400 },
-        );
+        return validationErrorResponse('unionId debe ser un UUID v4 válido', paramValidation.error);
       }
 
       const liberada = mockDb.liberarUnion(paramValidation.data.unionId);
-
-      // Disparar evento de desvinculación y limpieza para cada mesa
       const now = new Date().toISOString();
       for (const mesaId of liberada.mesasIds) {
         mockSalaSimulation.emitMesaEstadoActualizado({
@@ -77,48 +52,26 @@ export const unionesHandlers = [
 
       return HttpResponse.json(liberada, { status: 200 });
     } catch (err) {
-      if (err instanceof MockApiError) {
-        return HttpResponse.json(err.toResponse(), { status: err.statusCode });
-      }
-      return HttpResponse.json(
-        { statusCode: 500, code: 'INTERNAL_ERROR', message: 'Error al liberar unión' },
-        { status: 500 },
-      );
+      return handleMockError(err, 'Error al liberar unión');
     }
   }),
 
   // GET /sala/mesas/uniones
   http.get('*/sala/mesas/uniones', ({ request }) => {
     try {
-      const url = new URL(request.url);
-      const queryParams: Record<string, string> = {};
-      url.searchParams.forEach((val, key) => {
-        queryParams[key] = val;
-      });
-
+      const queryParams = extractQueryParams(request.url);
       const parsedQuery = listarUnionesQuerySchema.safeParse(queryParams);
       if (!parsedQuery.success) {
-        return HttpResponse.json(
-          {
-            statusCode: 400,
-            code: 'VALIDATION_ERROR',
-            message: 'Parámetros de consulta inválidos para uniones',
-            details: parsedQuery.error.flatten(),
-          },
-          { status: 400 },
+        return validationErrorResponse(
+          'Parámetros de consulta inválidos para uniones',
+          parsedQuery.error,
         );
       }
 
       const uniones = mockDb.getUniones(parsedQuery.data);
       return HttpResponse.json(uniones, { status: 200 });
     } catch (err) {
-      if (err instanceof MockApiError) {
-        return HttpResponse.json(err.toResponse(), { status: err.statusCode });
-      }
-      return HttpResponse.json(
-        { statusCode: 500, code: 'INTERNAL_ERROR', message: 'Error al listar uniones' },
-        { status: 500 },
-      );
+      return handleMockError(err, 'Error al listar uniones');
     }
   }),
 ];

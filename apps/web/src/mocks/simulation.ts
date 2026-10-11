@@ -15,9 +15,9 @@ type EsperaListener = (payload: EsperaMesaDisponiblePayload) => void;
 type WsBroadcastFn = (event: string, payload: unknown) => void;
 
 class SalaSimulationService {
-  private mesaListeners = new Set<MesaListener>();
-  private reservaListeners = new Set<ReservaListener>();
-  private esperaListeners = new Set<EsperaListener>();
+  private readonly mesaListeners = new Set<MesaListener>();
+  private readonly reservaListeners = new Set<ReservaListener>();
+  private readonly esperaListeners = new Set<EsperaListener>();
   private wsBroadcaster: WsBroadcastFn | null = null;
 
   setWsBroadcaster(broadcaster: WsBroadcastFn | null) {

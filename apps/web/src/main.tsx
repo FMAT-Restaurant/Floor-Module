@@ -10,7 +10,7 @@ async function prepareApp(): Promise<void> {
   }
 }
 
-prepareApp().then(() => {
+void prepareApp().then(() => {
   ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
     <StrictMode>
       <App />

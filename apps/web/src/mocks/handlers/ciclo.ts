@@ -1,44 +1,32 @@
 import { actualizarEstadoMesaSchema, mesaParamSchema, ocuparMesaSchema } from '@floor/shared';
 import { http, HttpResponse } from 'msw';
-import { MockApiError, mockDb } from '../db';
+import { mockDb } from '../db';
 import { mockSalaSimulation } from '../simulation';
+import { handleMockError, validationErrorResponse } from './utils';
+
+function validateMesaId(params: Record<string, string | readonly string[] | undefined>) {
+  return mesaParamSchema.safeParse({ mesaId: params.mesaId });
+}
 
 export const cicloHandlers = [
   // POST /sala/mesas/:mesaId/ocupar
   http.post('*/sala/mesas/:mesaId/ocupar', async ({ params, request }) => {
     try {
-      const paramValidation = mesaParamSchema.safeParse({ mesaId: params.mesaId });
+      const paramValidation = validateMesaId(params);
       if (!paramValidation.success) {
-        return HttpResponse.json(
-          {
-            statusCode: 400,
-            code: 'VALIDATION_ERROR',
-            message: 'mesaId debe ser un UUID v4 válido',
-            details: paramValidation.error.flatten(),
-          },
-          { status: 400 },
-        );
+        return validationErrorResponse('mesaId debe ser un UUID v4 válido', paramValidation.error);
       }
 
       const body = await request.json().catch(() => null);
       const parsedBody = ocuparMesaSchema.safeParse(body);
       if (!parsedBody.success) {
-        return HttpResponse.json(
-          {
-            statusCode: 400,
-            code: 'VALIDATION_ERROR',
-            message: 'Datos inválidos para ocupar mesa',
-            details: parsedBody.error.flatten(),
-          },
-          { status: 400 },
-        );
+        return validationErrorResponse('Datos inválidos para ocupar mesa', parsedBody.error);
       }
 
       const mesaId = paramValidation.data.mesaId;
       const mesaPrevia = mockDb.getMesa(mesaId);
       const resultado = mockDb.ocuparMesa(mesaId, parsedBody.data);
 
-      // Disparar evento WebSocket simulado
       mockSalaSimulation.emitMesaEstadoActualizado({
         mesaId,
         estado: resultado.estado,
@@ -48,43 +36,24 @@ export const cicloHandlers = [
 
       return HttpResponse.json(resultado, { status: 200 });
     } catch (err) {
-      if (err instanceof MockApiError) {
-        return HttpResponse.json(err.toResponse(), { status: err.statusCode });
-      }
-      return HttpResponse.json(
-        { statusCode: 500, code: 'INTERNAL_ERROR', message: 'Error al ocupar mesa' },
-        { status: 500 },
-      );
+      return handleMockError(err, 'Error al ocupar mesa');
     }
   }),
 
   // PATCH /sala/mesas/:mesaId/estado
   http.patch('*/sala/mesas/:mesaId/estado', async ({ params, request }) => {
     try {
-      const paramValidation = mesaParamSchema.safeParse({ mesaId: params.mesaId });
+      const paramValidation = validateMesaId(params);
       if (!paramValidation.success) {
-        return HttpResponse.json(
-          {
-            statusCode: 400,
-            code: 'VALIDATION_ERROR',
-            message: 'mesaId debe ser un UUID v4 válido',
-            details: paramValidation.error.flatten(),
-          },
-          { status: 400 },
-        );
+        return validationErrorResponse('mesaId debe ser un UUID v4 válido', paramValidation.error);
       }
 
       const body = await request.json().catch(() => null);
       const parsedBody = actualizarEstadoMesaSchema.safeParse(body);
       if (!parsedBody.success) {
-        return HttpResponse.json(
-          {
-            statusCode: 400,
-            code: 'VALIDATION_ERROR',
-            message: 'Estado inválido. Solo se permite "Limpieza pendiente" o "Libre"',
-            details: parsedBody.error.flatten(),
-          },
-          { status: 400 },
+        return validationErrorResponse(
+          'Estado inválido. Solo se permite "Limpieza pendiente" o "Libre"',
+          parsedBody.error,
         );
       }
 
@@ -92,7 +61,6 @@ export const cicloHandlers = [
       const mesaPrevia = mockDb.getMesa(mesaId);
       const resultado = mockDb.actualizarEstadoMesa(mesaId, parsedBody.data.estado);
 
-      // Disparar evento de mesa actualizada
       mockSalaSimulation.emitMesaEstadoActualizado({
         mesaId,
         estado: resultado.estado,
@@ -100,7 +68,6 @@ export const cicloHandlers = [
         timestamp: new Date().toISOString(),
       });
 
-      // Si se liberó mesa y hubo match en lista de espera (RN-17)
       if (resultado.waitlistMatch) {
         mockSalaSimulation.emitEsperaMesaDisponible({
           mesaId,
@@ -114,13 +81,7 @@ export const cicloHandlers = [
         { status: 200 },
       );
     } catch (err) {
-      if (err instanceof MockApiError) {
-        return HttpResponse.json(err.toResponse(), { status: err.statusCode });
-      }
-      return HttpResponse.json(
-        { statusCode: 500, code: 'INTERNAL_ERROR', message: 'Error al actualizar estado de mesa' },
-        { status: 500 },
-      );
+      return handleMockError(err, 'Error al actualizar estado de mesa');
     }
   }),
 ];
