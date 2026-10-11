@@ -333,6 +333,19 @@ describe('useSalaSocket & SalaSocketProvider', () => {
   });
 
   describe('5. Reconexión y reconciliación de caché', () => {
+    function assertReconnectedState(hookResult: {
+      current: { isConnected: boolean; isReconnecting: boolean };
+    }) {
+      expect(hookResult.current.isConnected).toBe(true);
+      expect(hookResult.current.isReconnecting).toBe(false);
+      expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
+        queryKey: queryKeys.mesas.all,
+      });
+      expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
+        queryKey: queryKeys.reservas.all,
+      });
+    }
+
     it('invalida inmediatamente mesas.all y reservas.all al emitirse connect', () => {
       const { result } = renderHook(() => useSalaSocket(), { wrapper: createWrapper() });
 
@@ -340,14 +353,7 @@ describe('useSalaSocket & SalaSocketProvider', () => {
         mockSocketInstance.emit('connect');
       });
 
-      expect(result.current.isConnected).toBe(true);
-      expect(result.current.isReconnecting).toBe(false);
-      expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
-        queryKey: queryKeys.mesas.all,
-      });
-      expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
-        queryKey: queryKeys.reservas.all,
-      });
+      assertReconnectedState(result);
     });
 
     it('invalida mesas.all y reservas.all y actualiza estado tras desconexión y reconexión', () => {
@@ -358,7 +364,6 @@ describe('useSalaSocket & SalaSocketProvider', () => {
         mockSocketInstance.emit('connect');
       });
       expect(result.current.isConnected).toBe(true);
-      expect(result.current.isReconnecting).toBe(false);
 
       // Simular desconexión por pérdida de transporte
       act(() => {
@@ -375,14 +380,7 @@ describe('useSalaSocket & SalaSocketProvider', () => {
         mockSocketInstance.emit('reconnect');
       });
 
-      expect(result.current.isConnected).toBe(true);
-      expect(result.current.isReconnecting).toBe(false);
-      expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
-        queryKey: queryKeys.mesas.all,
-      });
-      expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
-        queryKey: queryKeys.reservas.all,
-      });
+      assertReconnectedState(result);
     });
 
     it('marca isReconnecting en connect_error y reconnect_attempt', () => {
