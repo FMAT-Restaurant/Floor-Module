@@ -13,3 +13,5 @@ export type {
 export * from './schemas';
 
 export * from './openapi';
+
+export * from './fixtures';
