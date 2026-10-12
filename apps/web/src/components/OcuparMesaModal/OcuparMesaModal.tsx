@@ -2,9 +2,15 @@ import React, { useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { X, ChevronDown, AlertTriangle, Clock, Loader2, AlertCircle } from 'lucide-react';
 import {
+  EstadoReserva,
+  EstadoEspera,
   fixtureMeserosCatalogo,
+  fixtureReservas,
+  fixtureListaEspera,
   type MesaEnVivoDto,
   type MeseroCatalogoItem,
+  type ReservaDto,
+  type EsperaDto,
   type OcuparMesaRequestDto,
   type OcuparMesaResponseDto,
 } from '@floor/shared';
@@ -19,6 +25,8 @@ export interface OcuparMesaModalProps {
   readonly onClose: () => void;
   readonly onSuccess?: (response: OcuparMesaResponseDto) => void;
   readonly meserosCatalogo?: readonly MeseroCatalogoItem[];
+  readonly reservasCatalogo?: readonly ReservaDto[];
+  readonly esperaCatalogo?: readonly EsperaDto[];
 }
 
 export function OcuparMesaModal({
@@ -27,6 +35,8 @@ export function OcuparMesaModal({
   onClose,
   onSuccess,
   meserosCatalogo = fixtureMeserosCatalogo,
+  reservasCatalogo = fixtureReservas,
+  esperaCatalogo = fixtureListaEspera,
 }: OcuparMesaModalProps): React.JSX.Element | null {
   const queryClient = useQueryClient();
 
@@ -42,6 +52,18 @@ export function OcuparMesaModal({
   const [mostrarSobrecupoBackend, setMostrarSobrecupoBackend] = useState(false);
   const [mostrarReservaProximaBackend, setMostrarReservaProximaBackend] = useState(false);
   const [errorApi, setErrorApi] = useState<string | null>(null);
+
+  // Catálogo filtrado de reservas confirmadas activas
+  const reservasDisponibles = React.useMemo(() => {
+    return reservasCatalogo.filter((r) => r.estado === EstadoReserva.CONFIRMADA);
+  }, [reservasCatalogo]);
+
+  // Catálogo filtrado de lista de espera activa (en espera o notificado)
+  const esperaDisponible = React.useMemo(() => {
+    return esperaCatalogo.filter(
+      (e) => e.estado === EstadoEspera.EN_ESPERA || e.estado === EstadoEspera.NOTIFICADO,
+    );
+  }, [esperaCatalogo]);
 
   const ocuparMutation = useMutation({
     mutationFn: (dto: OcuparMesaRequestDto) => {
@@ -323,35 +345,66 @@ export function OcuparMesaModal({
 
             {mostrarOpcionesAvanzadas && (
               <div className="mt-2 p-3 bg-canvas border border-border rounded-control space-y-3">
+                {/* Selector de Reserva */}
                 <div>
                   <label htmlFor="reservaId" className="block text-xs font-medium text-text mb-1">
-                    ID de Reserva (opcional)
+                    Reserva asociada (opcional)
                   </label>
-                  <input
+                  <select
                     id="reservaId"
                     name="reservaId"
-                    type="text"
                     value={reservaId}
                     disabled={ocuparMutation.isPending}
-                    onChange={(e) => setReservaId(e.target.value)}
-                    placeholder="UUID de reserva asociada"
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      setReservaId(id);
+                      if (id) {
+                        const res = reservasDisponibles.find((r) => r.reservaId === id);
+                        if (res) {
+                          setComensales(res.cantidadPersonas);
+                        }
+                      }
+                    }}
                     className="h-9 px-2.5 text-xs rounded-control border border-border focus:ring-2 focus:ring-primary w-full bg-white outline-none text-ink disabled:bg-gray-100"
-                  />
+                  >
+                    <option value="">Sin reserva vinculada</option>
+                    {reservasDisponibles.map((res) => (
+                      <option key={res.reservaId} value={res.reservaId}>
+                        {res.nombreContacto} · {res.cantidadPersonas} pers. ({res.horaInicio})
+                      </option>
+                    ))}
+                  </select>
                 </div>
+
+                {/* Selector de Lista de Espera */}
                 <div>
                   <label htmlFor="esperaId" className="block text-xs font-medium text-text mb-1">
-                    ID de Lista de Espera (opcional)
+                    Turno en lista de espera (opcional)
                   </label>
-                  <input
+                  <select
                     id="esperaId"
                     name="esperaId"
-                    type="text"
                     value={esperaId}
                     disabled={ocuparMutation.isPending}
-                    onChange={(e) => setEsperaId(e.target.value)}
-                    placeholder="UUID del turno en lista de espera"
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      setEsperaId(id);
+                      if (id) {
+                        const esp = esperaDisponible.find((item) => item.esperaId === id);
+                        if (esp) {
+                          setComensales(esp.cantidadPersonas);
+                        }
+                      }
+                    }}
                     className="h-9 px-2.5 text-xs rounded-control border border-border focus:ring-2 focus:ring-primary w-full bg-white outline-none text-ink disabled:bg-gray-100"
-                  />
+                  >
+                    <option value="">Sin turno en lista de espera</option>
+                    {esperaDisponible.map((esp) => (
+                      <option key={esp.esperaId} value={esp.esperaId}>
+                        {esp.nombreCliente} · {esp.cantidadPersonas} pers.
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
             )}

@@ -304,7 +304,7 @@ describe('OcuparMesaModal Component', () => {
     expect(screen.getByTestId('alerta-sobrecupo')).toBeInTheDocument();
   });
 
-  it('soporta envío con campos opcionales colapsables de reserva y espera', async () => {
+  it('soporta seleccion amigable mediante dropdowns de reservas activas y turnos de espera', async () => {
     let capturedBody: Record<string, unknown> | null = null;
     server.use(
       http.post('*/sala/mesas/:mesaId/ocupar', async ({ request }) => {
@@ -326,14 +326,27 @@ describe('OcuparMesaModal Component', () => {
     // Expandir opciones avanzadas
     fireEvent.click(screen.getByRole('button', { name: /opciones avanzadas/i }));
 
-    const inputReserva = screen.getByLabelText(/id de reserva/i);
-    const inputEspera = screen.getByLabelText(/id de lista de espera/i);
+    const selectReserva = screen.getByLabelText(/reserva asociada/i);
+    const selectEspera = screen.getByLabelText(/turno en lista de espera/i);
 
-    fireEvent.change(inputReserva, {
-      target: { value: 'c1000000-0000-4000-8000-000000000001' },
+    // Opciones legibles para el host (sin UUIDs crudos)
+    expect(screen.getByRole('option', { name: 'Sin reserva vinculada' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('option', { name: /Mauricio Díaz · 2 pers\. \(20:00\)/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('option', { name: 'Sin turno en lista de espera' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Gabriel Torres · 2 pers\./i })).toBeInTheDocument();
+
+    // Seleccionamos la reserva de Mauricio Díaz
+    fireEvent.change(selectReserva, {
+      target: { value: 'b1000000-0000-4000-8000-000000000002' },
     });
-    fireEvent.change(inputEspera, {
-      target: { value: 'e1000000-0000-4000-8000-000000000002' },
+
+    // Seleccionamos el turno de Gabriel Torres
+    fireEvent.change(selectEspera, {
+      target: { value: 'e1000000-0000-4000-8000-000000000001' },
     });
 
     fireEvent.click(screen.getByRole('button', { name: /confirmar ocupación/i }));
@@ -343,10 +356,10 @@ describe('OcuparMesaModal Component', () => {
     });
 
     expect(capturedBody).toEqual({
-      comensales: 1,
+      comensales: 2,
       meseroId: FIXTURE_MESERO_IDS.CARLOS,
-      reservaId: 'c1000000-0000-4000-8000-000000000001',
-      esperaId: 'e1000000-0000-4000-8000-000000000002',
+      reservaId: 'b1000000-0000-4000-8000-000000000002',
+      esperaId: 'e1000000-0000-4000-8000-000000000001',
     });
   });
 

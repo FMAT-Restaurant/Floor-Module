@@ -188,6 +188,7 @@ La escala de espaciado se basa en múltiplos de **4px** (`--space-unit: 4px`):
 - ❌ No utilizar el `placeholder` como reemplazo de la etiqueta (`<label>`).
 - ❌ No vaciar o limpiar los datos del formulario si ocurre un error de red.
 - ❌ No mostrar mensajes crípticos o genéricos como "Dato inválido" sin explicar exactamente cómo corregirlo.
+- ❌ No exigir al operador de sala (host, mesero, cajero) tipear manualmente identificadores técnicos o UUIDs hexadecimales. Entidades vinculadas (meseros, reservas activas, lista de espera) deben seleccionarse siempre mediante selectores desplegables (`<select>` o combobox) con nombres, aforos y horarios legibles.
 
 ---
 
@@ -295,6 +296,13 @@ Formato tipo píldora o caja suave con borde, dot semántico y texto claro:
   2. Descripción clara del impacto: *"Se eliminará 'Hamburguesa clásica'. Esta acción no se puede deshacer."*
   3. Caja de advertencia suave opcional.
   4. Botonera inferior alineada a la derecha: Botón "Cancelar" (secundario) a la izquierda y botón de acción (ej. "Eliminar" en rojo destructivo) a la derecha.
+
+#### Modales Operativos y de Asignación (ej. Ocupar Mesa)
+- **Selección de Entidades Relacionadas:** Los campos para asociar meseros, reservas activas o turnos de lista de espera deben presentarse mediante selectores desplegables (`<select>`) con formato amigable y legible:
+  - Mesero: `Nombre Apellido`
+  - Reserva: `{nombreContacto} · {cantidadPersonas} pers. ({horaInicio})`
+  - Lista de espera: `{nombreCliente} · {cantidadPersonas} pers.`
+- **Sin captura manual de UUIDs:** El operador nunca debe introducir cadenas UUID manuales. Los identificadores técnicos se manejan como valor subyacente del `<option value={id}>`, garantizando velocidad operativa para el host y reduciendo errores humanos.
 
 ---
 
