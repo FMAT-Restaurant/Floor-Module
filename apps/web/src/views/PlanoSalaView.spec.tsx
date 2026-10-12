@@ -1,20 +1,11 @@
 import { render, screen, fireEvent } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { describe, it, expect, beforeAll, afterEach, afterAll, vi } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { server } from '../mocks/server';
 import { mockDb } from '../mocks/db';
+import { createTestQueryClient } from '../test/test-utils';
 import { PlanoSalaView } from './PlanoSalaView';
-
-function createTestQueryClient() {
-  return new QueryClient({
-    defaultOptions: {
-      queries: {
-        retry: false,
-      },
-    },
-  });
-}
 
 beforeAll(() => {
   server.listen({ onUnhandledRequest: 'error' });
@@ -168,7 +159,7 @@ describe('PlanoSalaView Component', () => {
       </QueryClientProvider>,
     );
 
-    const mesa1Card = await screen.findByRole('button', { name: 'Mesa 1' });
+    const mesa1Card = await screen.findByLabelText('Mesa 1');
     fireEvent.click(mesa1Card);
 
     expect(handleSelect).toHaveBeenCalledTimes(1);

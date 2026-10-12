@@ -1,21 +1,12 @@
 import { render, screen } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'vitest';
 import type { Socket } from 'socket.io-client';
 import { App } from './App';
 import { SalaSocketProvider } from './context';
 import { server } from './mocks/server';
 import { mockDb } from './mocks/db';
-
-function createTestQueryClient() {
-  return new QueryClient({
-    defaultOptions: {
-      queries: {
-        retry: false,
-      },
-    },
-  });
-}
+import { createTestQueryClient } from './test/test-utils';
 
 beforeAll(() => {
   server.listen({ onUnhandledRequest: 'error' });

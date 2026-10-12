@@ -8,9 +8,17 @@ import { MesaCard } from '../components/MesaCard';
 import { cn } from '../lib/utils';
 
 export interface PlanoSalaViewProps {
-  onSelectMesa?: (mesa: MesaEnVivoDto) => void;
-  onAccionMesa?: (mesa: MesaEnVivoDto) => void;
-  selectedMesaId?: string | null;
+  readonly onSelectMesa?: (mesa: MesaEnVivoDto) => void;
+  readonly onAccionMesa?: (mesa: MesaEnVivoDto) => void;
+  readonly selectedMesaId?: string | null;
+}
+
+interface MetricaItem {
+  readonly key: string;
+  readonly label: string;
+  readonly valor: number;
+  readonly badgeClass: string;
+  readonly dotClass?: string;
 }
 
 export function PlanoSalaView({
@@ -46,6 +54,46 @@ export function PlanoSalaView({
     return { total, libres, ocupadas, limpieza, conReserva };
   }, [mesas]);
 
+  const metricasConfig = useMemo<MetricaItem[]>(
+    () => [
+      {
+        key: 'total',
+        label: 'Total:',
+        valor: metricas.total,
+        badgeClass: 'bg-canvas border-border text-ink font-semibold',
+      },
+      {
+        key: 'disponibles',
+        label: 'Disponibles:',
+        valor: metricas.libres,
+        badgeClass: 'bg-emerald-50 text-emerald-800 border-emerald-200 font-medium',
+        dotClass: 'bg-emerald-500',
+      },
+      {
+        key: 'ocupadas',
+        label: 'Ocupadas:',
+        valor: metricas.ocupadas,
+        badgeClass: 'bg-amber-50 text-amber-800 border-amber-200 font-medium',
+        dotClass: 'bg-amber-500',
+      },
+      {
+        key: 'limpieza',
+        label: 'Limpieza pendiente:',
+        valor: metricas.limpieza,
+        badgeClass: 'bg-amber-50 text-amber-700 border-amber-200 font-medium',
+        dotClass: 'bg-amber-400',
+      },
+      {
+        key: 'reserva',
+        label: 'Reserva próxima:',
+        valor: metricas.conReserva,
+        badgeClass: 'bg-blue-50 text-blue-800 border-blue-200 font-medium',
+        dotClass: 'bg-blue-500',
+      },
+    ],
+    [metricas],
+  );
+
   const zonas = useMemo(() => {
     const uniqueZonas = new Set<string>();
     for (const m of mesas) {
@@ -75,30 +123,21 @@ export function PlanoSalaView({
         aria-label="Resumen de mesas"
         className="bg-surface border border-border rounded-card p-4 shadow-subtle flex flex-wrap items-center gap-2"
       >
-        <div className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-control bg-canvas border border-border text-ink">
-          <span>Total:</span>
-          <span className="font-bold">{metricas.total}</span>
-        </div>
-        <div className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-control bg-emerald-50 text-emerald-800 border border-emerald-200">
-          <span className="w-2 h-2 rounded-full bg-emerald-500" aria-hidden="true" />
-          <span>Disponibles:</span>
-          <span className="font-bold">{metricas.libres}</span>
-        </div>
-        <div className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-control bg-amber-50 text-amber-800 border border-amber-200">
-          <span className="w-2 h-2 rounded-full bg-amber-500" aria-hidden="true" />
-          <span>Ocupadas:</span>
-          <span className="font-bold">{metricas.ocupadas}</span>
-        </div>
-        <div className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-control bg-amber-50 text-amber-700 border border-amber-200">
-          <span className="w-2 h-2 rounded-full bg-amber-400" aria-hidden="true" />
-          <span>Limpieza pendiente:</span>
-          <span className="font-bold">{metricas.limpieza}</span>
-        </div>
-        <div className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-control bg-blue-50 text-blue-800 border border-blue-200">
-          <span className="w-2 h-2 rounded-full bg-blue-500" aria-hidden="true" />
-          <span>Reserva próxima:</span>
-          <span className="font-bold">{metricas.conReserva}</span>
-        </div>
+        {metricasConfig.map((item) => (
+          <div
+            key={item.key}
+            className={cn(
+              'inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-control border',
+              item.badgeClass,
+            )}
+          >
+            {item.dotClass && (
+              <span className={cn('w-2 h-2 rounded-full', item.dotClass)} aria-hidden="true" />
+            )}
+            <span>{item.label}</span>
+            <span className="font-bold">{item.valor}</span>
+          </div>
+        ))}
       </section>
 
       {/* Pestañas de zona */}

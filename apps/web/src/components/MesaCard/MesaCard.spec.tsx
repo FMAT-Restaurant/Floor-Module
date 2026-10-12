@@ -111,7 +111,7 @@ describe('MesaCard Component', () => {
     const handleSelect = vi.fn();
     render(<MesaCard mesa={mockBaseMesa} onSelect={handleSelect} />);
 
-    const card = screen.getByRole('button', { name: 'Mesa 4' });
+    const card = screen.getByLabelText('Mesa 4');
     fireEvent.click(card);
 
     expect(handleSelect).toHaveBeenCalledTimes(1);
@@ -135,7 +135,7 @@ describe('MesaCard Component', () => {
     const handleSelect = vi.fn();
     render(<MesaCard mesa={mockBaseMesa} onSelect={handleSelect} />);
 
-    const card = screen.getByRole('button', { name: 'Mesa 4' });
+    const card = screen.getByLabelText('Mesa 4');
     fireEvent.keyDown(card, { key: 'Enter' });
     expect(handleSelect).toHaveBeenCalledTimes(1);
 

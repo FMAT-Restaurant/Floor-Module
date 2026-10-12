@@ -9,7 +9,7 @@ export function formatTiempoOcupada(
 ): string | null {
   if (!ocupadaDesde) return null;
   const fecha = new Date(ocupadaDesde);
-  if (isNaN(fecha.getTime())) return null;
+  if (Number.isNaN(fecha.getTime())) return null;
 
   const diffMs = Math.max(0, now.getTime() - fecha.getTime());
   const diffMinutes = Math.floor(diffMs / (1000 * 60));

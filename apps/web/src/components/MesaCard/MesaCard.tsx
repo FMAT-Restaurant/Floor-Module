@@ -5,11 +5,46 @@ import { cn } from '../../lib/utils';
 import { formatTiempoOcupada } from './utils';
 
 export interface MesaCardProps {
-  mesa: MesaEnVivoDto;
-  isSelected?: boolean;
-  onSelect?: (mesa: MesaEnVivoDto) => void;
-  onAccion?: (mesa: MesaEnVivoDto) => void;
-  now?: Date;
+  readonly mesa: MesaEnVivoDto;
+  readonly isSelected?: boolean;
+  readonly onSelect?: (mesa: MesaEnVivoDto) => void;
+  readonly onAccion?: (mesa: MesaEnVivoDto) => void;
+  readonly now?: Date;
+}
+
+interface EstadoVisualInfo {
+  readonly badgeClass: string;
+  readonly dotClass: string;
+  readonly texto: string;
+}
+
+function getEstadoVisual(mesa: MesaEnVivoDto): EstadoVisualInfo {
+  if (mesa.estadoFisico === EstadoMesa.LIBRE) {
+    if (mesa.tieneReservaProxima) {
+      return {
+        badgeClass: 'bg-blue-50 text-blue-800 border-blue-200',
+        dotClass: 'bg-blue-500',
+        texto: 'Reservada',
+      };
+    }
+    return {
+      badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      dotClass: 'bg-emerald-500',
+      texto: 'Libre',
+    };
+  }
+  if (mesa.estadoFisico === EstadoMesa.OCUPADA) {
+    return {
+      badgeClass: 'bg-amber-50 text-amber-800 border-amber-200',
+      dotClass: 'bg-amber-500',
+      texto: 'Ocupada',
+    };
+  }
+  return {
+    badgeClass: 'bg-amber-50 text-amber-700 border-amber-200',
+    dotClass: 'bg-amber-400',
+    texto: 'Limpieza',
+  };
 }
 
 export function MesaCard({
@@ -19,12 +54,9 @@ export function MesaCard({
   onAccion,
   now,
 }: MesaCardProps): React.JSX.Element {
-  const isReservadaProxima = mesa.estadoFisico === EstadoMesa.LIBRE && mesa.tieneReservaProxima;
-  const isLibrePura = mesa.estadoFisico === EstadoMesa.LIBRE && !mesa.tieneReservaProxima;
   const isOcupada = mesa.estadoFisico === EstadoMesa.OCUPADA;
-  const isLimpieza = mesa.estadoFisico === EstadoMesa.LIMPIEZA_PENDIENTE;
-
   const tiempoOcupada = isOcupada ? formatTiempoOcupada(mesa.ocupadaDesde, now) : null;
+  const estadoVisual = getEstadoVisual(mesa);
 
   const handleCardClick = () => {
     onSelect?.(mesa);
@@ -44,10 +76,10 @@ export function MesaCard({
 
   return (
     <div
-      role="button"
       tabIndex={0}
       aria-pressed={isSelected}
       aria-label={`Mesa ${mesa.numeroMesa}`}
+      data-testid={`mesa-card-${mesa.numeroMesa}`}
       onClick={handleCardClick}
       onKeyDown={handleKeyDown}
       className={cn(
@@ -61,33 +93,18 @@ export function MesaCard({
         {/* Cabecera de estado: Dot semántico + texto + tags */}
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-1.5 flex-wrap">
-            {isReservadaProxima && (
-              <span className="inline-flex items-center gap-1.5 text-xs font-medium bg-blue-50 text-blue-800 px-2.5 py-0.5 rounded-full border border-blue-200">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-500" aria-hidden="true" />
-                Reservada
-              </span>
-            )}
-
-            {isLibrePura && (
-              <span className="inline-flex items-center gap-1.5 text-xs font-medium bg-emerald-50 text-emerald-700 px-2.5 py-0.5 rounded-full border border-emerald-200">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
-                Libre
-              </span>
-            )}
-
-            {isOcupada && (
-              <span className="inline-flex items-center gap-1.5 text-xs font-medium bg-amber-50 text-amber-800 px-2.5 py-0.5 rounded-full border border-amber-200">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" aria-hidden="true" />
-                Ocupada
-              </span>
-            )}
-
-            {isLimpieza && (
-              <span className="inline-flex items-center gap-1.5 text-xs font-medium bg-amber-50 text-amber-700 px-2.5 py-0.5 rounded-full border border-amber-200">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" aria-hidden="true" />
-                Limpieza
-              </span>
-            )}
+            <span
+              className={cn(
+                'inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-0.5 rounded-full border',
+                estadoVisual.badgeClass,
+              )}
+            >
+              <span
+                className={cn('w-1.5 h-1.5 rounded-full', estadoVisual.dotClass)}
+                aria-hidden="true"
+              />
+              {estadoVisual.texto}
+            </span>
 
             {mesa.unionId && (
               <span className="bg-orange-50 text-primary border border-orange-200 text-xs font-medium px-2 py-0.5 rounded-full">
