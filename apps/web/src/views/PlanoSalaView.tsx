@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertCircle, LayoutGrid, RotateCcw } from 'lucide-react';
-import { EstadoMesa, type MesaEnVivoDto } from '@floor/shared';
+import { AlertCircle, LayoutGrid, RotateCcw, CheckCircle2, X } from 'lucide-react';
+import { EstadoMesa, type MesaEnVivoDto, type OcuparMesaResponseDto } from '@floor/shared';
 import { getMesasEnVivo } from '../api/services/mesas.service';
 import { queryKeys } from '../api/queryKeys';
 import { MesaCard } from '../components/MesaCard';
+import { OcuparMesaModal } from '../components/OcuparMesaModal';
 import { cn } from '../lib/utils';
 
 export interface PlanoSalaViewProps {
@@ -28,6 +29,8 @@ export function PlanoSalaView({
 }: PlanoSalaViewProps): React.JSX.Element {
   const [selectedZona, setSelectedZona] = useState<string>('Todas');
   const [localSelectedMesaId, setLocalSelectedMesaId] = useState<string | null>(null);
+  const [mesaParaOcupar, setMesaParaOcupar] = useState<MesaEnVivoDto | null>(null);
+  const [toastExito, setToastExito] = useState<string | null>(null);
 
   const currentSelectedMesaId = selectedMesaId !== undefined ? selectedMesaId : localSelectedMesaId;
 
@@ -123,9 +126,33 @@ export function PlanoSalaView({
     return mesas.filter((m) => m.zona === selectedZona);
   }, [mesas, selectedZona]);
 
+  React.useEffect(() => {
+    if (!toastExito) return;
+    const timer = setTimeout(() => {
+      setToastExito(null);
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [toastExito]);
+
   const handleSelectMesa = (mesa: MesaEnVivoDto) => {
     setLocalSelectedMesaId(mesa.mesaId);
+    if (mesa.estadoFisico === EstadoMesa.LIBRE) {
+      setMesaParaOcupar(mesa);
+    }
     onSelectMesa?.(mesa);
+  };
+
+  const handleAccionMesa = (mesa: MesaEnVivoDto) => {
+    if (mesa.estadoFisico === EstadoMesa.LIBRE) {
+      setMesaParaOcupar(mesa);
+    }
+    onAccionMesa?.(mesa);
+  };
+
+  const handleOcupacionSuccess = (_response: OcuparMesaResponseDto) => {
+    const numero = mesaParaOcupar?.numeroMesa ?? '';
+    setToastExito(`Mesa ${numero} ocupada exitosamente.`);
+    setMesaParaOcupar(null);
   };
 
   return (
@@ -263,11 +290,39 @@ export function PlanoSalaView({
                 mesa={mesa}
                 isSelected={currentSelectedMesaId === mesa.mesaId}
                 onSelect={handleSelectMesa}
-                onAccion={onAccionMesa}
+                onAccion={handleAccionMesa}
                 mesasUnidas={mesasUnidas}
               />
             );
           })}
+        </div>
+      )}
+
+      {/* Modal de Ocupación de Mesa */}
+      <OcuparMesaModal
+        mesa={mesaParaOcupar}
+        isOpen={Boolean(mesaParaOcupar)}
+        onClose={() => setMesaParaOcupar(null)}
+        onSuccess={handleOcupacionSuccess}
+      />
+
+      {/* Toast informativo de éxito */}
+      {toastExito && (
+        <div
+          role="status"
+          data-testid="toast-ocupacion-exitosa"
+          className="fixed bottom-6 right-6 z-50 bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-card shadow-lg flex items-center gap-3 animate-fadeIn"
+        >
+          <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" aria-hidden="true" />
+          <span className="text-sm font-medium">{toastExito}</span>
+          <button
+            type="button"
+            aria-label="Cerrar notificación"
+            onClick={() => setToastExito(null)}
+            className="text-emerald-700 hover:text-emerald-900 ml-2 focus:outline-none"
+          >
+            <X className="w-4 h-4" aria-hidden="true" />
+          </button>
         </div>
       )}
     </div>
