@@ -28,7 +28,7 @@ describe('App Component', () => {
         <App />
       </QueryClientProvider>,
     );
-    expect(screen.getByText('Floor Module')).toBeInTheDocument();
+    expect(screen.getByText('Control de Sala')).toBeInTheDocument();
     expect(
       screen.getByText('Gestión de Sala, Mesas y Reservas en tiempo real'),
     ).toBeInTheDocument();

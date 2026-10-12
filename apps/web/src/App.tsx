@@ -10,7 +10,7 @@ export function App() {
         <header className="bg-surface border border-border rounded-card p-6 shadow-subtle flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold text-ink">Floor Module</h1>
+              <h1 className="text-2xl font-bold text-ink">Control de Sala</h1>
               <span className="text-xs bg-primary-soft text-primary font-semibold px-2.5 py-0.5 rounded-full border border-primary/20">
                 v1.0.0
               </span>
