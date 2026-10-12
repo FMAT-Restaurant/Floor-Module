@@ -278,6 +278,8 @@ type OcuparMesaRequestDto = {
 };
 ```
 
+> **Nota de Implementación Frontend (UX):** En la interfaz web (`OcuparMesaModal`), los campos `reservaId` y `esperaId` no se capturan como texto plano de UUIDs, sino mediante selectores desplegables amigables que listan las reservas confirmadas y los turnos en espera activos con nombres legibles de comensales y horarios. Además, son **mutuamente excluyentes** (la ocupación de una mesa proviene de una reserva, de la lista de espera, o de un walk-in directo, pero nunca de ambas simultáneamente).
+
 ### 5.3 Meseros — Satisface: RF-010, RF-011
 
 | Método | Ruta | Request | Response | Errores |
