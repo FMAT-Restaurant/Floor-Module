@@ -1,11 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { X, ChevronDown, AlertTriangle, Clock } from 'lucide-react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { X, ChevronDown, AlertTriangle, Clock, Loader2, AlertCircle } from 'lucide-react';
 import {
   fixtureMeserosCatalogo,
   type MesaEnVivoDto,
   type MeseroCatalogoItem,
+  type OcuparMesaRequestDto,
   type OcuparMesaResponseDto,
 } from '@floor/shared';
+import { ocuparMesa } from '../../api/services/mesas.service';
+import { queryKeys } from '../../api/queryKeys';
+import { isApiError } from '../../api/error';
 import { cn } from '../../lib/utils';
 
 export interface OcuparMesaModalProps {
@@ -20,8 +25,11 @@ export function OcuparMesaModal({
   mesa,
   isOpen,
   onClose,
+  onSuccess,
   meserosCatalogo = fixtureMeserosCatalogo,
 }: OcuparMesaModalProps): React.JSX.Element | null {
+  const queryClient = useQueryClient();
+
   const [comensales, setComensales] = useState<number | ''>(1);
   const [meseroId, setMeseroId] = useState<string>('');
   const [forzarSobrecupo, setForzarSobrecupo] = useState<boolean>(false);
@@ -29,6 +37,38 @@ export function OcuparMesaModal({
   const [reservaId, setReservaId] = useState<string>('');
   const [esperaId, setEsperaId] = useState<string>('');
   const [mostrarOpcionesAvanzadas, setMostrarOpcionesAvanzadas] = useState(false);
+
+  // Estados para advertencias provocadas por 409 del backend
+  const [mostrarSobrecupoBackend, setMostrarSobrecupoBackend] = useState(false);
+  const [mostrarReservaProximaBackend, setMostrarReservaProximaBackend] = useState(false);
+  const [errorApi, setErrorApi] = useState<string | null>(null);
+
+  const ocuparMutation = useMutation({
+    mutationFn: (dto: OcuparMesaRequestDto) => {
+      if (!mesa) throw new Error('No hay mesa seleccionada');
+      return ocuparMesa(mesa.mesaId, dto);
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.mesas.all });
+      onClose();
+      onSuccess?.(data);
+    },
+    onError: (error: unknown) => {
+      if (isApiError(error)) {
+        if (error.code === 'SOBRECUPO_DETECTADO') {
+          setMostrarSobrecupoBackend(true);
+        }
+        if (error.code === 'RESERVA_PROXIMA_PRESENTE') {
+          setMostrarReservaProximaBackend(true);
+        }
+        setErrorApi(error.message);
+      } else if (error instanceof Error) {
+        setErrorApi(error.message);
+      } else {
+        setErrorApi('Error al ocupar la mesa');
+      }
+    },
+  });
 
   useEffect(() => {
     if (isOpen && mesa) {
@@ -39,12 +79,15 @@ export function OcuparMesaModal({
       setReservaId('');
       setEsperaId('');
       setMostrarOpcionesAvanzadas(false);
+      setMostrarSobrecupoBackend(false);
+      setMostrarReservaProximaBackend(false);
+      setErrorApi(null);
     }
   }, [isOpen, mesa]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' && !ocuparMutation.isPending) {
         onClose();
       }
     };
@@ -54,7 +97,7 @@ export function OcuparMesaModal({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, ocuparMutation.isPending]);
 
   if (!isOpen || !mesa) {
     return null;
@@ -66,27 +109,42 @@ export function OcuparMesaModal({
 
   // Detección reactiva de sobrecupo (RN-02)
   const haySobrecupo = comensalesValido ? comensalesNum > mesa.capacidad : false;
+  const debeMostrarSobrecupo = haySobrecupo || mostrarSobrecupoBackend;
 
   // Detección reactiva de reserva próxima (RN-05)
   const hayReservaProxima = Boolean(mesa.tieneReservaProxima);
+  const debeMostrarReservaProxima = hayReservaProxima || mostrarReservaProximaBackend;
 
   // Si hay sobrecupo o reserva próxima, se requiere confirmación explícita
-  const bloqueadoPorSobrecupo = haySobrecupo && !forzarSobrecupo;
-  const bloqueadoPorReserva = hayReservaProxima && !forzarOcupacion;
+  const bloqueadoPorSobrecupo = debeMostrarSobrecupo && !forzarSobrecupo;
+  const bloqueadoPorReserva = debeMostrarReservaProxima && !forzarOcupacion;
 
   const isFormValid =
     comensalesValido && meseroValido && !bloqueadoPorSobrecupo && !bloqueadoPorReserva;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isFormValid) return;
+    if (!isFormValid || ocuparMutation.isPending) return;
+
+    setErrorApi(null);
+
+    const payload: OcuparMesaRequestDto = {
+      comensales: comensalesNum,
+      meseroId,
+      ...(forzarSobrecupo ? { forzarSobrecupo: true } : {}),
+      ...(forzarOcupacion ? { forzarOcupacion: true } : {}),
+      ...(reservaId.trim() ? { reservaId: reservaId.trim() } : {}),
+      ...(esperaId.trim() ? { esperaId: esperaId.trim() } : {}),
+    };
+
+    ocuparMutation.mutate(payload);
   };
 
   return (
     <div
       role="presentation"
       onClick={(e) => {
-        if (e.target === e.currentTarget) {
+        if (e.target === e.currentTarget && !ocuparMutation.isPending) {
           onClose();
         }
       }}
@@ -104,7 +162,8 @@ export function OcuparMesaModal({
           type="button"
           aria-label="Cerrar modal"
           onClick={onClose}
-          className="absolute top-4 right-4 text-muted hover:text-ink p-1 rounded-control transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20"
+          disabled={ocuparMutation.isPending}
+          className="absolute top-4 right-4 text-muted hover:text-ink p-1 rounded-control transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
         >
           <X className="w-5 h-5" aria-hidden="true" />
         </button>
@@ -132,12 +191,13 @@ export function OcuparMesaModal({
               type="number"
               min={1}
               value={comensales}
+              disabled={ocuparMutation.isPending}
               onChange={(e) => {
                 const val = e.target.value;
                 setComensales(val === '' ? '' : parseInt(val, 10));
               }}
               className={cn(
-                'h-10 px-3 rounded-control border border-border focus:ring-2 focus:ring-primary w-full outline-none transition-colors text-ink text-sm',
+                'h-10 px-3 rounded-control border border-border focus:ring-2 focus:ring-primary w-full outline-none transition-colors text-ink text-sm disabled:bg-gray-100 disabled:cursor-not-allowed',
                 !comensalesValido && comensales !== '' && 'border-red-500 focus:ring-red-500',
               )}
               placeholder="Ej. 2"
@@ -151,7 +211,7 @@ export function OcuparMesaModal({
           </div>
 
           {/* Advertencia de Sobrecupo (RN-02) */}
-          {haySobrecupo && (
+          {debeMostrarSobrecupo && (
             <div
               data-testid="alerta-sobrecupo"
               className="bg-amber-50 border border-amber-200 text-amber-900 rounded-lg p-3 text-sm flex flex-col gap-2"
@@ -168,6 +228,7 @@ export function OcuparMesaModal({
                 <input
                   type="checkbox"
                   checked={forzarSobrecupo}
+                  disabled={ocuparMutation.isPending}
                   onChange={(e) => setForzarSobrecupo(e.target.checked)}
                   className="rounded text-primary focus:ring-primary h-4 w-4"
                 />
@@ -177,7 +238,7 @@ export function OcuparMesaModal({
           )}
 
           {/* Advertencia de Reserva Próxima (RN-05) */}
-          {hayReservaProxima && (
+          {debeMostrarReservaProxima && (
             <div
               data-testid="alerta-reserva-proxima"
               className="bg-blue-50 border border-blue-200 text-blue-900 rounded-lg p-3 text-sm flex flex-col gap-2"
@@ -193,11 +254,24 @@ export function OcuparMesaModal({
                 <input
                   type="checkbox"
                   checked={forzarOcupacion}
+                  disabled={ocuparMutation.isPending}
                   onChange={(e) => setForzarOcupacion(e.target.checked)}
                   className="rounded text-primary focus:ring-primary h-4 w-4"
                 />
                 <span>Ocupar de todos modos (tiempo de servicio limitado)</span>
               </label>
+            </div>
+          )}
+
+          {/* Banner de error de API */}
+          {errorApi && (
+            <div
+              role="alert"
+              data-testid="alerta-error-api"
+              className="bg-red-50 border border-red-200 text-red-800 rounded-lg p-3 text-sm flex items-start gap-2"
+            >
+              <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" aria-hidden="true" />
+              <div className="text-xs flex-1">{errorApi}</div>
             </div>
           )}
 
@@ -210,8 +284,9 @@ export function OcuparMesaModal({
               id="meseroId"
               name="meseroId"
               value={meseroId}
+              disabled={ocuparMutation.isPending}
               onChange={(e) => setMeseroId(e.target.value)}
-              className="h-10 px-3 rounded-control border border-border focus:ring-2 focus:ring-primary w-full bg-white outline-none transition-colors text-ink text-sm"
+              className="h-10 px-3 rounded-control border border-border focus:ring-2 focus:ring-primary w-full bg-white outline-none transition-colors text-ink text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
               required
             >
               <option value="">Selecciona un mesero...</option>
@@ -232,8 +307,9 @@ export function OcuparMesaModal({
           <div className="pt-1">
             <button
               type="button"
+              disabled={ocuparMutation.isPending}
               onClick={() => setMostrarOpcionesAvanzadas(!mostrarOpcionesAvanzadas)}
-              className="text-xs text-muted hover:text-ink font-medium inline-flex items-center gap-1 transition-colors"
+              className="text-xs text-muted hover:text-ink font-medium inline-flex items-center gap-1 transition-colors disabled:opacity-50"
             >
               <ChevronDown
                 className={cn(
@@ -256,9 +332,10 @@ export function OcuparMesaModal({
                     name="reservaId"
                     type="text"
                     value={reservaId}
+                    disabled={ocuparMutation.isPending}
                     onChange={(e) => setReservaId(e.target.value)}
                     placeholder="UUID de reserva asociada"
-                    className="h-9 px-2.5 text-xs rounded-control border border-border focus:ring-2 focus:ring-primary w-full bg-white outline-none text-ink"
+                    className="h-9 px-2.5 text-xs rounded-control border border-border focus:ring-2 focus:ring-primary w-full bg-white outline-none text-ink disabled:bg-gray-100"
                   />
                 </div>
                 <div>
@@ -270,9 +347,10 @@ export function OcuparMesaModal({
                     name="esperaId"
                     type="text"
                     value={esperaId}
+                    disabled={ocuparMutation.isPending}
                     onChange={(e) => setEsperaId(e.target.value)}
                     placeholder="UUID del turno en lista de espera"
-                    className="h-9 px-2.5 text-xs rounded-control border border-border focus:ring-2 focus:ring-primary w-full bg-white outline-none text-ink"
+                    className="h-9 px-2.5 text-xs rounded-control border border-border focus:ring-2 focus:ring-primary w-full bg-white outline-none text-ink disabled:bg-gray-100"
                   />
                 </div>
               </div>
@@ -284,16 +362,24 @@ export function OcuparMesaModal({
             <button
               type="button"
               onClick={onClose}
-              className="h-10 px-4 bg-white border border-border text-text rounded-control hover:bg-gray-50 text-sm font-medium transition-colors"
+              disabled={ocuparMutation.isPending}
+              className="h-10 px-4 bg-white border border-border text-text rounded-control hover:bg-gray-50 text-sm font-medium transition-colors disabled:opacity-50"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              disabled={!isFormValid}
+              disabled={!isFormValid || ocuparMutation.isPending}
               className="h-10 px-4 bg-primary hover:bg-primary-hover text-white rounded-control font-medium inline-flex items-center gap-2 text-sm transition-colors disabled:opacity-50"
             >
-              Confirmar Ocupación
+              {ocuparMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                  <span>Ocupando...</span>
+                </>
+              ) : (
+                <span>Confirmar Ocupación</span>
+              )}
             </button>
           </div>
         </form>
