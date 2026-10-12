@@ -65,7 +65,7 @@ export function MesaCard({
     onSelect?.(mesa);
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       onSelect?.(mesa);
@@ -79,20 +79,22 @@ export function MesaCard({
 
   return (
     <div
-      tabIndex={0}
-      aria-pressed={isSelected}
-      aria-label={`Mesa ${mesa.numeroMesa}`}
       data-testid={`mesa-card-${mesa.numeroMesa}`}
-      onClick={handleCardClick}
-      onKeyDown={handleKeyDown}
       className={cn(
-        'p-4 rounded-card border transition-all cursor-pointer flex flex-col justify-between gap-4 select-none',
+        'p-4 rounded-card border transition-all flex flex-col justify-between gap-4 select-none',
         isSelected
           ? 'bg-primary-soft border-primary shadow-subtle'
           : 'bg-surface border-border hover:border-gray-300 shadow-subtle',
       )}
     >
-      <div className="space-y-3">
+      <button
+        type="button"
+        aria-label={`Mesa ${mesa.numeroMesa}`}
+        aria-pressed={isSelected}
+        onClick={handleCardClick}
+        onKeyDown={handleKeyDown}
+        className="w-full text-left space-y-3 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 rounded-lg p-0.5"
+      >
         {/* Cabecera de estado: Dot semántico + texto + tags */}
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-1.5 flex-wrap">
@@ -139,7 +141,7 @@ export function MesaCard({
             <span>{mesa.zona}</span>
           </div>
         </div>
-      </div>
+      </button>
 
       {/* Acción secundaria de 40px en la base */}
       <div className="pt-2 border-t border-border/60">
