@@ -174,4 +174,35 @@ describe('PlanoSalaView Component', () => {
     expect(handleAccion).toHaveBeenCalledTimes(1);
     expect(handleAccion).toHaveBeenCalledWith(expect.objectContaining({ numeroMesa: 1 }));
   });
+
+  it('opens OcuparMesaModal when clicking on a free table and displays toast upon successful occupancy', async () => {
+    render(
+      <QueryClientProvider client={createTestQueryClient()}>
+        <PlanoSalaView />
+      </QueryClientProvider>,
+    );
+
+    // Click en Mesa 1 (Libre)
+    const mesa1Card = await screen.findByLabelText('Mesa 1');
+    fireEvent.click(mesa1Card);
+
+    // Modal abierto
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByText('Ocupar Mesa 1')).toBeInTheDocument();
+
+    // Seleccionamos mesero
+    const selectMesero = screen.getByLabelText(/mesero responsable/i);
+    fireEvent.change(selectMesero, {
+      target: { value: 'd1000000-0000-4000-8000-000000000001' },
+    });
+
+    // Confirmamos ocupación
+    const submitBtn = screen.getByRole('button', { name: /confirmar ocupación/i });
+    fireEvent.click(submitBtn);
+
+    // Modal se cierra y aparece el toast de éxito
+    expect(await screen.findByTestId('toast-ocupacion-exitosa')).toBeInTheDocument();
+    expect(screen.getByText('Mesa 1 ocupada exitosamente.')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
 });
