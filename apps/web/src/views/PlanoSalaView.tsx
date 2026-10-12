@@ -255,9 +255,7 @@ export function PlanoSalaView({
       {!isLoading && !isError && mesasFiltradas.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {mesasFiltradas.map((mesa) => {
-            const mesasUnidas = mesa.unionId
-              ? (unionesMap.get(mesa.unionId) ?? []).filter((n) => n !== mesa.numeroMesa)
-              : undefined;
+            const mesasUnidas = mesa.unionId ? unionesMap.get(mesa.unionId) : undefined;
 
             return (
               <MesaCard

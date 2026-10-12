@@ -95,8 +95,7 @@ describe('PlanoSalaView Component', () => {
     expect(screen.getByText(/Reserva próxima:/i)).toBeInTheDocument();
 
     // Union tables show joined table numbers
-    expect(screen.getByText('Unido con 6')).toBeInTheDocument();
-    expect(screen.getByText('Unido con 5')).toBeInTheDocument();
+    expect(screen.getAllByText('Unidos: 5 y 6').length).toBe(2);
   });
 
   it('filters tables properly when switching zone tabs', async () => {

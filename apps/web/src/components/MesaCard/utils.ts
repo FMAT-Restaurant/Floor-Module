@@ -24,19 +24,30 @@ export function formatTiempoOcupada(
 }
 
 /**
- * Helper to format union badge text indicating joined tables.
- * Returns 'Unido con X', 'Unido con X y Y', or fallback 'Unión activa'.
+ * Helper to format union badge text indicating all tables in the group.
+ * Formats as 'Unidos: x, y y z', sorted in ascending numerical order.
+ * Examples:
+ * - [5, 6] -> 'Unidos: 5 y 6'
+ * - [2, 5, 8] -> 'Unidos: 2, 5 y 8'
+ * - [2] -> 'Unidos: 2'
+ * - undefined or empty -> 'Unión activa'
  */
 export function formatUnionTexto(mesasUnidas?: readonly number[]): string {
   if (!mesasUnidas || mesasUnidas.length === 0) {
     return 'Unión activa';
   }
 
-  if (mesasUnidas.length === 1) {
-    return `Unido con ${mesasUnidas[0]}`;
+  const sorted = [...mesasUnidas].sort((a, b) => a - b);
+
+  if (sorted.length === 1) {
+    return `Unidos: ${sorted[0]}`;
   }
 
-  const ultimaMesa = mesasUnidas[mesasUnidas.length - 1];
-  const anteriores = mesasUnidas.slice(0, -1).join(', ');
-  return `Unido con ${anteriores} y ${ultimaMesa}`;
+  if (sorted.length === 2) {
+    return `Unidos: ${sorted[0]} y ${sorted[1]}`;
+  }
+
+  const ultima = sorted[sorted.length - 1];
+  const anteriores = sorted.slice(0, -1).join(', ');
+  return `Unidos: ${anteriores} y ${ultima}`;
 }

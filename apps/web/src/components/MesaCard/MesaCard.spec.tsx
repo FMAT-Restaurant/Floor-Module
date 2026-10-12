@@ -96,7 +96,7 @@ describe('MesaCard Component', () => {
     expect(unionBadge.className).toContain('text-primary');
   });
 
-  it('renders table in union showing specific joined table ("Unido con 2")', () => {
+  it('renders table in union showing specific joined table ("Unidos: 2")', () => {
     const mesaEnUnion: MesaEnVivoDto = {
       ...mockBaseMesa,
       unionId: '22222222-2222-4222-8222-222222222222',
@@ -104,10 +104,10 @@ describe('MesaCard Component', () => {
 
     render(<MesaCard mesa={mesaEnUnion} mesasUnidas={[2]} />);
 
-    expect(screen.getByText('Unido con 2')).toBeInTheDocument();
+    expect(screen.getByText('Unidos: 2')).toBeInTheDocument();
   });
 
-  it('renders table in union showing multiple joined tables ("Unido con 2 y 5")', () => {
+  it('renders table in union showing multiple joined tables ("Unidos: 2 y 5")', () => {
     const mesaEnUnion: MesaEnVivoDto = {
       ...mockBaseMesa,
       unionId: '22222222-2222-4222-8222-222222222222',
@@ -115,7 +115,7 @@ describe('MesaCard Component', () => {
 
     render(<MesaCard mesa={mesaEnUnion} mesasUnidas={[2, 5]} />);
 
-    expect(screen.getByText('Unido con 2 y 5')).toBeInTheDocument();
+    expect(screen.getByText('Unidos: 2 y 5')).toBeInTheDocument();
   });
 
   it('applies orange border and soft orange background styles when isSelected is true', () => {
@@ -192,17 +192,19 @@ describe('MesaCard Component', () => {
 
     it('formats single joined table', async () => {
       const { formatUnionTexto } = await import('./utils');
-      expect(formatUnionTexto([2])).toBe('Unido con 2');
+      expect(formatUnionTexto([2])).toBe('Unidos: 2');
     });
 
-    it('formats two joined tables with "y"', async () => {
+    it('formats two joined tables with "y" and sorts numerically', async () => {
       const { formatUnionTexto } = await import('./utils');
-      expect(formatUnionTexto([2, 5])).toBe('Unido con 2 y 5');
+      expect(formatUnionTexto([2, 5])).toBe('Unidos: 2 y 5');
+      expect(formatUnionTexto([5, 2])).toBe('Unidos: 2 y 5');
     });
 
-    it('formats three or more joined tables with comma and "y"', async () => {
+    it('formats three or more joined tables with comma, "y" and numerical sorting', async () => {
       const { formatUnionTexto } = await import('./utils');
-      expect(formatUnionTexto([2, 4, 5])).toBe('Unido con 2, 4 y 5');
+      expect(formatUnionTexto([2, 4, 5])).toBe('Unidos: 2, 4 y 5');
+      expect(formatUnionTexto([5, 2, 8])).toBe('Unidos: 2, 5 y 8');
     });
   });
 });
