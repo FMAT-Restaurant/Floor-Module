@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { X, ChevronDown } from 'lucide-react';
+import { X, ChevronDown, AlertTriangle, Clock } from 'lucide-react';
 import {
   fixtureMeserosCatalogo,
   type MesaEnVivoDto,
@@ -24,6 +24,8 @@ export function OcuparMesaModal({
 }: OcuparMesaModalProps): React.JSX.Element | null {
   const [comensales, setComensales] = useState<number | ''>(1);
   const [meseroId, setMeseroId] = useState<string>('');
+  const [forzarSobrecupo, setForzarSobrecupo] = useState<boolean>(false);
+  const [forzarOcupacion, setForzarOcupacion] = useState<boolean>(false);
   const [reservaId, setReservaId] = useState<string>('');
   const [esperaId, setEsperaId] = useState<string>('');
   const [mostrarOpcionesAvanzadas, setMostrarOpcionesAvanzadas] = useState(false);
@@ -32,6 +34,8 @@ export function OcuparMesaModal({
     if (isOpen && mesa) {
       setComensales(1);
       setMeseroId(mesa.meseroId ?? '');
+      setForzarSobrecupo(false);
+      setForzarOcupacion(false);
       setReservaId('');
       setEsperaId('');
       setMostrarOpcionesAvanzadas(false);
@@ -59,7 +63,19 @@ export function OcuparMesaModal({
   const comensalesNum = typeof comensales === 'number' ? comensales : parseInt(comensales, 10);
   const comensalesValido = Number.isInteger(comensalesNum) && comensalesNum >= 1;
   const meseroValido = Boolean(meseroId && meseroId.trim().length > 0);
-  const isFormValid = comensalesValido && meseroValido;
+
+  // Detección reactiva de sobrecupo (RN-02)
+  const haySobrecupo = comensalesValido ? comensalesNum > mesa.capacidad : false;
+
+  // Detección reactiva de reserva próxima (RN-05)
+  const hayReservaProxima = Boolean(mesa.tieneReservaProxima);
+
+  // Si hay sobrecupo o reserva próxima, se requiere confirmación explícita
+  const bloqueadoPorSobrecupo = haySobrecupo && !forzarSobrecupo;
+  const bloqueadoPorReserva = hayReservaProxima && !forzarOcupacion;
+
+  const isFormValid =
+    comensalesValido && meseroValido && !bloqueadoPorSobrecupo && !bloqueadoPorReserva;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -133,6 +149,57 @@ export function OcuparMesaModal({
               </p>
             )}
           </div>
+
+          {/* Advertencia de Sobrecupo (RN-02) */}
+          {haySobrecupo && (
+            <div
+              data-testid="alerta-sobrecupo"
+              className="bg-amber-50 border border-amber-200 text-amber-900 rounded-lg p-3 text-sm flex flex-col gap-2"
+            >
+              <div className="flex items-center gap-2 font-medium">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" aria-hidden="true" />
+                <span>Aforo excedido</span>
+              </div>
+              <p className="text-xs text-amber-800">
+                La mesa tiene capacidad para {mesa.capacidad} personas y se registraron{' '}
+                {comensalesNum}.
+              </p>
+              <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer mt-1 select-none">
+                <input
+                  type="checkbox"
+                  checked={forzarSobrecupo}
+                  onChange={(e) => setForzarSobrecupo(e.target.checked)}
+                  className="rounded text-primary focus:ring-primary h-4 w-4"
+                />
+                <span>Autorizar sobrecupo para esta mesa</span>
+              </label>
+            </div>
+          )}
+
+          {/* Advertencia de Reserva Próxima (RN-05) */}
+          {hayReservaProxima && (
+            <div
+              data-testid="alerta-reserva-proxima"
+              className="bg-blue-50 border border-blue-200 text-blue-900 rounded-lg p-3 text-sm flex flex-col gap-2"
+            >
+              <div className="flex items-center gap-2 font-medium">
+                <Clock className="w-4 h-4 text-blue-600 shrink-0" aria-hidden="true" />
+                <span>Reserva próxima programada</span>
+              </div>
+              <p className="text-xs text-blue-800">
+                Esta mesa tiene una reserva confirmada en los próximos 30 minutos.
+              </p>
+              <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer mt-1 select-none">
+                <input
+                  type="checkbox"
+                  checked={forzarOcupacion}
+                  onChange={(e) => setForzarOcupacion(e.target.checked)}
+                  className="rounded text-primary focus:ring-primary h-4 w-4"
+                />
+                <span>Ocupar de todos modos (tiempo de servicio limitado)</span>
+              </label>
+            </div>
+          )}
 
           {/* Mesero responsable */}
           <div>
