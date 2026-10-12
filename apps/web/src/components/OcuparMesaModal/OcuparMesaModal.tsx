@@ -141,8 +141,37 @@ export function OcuparMesaModal({
   const bloqueadoPorSobrecupo = debeMostrarSobrecupo && !forzarSobrecupo;
   const bloqueadoPorReserva = debeMostrarReservaProxima && !forzarOcupacion;
 
+  // Reserva y Lista de espera son mutuamente excluyentes (un cliente proviene de una u otra)
+  const conflictoOrigen = Boolean(reservaId && esperaId);
+
   const isFormValid =
-    comensalesValido && meseroValido && !bloqueadoPorSobrecupo && !bloqueadoPorReserva;
+    comensalesValido &&
+    meseroValido &&
+    !bloqueadoPorSobrecupo &&
+    !bloqueadoPorReserva &&
+    !conflictoOrigen;
+
+  const handleSelectReserva = (id: string) => {
+    setReservaId(id);
+    if (id) {
+      setEsperaId('');
+      const res = reservasDisponibles.find((r) => r.reservaId === id);
+      if (res) {
+        setComensales(res.cantidadPersonas);
+      }
+    }
+  };
+
+  const handleSelectEspera = (id: string) => {
+    setEsperaId(id);
+    if (id) {
+      setReservaId('');
+      const esp = esperaDisponible.find((item) => item.esperaId === id);
+      if (esp) {
+        setComensales(esp.cantidadPersonas);
+      }
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -345,6 +374,18 @@ export function OcuparMesaModal({
 
             {mostrarOpcionesAvanzadas && (
               <div className="mt-2 p-3 bg-canvas border border-border rounded-control space-y-3">
+                <p className="text-[11px] text-muted">
+                  Vinculación de origen (mutuamente excluyentes: selecciona reserva o lista de
+                  espera):
+                </p>
+
+                {conflictoOrigen && (
+                  <p className="text-xs text-red-600 font-medium">
+                    Una mesa solo puede ocuparse proveniente de una reserva o de un turno de lista
+                    de espera.
+                  </p>
+                )}
+
                 {/* Selector de Reserva */}
                 <div>
                   <label htmlFor="reservaId" className="block text-xs font-medium text-text mb-1">
@@ -355,16 +396,7 @@ export function OcuparMesaModal({
                     name="reservaId"
                     value={reservaId}
                     disabled={ocuparMutation.isPending}
-                    onChange={(e) => {
-                      const id = e.target.value;
-                      setReservaId(id);
-                      if (id) {
-                        const res = reservasDisponibles.find((r) => r.reservaId === id);
-                        if (res) {
-                          setComensales(res.cantidadPersonas);
-                        }
-                      }
-                    }}
+                    onChange={(e) => handleSelectReserva(e.target.value)}
                     className="h-9 px-2.5 text-xs rounded-control border border-border focus:ring-2 focus:ring-primary w-full bg-white outline-none text-ink disabled:bg-gray-100"
                   >
                     <option value="">Sin reserva vinculada</option>
@@ -386,16 +418,7 @@ export function OcuparMesaModal({
                     name="esperaId"
                     value={esperaId}
                     disabled={ocuparMutation.isPending}
-                    onChange={(e) => {
-                      const id = e.target.value;
-                      setEsperaId(id);
-                      if (id) {
-                        const esp = esperaDisponible.find((item) => item.esperaId === id);
-                        if (esp) {
-                          setComensales(esp.cantidadPersonas);
-                        }
-                      }
-                    }}
+                    onChange={(e) => handleSelectEspera(e.target.value)}
                     className="h-9 px-2.5 text-xs rounded-control border border-border focus:ring-2 focus:ring-primary w-full bg-white outline-none text-ink disabled:bg-gray-100"
                   >
                     <option value="">Sin turno en lista de espera</option>

@@ -303,6 +303,7 @@ Formato tipo píldora o caja suave con borde, dot semántico y texto claro:
   - Reserva: `{nombreContacto} · {cantidadPersonas} pers. ({horaInicio})`
   - Lista de espera: `{nombreCliente} · {cantidadPersonas} pers.`
 - **Sin captura manual de UUIDs:** El operador nunca debe introducir cadenas UUID manuales. Los identificadores técnicos se manejan como valor subyacente del `<option value={id}>`, garantizando velocidad operativa para el host y reduciendo errores humanos.
+- **Exclusión mutua de origen:** Una ocupación de mesa proviene de un único flujo (reserva confirmada O lista de espera presencial O walk-in directo). La interfaz debe garantizar exclusión mutua entre `reservaId` y `esperaId`: seleccionar uno limpia automáticamente el otro para evitar conflictos operativos.
 
 ---
 

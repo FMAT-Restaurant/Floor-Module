@@ -304,7 +304,7 @@ describe('OcuparMesaModal Component', () => {
     expect(screen.getByTestId('alerta-sobrecupo')).toBeInTheDocument();
   });
 
-  it('soporta seleccion amigable mediante dropdowns de reservas activas y turnos de espera', async () => {
+  it('soporta seleccion amigable mediante dropdowns y garantiza que reserva y espera sean mutuamente excluyentes', async () => {
     let capturedBody: Record<string, unknown> | null = null;
     server.use(
       http.post('*/sala/mesas/:mesaId/ocupar', async ({ request }) => {
@@ -339,15 +339,21 @@ describe('OcuparMesaModal Component', () => {
     ).toBeInTheDocument();
     expect(screen.getByRole('option', { name: /Gabriel Torres · 2 pers\./i })).toBeInTheDocument();
 
-    // Seleccionamos la reserva de Mauricio Díaz
+    // 1. Seleccionamos la reserva de Mauricio Díaz (2 personas)
     fireEvent.change(selectReserva, {
       target: { value: 'b1000000-0000-4000-8000-000000000002' },
     });
 
-    // Seleccionamos el turno de Gabriel Torres
+    expect(selectReserva).toHaveValue('b1000000-0000-4000-8000-000000000002');
+    expect(selectEspera).toHaveValue('');
+
+    // 2. Al seleccionar luego el turno de lista de espera, la reserva se deselecciona automáticamente
     fireEvent.change(selectEspera, {
       target: { value: 'e1000000-0000-4000-8000-000000000001' },
     });
+
+    expect(selectEspera).toHaveValue('e1000000-0000-4000-8000-000000000001');
+    expect(selectReserva).toHaveValue(''); // Se limpió por exclusión mutua
 
     fireEvent.click(screen.getByRole('button', { name: /confirmar ocupación/i }));
 
@@ -358,9 +364,9 @@ describe('OcuparMesaModal Component', () => {
     expect(capturedBody).toEqual({
       comensales: 2,
       meseroId: FIXTURE_MESERO_IDS.CARLOS,
-      reservaId: 'b1000000-0000-4000-8000-000000000002',
       esperaId: 'e1000000-0000-4000-8000-000000000001',
     });
+    expect(capturedBody).not.toHaveProperty('reservaId');
   });
 
   it('cierra el modal al presionar Cancelar, el botón X o la tecla Escape', () => {
