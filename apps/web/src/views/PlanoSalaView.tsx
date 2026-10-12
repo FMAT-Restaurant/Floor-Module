@@ -104,6 +104,18 @@ export function PlanoSalaView({
     return ['Todas', ...Array.from(uniqueZonas)];
   }, [mesas]);
 
+  const unionesMap = useMemo(() => {
+    const map = new Map<string, number[]>();
+    for (const m of mesas) {
+      if (m.unionId) {
+        const list = map.get(m.unionId) ?? [];
+        list.push(m.numeroMesa);
+        map.set(m.unionId, list);
+      }
+    }
+    return map;
+  }, [mesas]);
+
   const mesasFiltradas = useMemo(() => {
     if (selectedZona === 'Todas') {
       return mesas;
@@ -242,15 +254,22 @@ export function PlanoSalaView({
       {/* Cuadrícula de mesas poblada */}
       {!isLoading && !isError && mesasFiltradas.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {mesasFiltradas.map((mesa) => (
-            <MesaCard
-              key={mesa.mesaId}
-              mesa={mesa}
-              isSelected={currentSelectedMesaId === mesa.mesaId}
-              onSelect={handleSelectMesa}
-              onAccion={onAccionMesa}
-            />
-          ))}
+          {mesasFiltradas.map((mesa) => {
+            const mesasUnidas = mesa.unionId
+              ? (unionesMap.get(mesa.unionId) ?? []).filter((n) => n !== mesa.numeroMesa)
+              : undefined;
+
+            return (
+              <MesaCard
+                key={mesa.mesaId}
+                mesa={mesa}
+                isSelected={currentSelectedMesaId === mesa.mesaId}
+                onSelect={handleSelectMesa}
+                onAccion={onAccionMesa}
+                mesasUnidas={mesasUnidas}
+              />
+            );
+          })}
         </div>
       )}
     </div>

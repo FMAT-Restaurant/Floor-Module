@@ -2,7 +2,7 @@ import React from 'react';
 import { Users, Clock } from 'lucide-react';
 import { EstadoMesa, type MesaEnVivoDto } from '@floor/shared';
 import { cn } from '../../lib/utils';
-import { formatTiempoOcupada } from './utils';
+import { formatTiempoOcupada, formatUnionTexto } from './utils';
 
 export interface MesaCardProps {
   readonly mesa: MesaEnVivoDto;
@@ -10,6 +10,7 @@ export interface MesaCardProps {
   readonly onSelect?: (mesa: MesaEnVivoDto) => void;
   readonly onAccion?: (mesa: MesaEnVivoDto) => void;
   readonly now?: Date;
+  readonly mesasUnidas?: readonly number[];
 }
 
 interface EstadoVisualInfo {
@@ -53,10 +54,12 @@ export function MesaCard({
   onSelect,
   onAccion,
   now,
+  mesasUnidas,
 }: MesaCardProps): React.JSX.Element {
   const isOcupada = mesa.estadoFisico === EstadoMesa.OCUPADA;
   const tiempoOcupada = isOcupada ? formatTiempoOcupada(mesa.ocupadaDesde, now) : null;
   const estadoVisual = getEstadoVisual(mesa);
+  const textoUnion = mesa.unionId ? formatUnionTexto(mesasUnidas) : null;
 
   const handleCardClick = () => {
     onSelect?.(mesa);
@@ -108,7 +111,7 @@ export function MesaCard({
 
             {mesa.unionId && (
               <span className="bg-orange-50 text-primary border border-orange-200 text-xs font-medium px-2 py-0.5 rounded-full">
-                Unión activa
+                {textoUnion}
               </span>
             )}
           </div>
