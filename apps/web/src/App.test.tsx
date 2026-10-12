@@ -1,16 +1,39 @@
 import { render, screen } from '@testing-library/react';
-import { QueryClientProvider } from '@tanstack/react-query';
-import { describe, it, expect } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { describe, it, expect, beforeAll, afterEach, afterAll } from 'vitest';
 import type { Socket } from 'socket.io-client';
-import { queryClient } from './api/queryClient';
 import { App } from './App';
 import { SalaSocketProvider } from './context';
-import { EstadoMesa } from '@floor/shared';
+import { server } from './mocks/server';
+import { mockDb } from './mocks/db';
+
+function createTestQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+      },
+    },
+  });
+}
+
+beforeAll(() => {
+  server.listen({ onUnhandledRequest: 'error' });
+});
+
+afterEach(() => {
+  server.resetHandlers();
+  mockDb.reset();
+});
+
+afterAll(() => {
+  server.close();
+});
 
 describe('App Component', () => {
   it('renders within QueryClientProvider without errors', () => {
     render(
-      <QueryClientProvider client={queryClient}>
+      <QueryClientProvider client={createTestQueryClient()}>
         <App />
       </QueryClientProvider>,
     );
@@ -20,31 +43,9 @@ describe('App Component', () => {
     ).toBeInTheDocument();
   });
 
-  it('displays table state badges from shared contracts with canonical visual indicators', () => {
-    render(
-      <QueryClientProvider client={queryClient}>
-        <App />
-      </QueryClientProvider>,
-    );
-    expect(screen.getByText(new RegExp(EstadoMesa.LIBRE))).toBeInTheDocument();
-    expect(screen.getByText(new RegExp(EstadoMesa.OCUPADA))).toBeInTheDocument();
-    expect(screen.getByText(new RegExp(EstadoMesa.LIMPIEZA_PENDIENTE))).toBeInTheDocument();
-  });
-
-  it('renders canonical buttons demo with official visual design tokens', () => {
-    render(
-      <QueryClientProvider client={queryClient}>
-        <App />
-      </QueryClientProvider>,
-    );
-    expect(screen.getByRole('button', { name: /acción principal/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /vista previa/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /descartar/i })).toBeInTheDocument();
-  });
-
   it('renders reconnection status badge when websocket is disconnected', () => {
     render(
-      <QueryClientProvider client={queryClient}>
+      <QueryClientProvider client={createTestQueryClient()}>
         <App />
       </QueryClientProvider>,
     );
@@ -61,12 +62,26 @@ describe('App Component', () => {
     } as unknown as Socket;
 
     render(
-      <QueryClientProvider client={queryClient}>
+      <QueryClientProvider client={createTestQueryClient()}>
         <SalaSocketProvider socket={mockSocket}>
           <App />
         </SalaSocketProvider>
       </QueryClientProvider>,
     );
     expect(screen.getByText(/en vivo/i)).toBeInTheDocument();
+  });
+
+  it('integrates and renders PlanoSalaView with live tables and state indicators', async () => {
+    render(
+      <QueryClientProvider client={createTestQueryClient()}>
+        <App />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText('Mesa 1')).toBeInTheDocument();
+    expect(screen.getByText('Mesa 2')).toBeInTheDocument();
+    expect(screen.getByText(/Disponibles:/i)).toBeInTheDocument();
+    expect(screen.getByText(/Ocupadas:/i)).toBeInTheDocument();
+    expect(screen.getByText(/Limpieza pendiente:/i)).toBeInTheDocument();
   });
 });
