@@ -5,7 +5,7 @@ import { EstadoMesa, type MesaEnVivoDto, type MeseroCatalogoItem } from '@floor/
 import { asignarMesero, cambiarEstadoMesa } from '../../api/services/mesas.service';
 import { queryKeys } from '../../api/queryKeys';
 import { isApiError } from '../../api/error';
-import { OperacionMesaModal } from './OperacionMesaModal';
+import { Modal } from '../Modal';
 
 export interface AccionesMesaProps {
   readonly mesa: MesaEnVivoDto;
@@ -144,7 +144,7 @@ export function AccionesMesa({ mesa, meserosCatalogo }: AccionesMesaProps) {
       )}
 
       {modal && (
-        <OperacionMesaModal
+        <Modal
           title={
             modal === 'salida'
               ? `Salida de comensales · Mesa ${mesa.numeroMesa}`
@@ -245,7 +245,7 @@ export function AccionesMesa({ mesa, meserosCatalogo }: AccionesMesaProps) {
               </button>
             </div>
           </form>
-        </OperacionMesaModal>
+        </Modal>
       )}
     </div>
   );
