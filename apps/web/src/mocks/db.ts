@@ -33,6 +33,7 @@ import {
   type ReservaDto,
   type UnionDto,
 } from '@floor/shared';
+import { esReservaConfirmadaFutura } from '../lib/reservas';
 
 export class MockApiError extends Error {
   constructor(
@@ -249,6 +250,17 @@ export class MockDatabase {
         409,
         'TRANSICION_INVALIDA',
         'Solo se puede dar de baja una mesa en estado Libre',
+      );
+    }
+    if (
+      this.reservas.some(
+        (reserva) => reserva.mesaId === mesaId && esReservaConfirmadaFutura(reserva),
+      )
+    ) {
+      throw new MockApiError(
+        409,
+        'TRANSICION_INVALIDA',
+        'La mesa tiene reservas confirmadas futuras. Cancela o reasigna esas reservas antes de darla de baja.',
       );
     }
     mesa.activo = false;

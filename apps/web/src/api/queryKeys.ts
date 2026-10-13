@@ -1,6 +1,7 @@
 export const queryKeys = {
   mesas: {
     all: ['mesas'] as const,
+    list: (filters?: Record<string, unknown>) => [...queryKeys.mesas.all, 'list', filters] as const,
     enVivo: () => [...queryKeys.mesas.all, 'en-vivo'] as const,
     detail: (mesaId: string) => [...queryKeys.mesas.all, 'detail', mesaId] as const,
     asignaciones: () => [...queryKeys.mesas.all, 'asignaciones'] as const,
