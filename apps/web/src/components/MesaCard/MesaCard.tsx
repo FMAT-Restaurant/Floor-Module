@@ -1,5 +1,5 @@
 import React from 'react';
-import { Users, Clock } from 'lucide-react';
+import { Users, Clock, UserRound } from 'lucide-react';
 import { EstadoMesa, type MesaEnVivoDto } from '@floor/shared';
 import { cn } from '../../lib/utils';
 import { formatTiempoOcupada, formatUnionTexto } from './utils';
@@ -11,6 +11,8 @@ export interface MesaCardProps {
   readonly onAccion?: (mesa: MesaEnVivoDto) => void;
   readonly now?: Date;
   readonly mesasUnidas?: readonly number[];
+  readonly meseroNombre?: string;
+  readonly acciones?: React.ReactNode;
 }
 
 interface EstadoVisualInfo {
@@ -55,6 +57,8 @@ export function MesaCard({
   onAccion,
   now,
   mesasUnidas,
+  meseroNombre,
+  acciones,
 }: MesaCardProps): React.JSX.Element {
   const isOcupada = mesa.estadoFisico === EstadoMesa.OCUPADA;
   const tiempoOcupada = isOcupada ? formatTiempoOcupada(mesa.ocupadaDesde, now) : null;
@@ -140,11 +144,18 @@ export function MesaCard({
             <span>·</span>
             <span>{mesa.zona}</span>
           </div>
+          <p className="flex items-center gap-2 text-sm text-muted mt-2">
+            <UserRound className="w-4 h-4 shrink-0" aria-hidden="true" />
+            <span>
+              {mesa.meseroId ? (meseroNombre ?? 'Mesero asignado') : 'Sin mesero asignado'}
+            </span>
+          </p>
         </div>
       </button>
 
       {/* Acción secundaria de 40px en la base */}
-      <div className="pt-2 border-t border-border/60">
+      <div className="pt-2 border-t border-border/60 space-y-2">
+        {acciones}
         <button
           type="button"
           onClick={handleAccionClick}

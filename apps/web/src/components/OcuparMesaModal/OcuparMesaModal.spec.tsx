@@ -379,7 +379,7 @@ describe('OcuparMesaModal Component', () => {
     fireEvent.click(screen.getByRole('button', { name: /cerrar modal/i }));
     expect(handleClose).toHaveBeenCalledTimes(2);
 
-    fireEvent.keyDown(window, { key: 'Escape' });
+    fireEvent.keyDown(document, { key: 'Escape' });
     expect(handleClose).toHaveBeenCalledTimes(3);
   });
 });

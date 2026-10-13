@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { describe, it, expect, beforeAll, afterEach, afterAll, vi } from 'vitest';
 import { http, HttpResponse } from 'msw';
@@ -6,6 +6,7 @@ import { server } from '../mocks/server';
 import { mockDb } from '../mocks/db';
 import { createTestQueryClient } from '../test/test-utils';
 import { PlanoSalaView } from './PlanoSalaView';
+import { FIXTURE_MESERO_IDS } from '@floor/shared';
 
 beforeAll(() => {
   server.listen({ onUnhandledRequest: 'error' });
@@ -21,6 +22,53 @@ afterAll(() => {
 });
 
 describe('PlanoSalaView Component', () => {
+  it('FE-005, RF-007, RF-023: marcar limpia actualiza el estado y los controles de la card', async () => {
+    render(
+      <QueryClientProvider client={createTestQueryClient()}>
+        <PlanoSalaView />
+      </QueryClientProvider>,
+    );
+    const card = await screen.findByTestId('mesa-card-4');
+    expect(within(card).getByText('Limpieza')).toBeInTheDocument();
+    fireEvent.click(within(card).getByRole('button', { name: 'Marcar limpia' }));
+    expect(await within(card).findByText('Libre')).toBeInTheDocument();
+    expect(within(card).queryByRole('button', { name: 'Marcar limpia' })).not.toBeInTheDocument();
+  });
+
+  it('FE-005, RF-006: confirmar salida actualiza la card a Limpieza y ofrece marcar limpia', async () => {
+    render(
+      <QueryClientProvider client={createTestQueryClient()}>
+        <PlanoSalaView />
+      </QueryClientProvider>,
+    );
+    const card = await screen.findByTestId('mesa-card-3');
+    fireEvent.click(within(card).getByRole('button', { name: 'Salida de comensales' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar salida' }));
+    expect(await within(card).findByText('Limpieza')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(within(card).getByRole('button', { name: 'Marcar limpia' })).toBeEnabled();
+    expect(within(card).queryByTestId('tiempo-ocupada')).not.toBeInTheDocument();
+  });
+
+  it('FE-005, RF-011, RF-023: reasignar actualiza el nombre del mesero sin seleccionar la mesa', async () => {
+    const onSelect = vi.fn();
+    render(
+      <QueryClientProvider client={createTestQueryClient()}>
+        <PlanoSalaView onSelectMesa={onSelect} />
+      </QueryClientProvider>,
+    );
+    const card = await screen.findByTestId('mesa-card-3');
+    expect(within(card).getByText('Carlos Gómez')).toBeInTheDocument();
+    fireEvent.click(within(card).getByRole('button', { name: 'Reasignar mesero' }));
+    fireEvent.change(screen.getByLabelText('Mesero responsable'), {
+      target: { value: FIXTURE_MESERO_IDS.ANA },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar asignación' }));
+    expect(await within(card).findByText('Ana Martínez')).toBeInTheDocument();
+    expect(within(card).queryByText('Carlos Gómez')).not.toBeInTheDocument();
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
   it('renders loading skeletons while query is in loading state', () => {
     server.use(
       http.get('*/sala/mesas/estado-en-vivo', async () => {
