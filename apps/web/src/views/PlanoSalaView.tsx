@@ -1,17 +1,25 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertCircle, LayoutGrid, RotateCcw, CheckCircle2, X } from 'lucide-react';
-import { EstadoMesa, type MesaEnVivoDto, type OcuparMesaResponseDto } from '@floor/shared';
+import {
+  EstadoMesa,
+  fixtureMeserosCatalogo,
+  type MesaEnVivoDto,
+  type MeseroCatalogoItem,
+  type OcuparMesaResponseDto,
+} from '@floor/shared';
 import { getMesasEnVivo } from '../api/services/mesas.service';
 import { queryKeys } from '../api/queryKeys';
 import { MesaCard } from '../components/MesaCard';
 import { OcuparMesaModal } from '../components/OcuparMesaModal';
+import { AccionesMesa } from '../components/AccionesMesa';
 import { cn } from '../lib/utils';
 
 export interface PlanoSalaViewProps {
   readonly onSelectMesa?: (mesa: MesaEnVivoDto) => void;
   readonly onAccionMesa?: (mesa: MesaEnVivoDto) => void;
   readonly selectedMesaId?: string | null;
+  readonly meserosCatalogo?: readonly MeseroCatalogoItem[];
 }
 
 interface MetricaItem {
@@ -26,6 +34,7 @@ export function PlanoSalaView({
   onSelectMesa,
   onAccionMesa,
   selectedMesaId,
+  meserosCatalogo = fixtureMeserosCatalogo,
 }: PlanoSalaViewProps): React.JSX.Element {
   const [selectedZona, setSelectedZona] = useState<string>('Todas');
   const [localSelectedMesaId, setLocalSelectedMesaId] = useState<string | null>(null);
@@ -292,6 +301,8 @@ export function PlanoSalaView({
                 onSelect={handleSelectMesa}
                 onAccion={handleAccionMesa}
                 mesasUnidas={mesasUnidas}
+                meseroNombre={meserosCatalogo.find((m) => m.meseroId === mesa.meseroId)?.nombre}
+                acciones={<AccionesMesa mesa={mesa} meserosCatalogo={meserosCatalogo} />}
               />
             );
           })}
@@ -304,6 +315,7 @@ export function PlanoSalaView({
         isOpen={Boolean(mesaParaOcupar)}
         onClose={() => setMesaParaOcupar(null)}
         onSuccess={handleOcupacionSuccess}
+        meserosCatalogo={meserosCatalogo}
       />
 
       {/* Toast informativo de éxito */}

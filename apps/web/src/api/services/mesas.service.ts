@@ -1,4 +1,6 @@
 import type {
+  AsignacionDto,
+  AsignarMeseroRequestDto,
   ActualizarEstadoMesaRequestDto,
   ActualizarEstadoMesaResponseDto,
   ActualizarMesaRequestDto,
@@ -49,4 +51,11 @@ export async function actualizarMesa(id: string, dto: ActualizarMesaRequestDto):
 
 export async function eliminarMesa(id: string): Promise<void> {
   return apiClient.delete<void>(`/mesas/${id}`);
+}
+
+export async function asignarMesero(
+  id: string,
+  dto: AsignarMeseroRequestDto,
+): Promise<AsignacionDto> {
+  return apiClient.put<AsignacionDto>(`/mesas/${id}/mesero`, dto);
 }
