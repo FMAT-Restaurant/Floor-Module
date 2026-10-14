@@ -1,0 +1,138 @@
+// SH-004 · Modelo de datos de Sala (SPEC.md §2, ARCHITECTURE.md §7, ADR-002)
+// Convención: campos en camelCase en código, columnas en snake_case en BD (@map).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Enums ----------
+// Prisma no admite espacios ni guiones en nombres de enum: se usa @map para que
+// en la BD queden los valores exactos del SPEC ('Limpieza pendiente', 'No-show', ...).
+
+enum EstadoMesa {
+  Libre
+  Ocupada
+  Limpieza_pendiente @map("Limpieza pendiente")
+}
+
+enum EstadoReserva {
+  Confirmada
+  Cancelada
+  Completada
+  No_show @map("No-show")
+}
+
+enum EstadoEspera {
+  En_espera @map("En espera")
+  Notificado
+  Sentado
+  Cancelado
+}
+
+enum EstadoUnion {
+  Activa
+  Disuelta
+}
+
+// ---------- Entidades ----------
+
+model UnionMesa {
+  id               String      @id @default(dbgenerated("gen_random_uuid()")) @map("id_union") @db.Uuid
+  zona             String      @db.VarChar(50)
+  fechaCreacion    DateTime    @default(now()) @map("fecha_creacion") @db.Timestamptz(6)
+  fechaDisolucion  DateTime?   @map("fecha_disolucion") @db.Timestamptz(6)
+  estado           EstadoUnion @default(Activa)
+
+  mesas Mesa[]
+}
+
+model Mesa {
+  id            String     @id @default(dbgenerated("gen_random_uuid()")) @map("id_mesa") @db.Uuid
+  numeroMesa    Int        @map("numero_mesa")
+  capacidad     Int
+  zona          String     @db.VarChar(50)
+  estadoFisico  EstadoMesa @default(Libre) @map("estado_fisico")
+  unionMesaId   String?    @map("id_union_mesa") @db.Uuid
+  activo        Boolean    @default(true)
+  creadoEn      DateTime   @default(now()) @map("creado_en") @db.Timestamptz(6)
+  actualizadoEn DateTime   @default(now()) @updatedAt @map("actualizado_en") @db.Timestamptz(6)
+  ocupadaDesde  DateTime?  @map("ocupada_desde") @db.Timestamptz(6)
+
+  unionMesa    UnionMesa?         @relation(fields: [unionMesaId], references: [id])
+  reservas     Reserva[]
+  asignaciones AsignacionMesero[]
+  esperas      ListaEspera[]
+
+  // El índice único parcial (numero_mesa WHERE activo) NO se declara aquí:
+  // Prisma no soporta índices parciales; se crea en SQL crudo (ver migración).
+  @@index([unionMesaId])
+  @@index([zona, estadoFisico])
+}
+
+model Reserva {
+  id               String        @id @default(dbgenerated("gen_random_uuid()")) @map("id_reserva") @db.Uuid
+  mesaId           String        @map("id_mesa") @db.Uuid
+  nombreContacto   String        @map("nombre_contacto") @db.VarChar(120)
+  telefonoContacto String        @map("telefono_contacto") @db.VarChar(20)
+  cantidadPersonas Int           @map("cantidad_personas")
+  fechaReserva     DateTime      @map("fecha_reserva") @db.Date
+  horaInicio       DateTime      @map("hora_inicio") @db.Time(6)
+  horaFin          DateTime      @map("hora_fin") @db.Time(6)
+  // Columna GENERADA por PostgreSQL a partir de fecha + horas (se crea en SQL crudo).
+  // Es opcional en Prisma para que nunca intentemos escribirla desde código.
+  rango            Unsupported("tstzrange")?
+  estado           EstadoReserva @default(Confirmada)
+  alertaEmitida    Boolean       @default(false) @map("alerta_emitida")
+
+  mesa Mesa @relation(fields: [mesaId], references: [id])
+
+  @@index([mesaId, fechaReserva])
+  @@index([estado, fechaReserva])
+}
+
+model AsignacionMesero {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @map("id_asignacion") @db.Uuid
+  mesaId          String    @map("id_mesa") @db.Uuid
+  // UUID v4 del claim `sub` de Auth. Sin FK: el personal vive en otro servicio.
+  meseroId        String    @map("id_mesero") @db.Uuid
+  fechaHoraInicio DateTime  @map("fecha_hora_inicio") @db.Timestamptz(6)
+  fechaHoraFin    DateTime? @map("fecha_hora_fin") @db.Timestamptz(6)
+  activo          Boolean   @default(true)
+
+  mesa Mesa @relation(fields: [mesaId], references: [id])
+
+  // Índice único parcial (id_mesa WHERE activo) en SQL crudo.
+  @@index([meseroId, activo])
+}
+
+model ListaEspera {
+  id               String       @id @default(dbgenerated("gen_random_uuid()")) @map("id_espera") @db.Uuid
+  nombreCliente    String       @map("nombre_cliente") @db.VarChar(120)
+  telefonoContacto String       @map("telefono_contacto") @db.VarChar(20)
+  cantidadPersonas Int          @map("cantidad_personas")
+  horaLlegada      DateTime     @default(now()) @map("hora_llegada") @db.Timestamptz(6)
+  estado           EstadoEspera @default(En_espera)
+  mesaAsignadaId   String?      @map("id_mesa_asignada") @db.Uuid
+
+  mesaAsignada Mesa? @relation(fields: [mesaAsignadaId], references: [id])
+
+  // Soporta la búsqueda FIFO (RN-17): el más antiguo "En espera".
+  @@index([estado, horaLlegada])
+}
+
+model OutboxEvento {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  routingKey    String    @map("routing_key")
+  payload       Json      @db.JsonB
+  correlationId String?   @map("correlation_id")
+  creadoEn      DateTime  @default(now()) @map("creado_en") @db.Timestamptz(6)
+  publicadoEn   DateTime? @map("publicado_en") @db.Timestamptz(6)
+  intentos      Int       @default(0)
+
+  @@map("outbox_evento")
+}
