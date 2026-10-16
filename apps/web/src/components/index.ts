@@ -6,3 +6,4 @@ export * from './BajaMesaModal';
 export * from './Modal';
 export * from './Calendar';
 export * from './DatePicker';
+export * from './TimePicker';

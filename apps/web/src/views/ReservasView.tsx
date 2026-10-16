@@ -21,6 +21,7 @@ import {
   type ReservaProximaAlertaPayload,
 } from '@floor/shared';
 import { DatePicker } from '../components/DatePicker';
+import { TimePicker } from '../components/TimePicker';
 import { getMesas } from '../api/services/mesas.service';
 import { getReservas, verificarDisponibilidad } from '../api/services/reservas.service';
 import { queryKeys } from '../api/queryKeys';
@@ -413,29 +414,15 @@ export function ReservasView({
             />
 
             {/* Hora de inicio */}
-            <div className="flex flex-col gap-1">
-              <label htmlFor={`${id}-disp-hora`} className="text-sm font-medium text-ink">
-                Hora de inicio <span className="text-red-500">*</span>
-              </label>
-              <input
-                id={`${id}-disp-hora`}
-                name="horaInicio"
-                type="time"
-                value={dispHoraInicio}
-                aria-invalid={Boolean(dispErrores.horaInicio)}
-                onChange={(e) => setDispHoraInicio(e.target.value)}
-                className={cn(
-                  'h-control px-3 bg-surface border border-border rounded-control text-sm text-text focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary',
-                  dispErrores.horaInicio &&
-                    'border-red-500 focus:border-red-500 focus:ring-red-500',
-                )}
-              />
-              {dispErrores.horaInicio && (
-                <span role="alert" className="text-xs text-red-600">
-                  {dispErrores.horaInicio}
-                </span>
-              )}
-            </div>
+            <TimePicker
+              id={`${id}-disp-hora`}
+              name="horaInicio"
+              label="Hora de inicio"
+              required
+              value={dispHoraInicio}
+              error={dispErrores.horaInicio}
+              onChange={(nueva) => setDispHoraInicio(nueva)}
+            />
 
             {/* Duración */}
             <div className="flex flex-col gap-1">
