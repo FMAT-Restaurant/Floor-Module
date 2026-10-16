@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'vitest';
 import type { Socket } from 'socket.io-client';
@@ -74,5 +74,20 @@ describe('App Component', () => {
     expect(screen.getByText(/Disponibles:/i)).toBeInTheDocument();
     expect(screen.getByText(/Ocupadas:/i)).toBeInTheDocument();
     expect(screen.getByText(/Limpieza pendiente:/i)).toBeInTheDocument();
+  });
+
+  it('switches to ReservasView when the "Reservas" navigation tab is selected', async () => {
+    render(
+      <QueryClientProvider client={createTestQueryClient()}>
+        <App />
+      </QueryClientProvider>,
+    );
+
+    const reservasTab = screen.getByRole('tab', { name: 'Reservas' });
+    fireEvent.click(reservasTab);
+
+    expect(reservasTab).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByRole('heading', { name: 'Agenda de reservas' })).toBeInTheDocument();
+    expect(screen.getByTestId('buscador-disponibilidad')).toBeInTheDocument();
   });
 });

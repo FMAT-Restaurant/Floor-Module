@@ -1,16 +1,19 @@
 import { useId, useRef, useState } from 'react';
 import { useSalaSocket } from './hooks';
-import { AdministracionMesasView, PlanoSalaView } from './views';
+import { AdministracionMesasView, PlanoSalaView, ReservasView } from './views';
 
 const views = [
   { key: 'plano', label: 'Plano de sala' },
+  { key: 'reservas', label: 'Reservas' },
   { key: 'mesas', label: 'Configuración de mesas' },
 ] as const;
+
+type ViewKey = (typeof views)[number]['key'];
 
 export function App() {
   const { isConnected } = useSalaSocket();
   const id = useId();
-  const [view, setView] = useState<'plano' | 'mesas'>('plano');
+  const [view, setView] = useState<ViewKey>('plano');
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   return (
@@ -80,7 +83,13 @@ export function App() {
             ))}
           </nav>
           <div role="tabpanel" id={`${id}-panel-${view}`} aria-labelledby={`${id}-tab-${view}`}>
-            {view === 'plano' ? <PlanoSalaView /> : <AdministracionMesasView />}
+            {view === 'plano' ? (
+              <PlanoSalaView />
+            ) : view === 'reservas' ? (
+              <ReservasView />
+            ) : (
+              <AdministracionMesasView />
+            )}
           </div>
         </main>
       </div>
