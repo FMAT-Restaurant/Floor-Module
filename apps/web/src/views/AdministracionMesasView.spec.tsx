@@ -442,6 +442,10 @@ describe('FE-006 · Administración de mesas (integración frontend + MSW)', () 
     renderPanel(true);
     const plano = screen.getByRole('tab', { name: 'Plano de sala' });
     fireEvent.keyDown(plano, { key: 'ArrowRight' });
+    const reservas = screen.getByRole('tab', { name: 'Reservas' });
+    expect(reservas).toHaveAttribute('aria-selected', 'true');
+    expect(reservas).toHaveFocus();
+    fireEvent.keyDown(reservas, { key: 'ArrowRight' });
     const admin = screen.getByRole('tab', { name: 'Configuración de mesas' });
     expect(admin).toHaveAttribute('aria-selected', 'true');
     expect(admin).toHaveFocus();
