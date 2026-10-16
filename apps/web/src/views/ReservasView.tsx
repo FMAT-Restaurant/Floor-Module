@@ -1,9 +1,9 @@
-import React, { useCallback, useId, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   AlertCircle,
   BellRing,
-  Calendar,
+  Calendar as CalendarIcon,
   CheckCircle2,
   Clock,
   Phone,
@@ -20,6 +20,7 @@ import {
   type ReservaDto,
   type ReservaProximaAlertaPayload,
 } from '@floor/shared';
+import { Calendar as CustomCalendar } from '../components/Calendar';
 import { getMesas } from '../api/services/mesas.service';
 import { getReservas, verificarDisponibilidad } from '../api/services/reservas.service';
 import { queryKeys } from '../api/queryKeys';
@@ -125,6 +126,19 @@ export function ReservasView({
   const [dispErrores, setDispErrores] = useState<Record<string, string>>({});
   const [criteriosDisponibilidad, setCriteriosDisponibilidad] =
     useState<ConsultarDisponibilidadQueryDto | null>(null);
+  const [mostrarCalendario, setMostrarCalendario] = useState(false);
+  const calendarioRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!mostrarCalendario) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (calendarioRef.current && !calendarioRef.current.contains(e.target as Node)) {
+        setMostrarCalendario(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [mostrarCalendario]);
 
   const handleCambiarFechaAgenda = (nuevaFecha: string) => {
     setSelectedFecha(nuevaFecha);
@@ -311,24 +325,55 @@ export function ReservasView({
         </div>
 
         <div className="flex flex-wrap items-end gap-2">
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1 relative" ref={calendarioRef}>
             <label htmlFor={`${id}-fecha-agenda`} className="text-sm font-medium text-ink">
               Fecha de agenda
             </label>
-            <input
-              id={`${id}-fecha-agenda`}
-              type="date"
-              value={selectedFecha}
-              onChange={(e) => handleCambiarFechaAgenda(e.target.value)}
-              className="h-control px-3 bg-surface border border-border rounded-control text-sm text-text focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-            />
+            <div className="flex items-center gap-1.5">
+              <input
+                id={`${id}-fecha-agenda`}
+                type="date"
+                value={selectedFecha}
+                onChange={(e) => handleCambiarFechaAgenda(e.target.value)}
+                className="h-control px-3 bg-surface border border-border rounded-control text-sm text-text focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+              />
+              <button
+                type="button"
+                aria-label="Abrir calendario interactivo"
+                onClick={() => setMostrarCalendario((prev) => !prev)}
+                className={cn(
+                  'h-control px-3 border rounded-control text-sm font-medium transition-colors inline-flex items-center justify-center gap-1.5 focus-visible:ring-2 focus-visible:ring-primary',
+                  mostrarCalendario
+                    ? 'bg-primary-soft border-primary text-primary font-semibold'
+                    : 'bg-surface border-border hover:bg-canvas text-text',
+                )}
+              >
+                <CalendarIcon className="w-4 h-4 text-primary" aria-hidden="true" />
+                <span className="hidden sm:inline">Calendario</span>
+              </button>
+            </div>
+
+            {mostrarCalendario && (
+              <div
+                data-testid="calendario-popover"
+                className="absolute top-full mt-2 right-0 sm:right-auto sm:left-0 z-30 shadow-lg animate-fadeIn"
+              >
+                <CustomCalendar
+                  value={selectedFecha}
+                  onChange={(nueva) => {
+                    handleCambiarFechaAgenda(nueva);
+                    setMostrarCalendario(false);
+                  }}
+                />
+              </div>
+            )}
           </div>
           <button
             type="button"
             onClick={() => handleCambiarFechaAgenda(getFechaLocalHoy())}
             className="h-control px-4 bg-surface border border-border hover:bg-canvas text-text text-sm font-medium rounded-control transition-colors inline-flex items-center justify-center gap-1.5 focus-visible:ring-2 focus-visible:ring-primary"
           >
-            <Calendar className="w-4 h-4 text-primary" aria-hidden="true" />
+            <CalendarIcon className="w-4 h-4 text-primary" aria-hidden="true" />
             <span>Hoy</span>
           </button>
         </div>
@@ -814,7 +859,7 @@ export function ReservasView({
             className="bg-canvas border border-border rounded-card p-10 text-center flex flex-col items-center justify-center space-y-2"
           >
             <div className="w-12 h-12 rounded-full bg-surface border border-border flex items-center justify-center text-muted">
-              <Calendar className="w-6 h-6" aria-hidden="true" />
+              <CalendarIcon className="w-6 h-6" aria-hidden="true" />
             </div>
             <h3 className="text-base font-bold text-ink">
               No hay reservas para los criterios seleccionados
