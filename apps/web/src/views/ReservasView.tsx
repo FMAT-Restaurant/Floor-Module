@@ -1,15 +1,27 @@
 import React, { useCallback, useId, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertCircle, BellRing, Calendar, Clock, Phone, RotateCcw, Users, X } from 'lucide-react';
+import {
+  AlertCircle,
+  BellRing,
+  Calendar,
+  CheckCircle2,
+  Clock,
+  Phone,
+  RotateCcw,
+  Search,
+  Users,
+  X,
+} from 'lucide-react';
 import {
   EstadoReserva,
+  consultarDisponibilidadQuerySchema,
   type ConsultarDisponibilidadQueryDto,
   type MesaDto,
   type ReservaDto,
   type ReservaProximaAlertaPayload,
 } from '@floor/shared';
 import { getMesas } from '../api/services/mesas.service';
-import { getReservas } from '../api/services/reservas.service';
+import { getReservas, verificarDisponibilidad } from '../api/services/reservas.service';
 import { queryKeys } from '../api/queryKeys';
 import { useSalaSocket } from '../hooks/useSalaSocket';
 import { getFechaLocalHoy } from '../lib/reservas';
@@ -33,6 +45,8 @@ const PESTAÑAS_ESTADO: readonly { key: FiltroEstado; label: string }[] = [
   { key: EstadoReserva.CANCELADA, label: EstadoReserva.CANCELADA },
   { key: EstadoReserva.NO_SHOW, label: EstadoReserva.NO_SHOW },
 ];
+
+const DURACIONES_RAPIDAS = [60, 90, 120] as const;
 
 const ESTADO_BADGE_CONFIG: Record<
   EstadoReserva,
@@ -89,7 +103,10 @@ export function EstadoReservaBadge({
   );
 }
 
-export function ReservasView({ initialFecha }: ReservasViewProps): React.JSX.Element {
+export function ReservasView({
+  initialFecha,
+  onSeleccionarMesaDisponible,
+}: ReservasViewProps): React.JSX.Element {
   const id = useId();
   const [selectedFecha, setSelectedFecha] = useState<string>(
     () => initialFecha ?? getFechaLocalHoy(),
@@ -99,6 +116,20 @@ export function ReservasView({ initialFecha }: ReservasViewProps): React.JSX.Ele
   const [selectedFranja, setSelectedFranja] = useState<FranjaHoraria>('Todas');
   const [alertaProxima, setAlertaProxima] = useState<ReservaProximaAlertaPayload | null>(null);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
+  // Estados del Buscador Interactivo de Disponibilidad (RF-015)
+  const [dispFecha, setDispFecha] = useState<string>(() => initialFecha ?? getFechaLocalHoy());
+  const [dispHoraInicio, setDispHoraInicio] = useState<string>('19:00');
+  const [dispDuracion, setDispDuracion] = useState<string>('90');
+  const [dispPersonas, setDispPersonas] = useState<string>('2');
+  const [dispErrores, setDispErrores] = useState<Record<string, string>>({});
+  const [criteriosDisponibilidad, setCriteriosDisponibilidad] =
+    useState<ConsultarDisponibilidadQueryDto | null>(null);
+
+  const handleCambiarFechaAgenda = (nuevaFecha: string) => {
+    setSelectedFecha(nuevaFecha);
+    setDispFecha(nuevaFecha);
+  };
 
   const handleReservaProximaAlerta = useCallback((payload: ReservaProximaAlertaPayload) => {
     setAlertaProxima(payload);
@@ -118,8 +149,22 @@ export function ReservasView({ initialFecha }: ReservasViewProps): React.JSX.Ele
     queryFn: () => getMesas(),
   });
 
+  const disponibilidadQuery = useQuery({
+    queryKey: queryKeys.reservas.disponibilidad(
+      criteriosDisponibilidad
+        ? (criteriosDisponibilidad as unknown as Record<string, unknown>)
+        : undefined,
+    ),
+    queryFn: () => verificarDisponibilidad(criteriosDisponibilidad!),
+    enabled: criteriosDisponibilidad !== null,
+  });
+
   const reservas = useMemo(() => reservasQuery.data ?? [], [reservasQuery.data]);
   const mesas = useMemo(() => mesasQuery.data ?? [], [mesasQuery.data]);
+  const mesasDisponibles = useMemo(
+    () => disponibilidadQuery.data ?? [],
+    [disponibilidadQuery.data],
+  );
 
   const mesasMap = useMemo(() => {
     const map = new Map<string, MesaDto>();
@@ -215,6 +260,43 @@ export function ReservasView({ initialFecha }: ReservasViewProps): React.JSX.Ele
     return mesa ? `Mesa ${mesa.numeroMesa} (${mesa.zona})` : `Mesa ${alertaProxima.mesaId}`;
   }, [alertaProxima, mesasMap]);
 
+  const handleBuscarDisponibilidad = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const parsed = consultarDisponibilidadQuerySchema.safeParse({
+      fecha: dispFecha,
+      horaInicio: dispHoraInicio,
+      duracion: dispDuracion,
+      personas: dispPersonas,
+    });
+
+    if (!parsed.success) {
+      const nextErrors: Record<string, string> = {};
+      for (const issue of parsed.error.issues) {
+        const field = String(issue.path[0] ?? 'form');
+        if (!nextErrors[field]) {
+          nextErrors[field] = issue.message;
+        }
+      }
+      setDispErrores(nextErrors);
+      return;
+    }
+
+    setDispErrores({});
+    const nextCriterios = parsed.data;
+    if (
+      criteriosDisponibilidad &&
+      criteriosDisponibilidad.fecha === nextCriterios.fecha &&
+      criteriosDisponibilidad.horaInicio === nextCriterios.horaInicio &&
+      criteriosDisponibilidad.duracion === nextCriterios.duracion &&
+      criteriosDisponibilidad.personas === nextCriterios.personas
+    ) {
+      void disponibilidadQuery.refetch();
+    } else {
+      setCriteriosDisponibilidad(nextCriterios);
+    }
+  };
+
   return (
     <section className="space-y-6" aria-labelledby={`${id}-title`}>
       {/* Encabezado y selector de fecha */}
@@ -237,13 +319,13 @@ export function ReservasView({ initialFecha }: ReservasViewProps): React.JSX.Ele
               id={`${id}-fecha-agenda`}
               type="date"
               value={selectedFecha}
-              onChange={(e) => setSelectedFecha(e.target.value)}
+              onChange={(e) => handleCambiarFechaAgenda(e.target.value)}
               className="h-control px-3 bg-surface border border-border rounded-control text-sm text-text focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
             />
           </div>
           <button
             type="button"
-            onClick={() => setSelectedFecha(getFechaLocalHoy())}
+            onClick={() => handleCambiarFechaAgenda(getFechaLocalHoy())}
             className="h-control px-4 bg-surface border border-border hover:bg-canvas text-text text-sm font-medium rounded-control transition-colors inline-flex items-center justify-center gap-1.5 focus-visible:ring-2 focus-visible:ring-primary"
           >
             <Calendar className="w-4 h-4 text-primary" aria-hidden="true" />
@@ -306,6 +388,276 @@ export function ReservasView({ initialFecha }: ReservasViewProps): React.JSX.Ele
             <span className="font-bold">{item.valor}</span>
           </div>
         ))}
+      </section>
+
+      {/* Buscador Interactivo de Disponibilidad (RF-015) */}
+      <section
+        aria-label="Buscador de disponibilidad de mesas"
+        data-testid="buscador-disponibilidad"
+        className="bg-surface border border-border rounded-card p-4 sm:p-6 shadow-subtle space-y-4"
+      >
+        <div>
+          <h3 className="text-lg font-bold text-ink">Consultar disponibilidad de mesas</h3>
+          <p className="text-sm text-muted mt-0.5">
+            Encuentra mesas activas con capacidad suficiente y sin conflictos en la franja horaria
+            solicitada.
+          </p>
+        </div>
+
+        <form onSubmit={handleBuscarDisponibilidad} noValidate className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Fecha */}
+            <div className="flex flex-col gap-1">
+              <label htmlFor={`${id}-disp-fecha`} className="text-sm font-medium text-ink">
+                Fecha de reserva <span className="text-red-500">*</span>
+              </label>
+              <input
+                id={`${id}-disp-fecha`}
+                name="fecha"
+                type="date"
+                value={dispFecha}
+                aria-invalid={Boolean(dispErrores.fecha)}
+                onChange={(e) => setDispFecha(e.target.value)}
+                className={cn(
+                  'h-control px-3 bg-surface border border-border rounded-control text-sm text-text focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary',
+                  dispErrores.fecha && 'border-red-500 focus:border-red-500 focus:ring-red-500',
+                )}
+              />
+              {dispErrores.fecha && (
+                <span role="alert" className="text-xs text-red-600">
+                  {dispErrores.fecha}
+                </span>
+              )}
+            </div>
+
+            {/* Hora de inicio */}
+            <div className="flex flex-col gap-1">
+              <label htmlFor={`${id}-disp-hora`} className="text-sm font-medium text-ink">
+                Hora de inicio <span className="text-red-500">*</span>
+              </label>
+              <input
+                id={`${id}-disp-hora`}
+                name="horaInicio"
+                type="time"
+                value={dispHoraInicio}
+                aria-invalid={Boolean(dispErrores.horaInicio)}
+                onChange={(e) => setDispHoraInicio(e.target.value)}
+                className={cn(
+                  'h-control px-3 bg-surface border border-border rounded-control text-sm text-text focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary',
+                  dispErrores.horaInicio &&
+                    'border-red-500 focus:border-red-500 focus:ring-red-500',
+                )}
+              />
+              {dispErrores.horaInicio && (
+                <span role="alert" className="text-xs text-red-600">
+                  {dispErrores.horaInicio}
+                </span>
+              )}
+            </div>
+
+            {/* Duración */}
+            <div className="flex flex-col gap-1">
+              <label htmlFor={`${id}-disp-duracion`} className="text-sm font-medium text-ink">
+                Duración (minutos) <span className="text-red-500">*</span>
+              </label>
+              <div className="flex items-center gap-1.5">
+                <input
+                  id={`${id}-disp-duracion`}
+                  name="duracion"
+                  type="number"
+                  min={15}
+                  max={480}
+                  step={15}
+                  value={dispDuracion}
+                  aria-invalid={Boolean(dispErrores.duracion)}
+                  onChange={(e) => setDispDuracion(e.target.value)}
+                  className={cn(
+                    'h-control px-3 w-full bg-surface border border-border rounded-control text-sm text-text focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary',
+                    dispErrores.duracion &&
+                      'border-red-500 focus:border-red-500 focus:ring-red-500',
+                  )}
+                />
+                <div className="flex items-center gap-1 shrink-0">
+                  {DURACIONES_RAPIDAS.map((min) => {
+                    const isSelected = Number(dispDuracion) === min;
+                    return (
+                      <button
+                        key={min}
+                        type="button"
+                        onClick={() => setDispDuracion(String(min))}
+                        className={cn(
+                          'h-control px-2.5 text-xs font-medium rounded-control border transition-colors',
+                          isSelected
+                            ? 'bg-primary-soft border-primary text-primary font-semibold'
+                            : 'bg-surface border-border text-muted hover:text-ink',
+                        )}
+                      >
+                        {min}m
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              {dispErrores.duracion && (
+                <span role="alert" className="text-xs text-red-600">
+                  {dispErrores.duracion}
+                </span>
+              )}
+            </div>
+
+            {/* Personas */}
+            <div className="flex flex-col gap-1">
+              <label htmlFor={`${id}-disp-personas`} className="text-sm font-medium text-ink">
+                Cantidad de personas <span className="text-red-500">*</span>
+              </label>
+              <input
+                id={`${id}-disp-personas`}
+                name="personas"
+                type="number"
+                min={1}
+                value={dispPersonas}
+                aria-invalid={Boolean(dispErrores.personas)}
+                onChange={(e) => setDispPersonas(e.target.value)}
+                className={cn(
+                  'h-control px-3 bg-surface border border-border rounded-control text-sm text-text focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary',
+                  dispErrores.personas && 'border-red-500 focus:border-red-500 focus:ring-red-500',
+                )}
+              />
+              {dispErrores.personas && (
+                <span role="alert" className="text-xs text-red-600">
+                  {dispErrores.personas}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={disponibilidadQuery.isFetching}
+              className="h-control px-4 bg-primary hover:bg-primary-hover text-white text-sm font-medium rounded-control transition-colors inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <Search className="w-4 h-4" aria-hidden="true" />
+              <span>Buscar disponibilidad</span>
+            </button>
+          </div>
+        </form>
+
+        {/* Resultados del buscador de disponibilidad */}
+        {disponibilidadQuery.isFetching && (
+          <div
+            data-testid="disponibilidad-loading-skeletons"
+            aria-busy="true"
+            aria-label="Consultando disponibilidad de mesas"
+            className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 pt-2"
+          >
+            {Array.from({ length: 4 }).map((_, idx) => (
+              <div
+                key={idx}
+                className="animate-pulse bg-gray-200 rounded-card h-28 p-4 flex flex-col justify-between"
+              >
+                <div className="h-4 w-28 bg-gray-300 rounded" />
+                <div className="h-5 w-20 bg-gray-300 rounded" />
+                <div className="h-3 w-32 bg-gray-300 rounded" />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!disponibilidadQuery.isFetching && disponibilidadQuery.isError && (
+          <div
+            role="alert"
+            data-testid="disponibilidad-error-banner"
+            className="bg-red-50 border border-red-200 text-red-800 p-4 rounded-card flex flex-col sm:flex-row items-center justify-between gap-3"
+          >
+            <div className="flex items-center gap-2 text-sm">
+              <AlertCircle className="w-5 h-5 text-red-600 shrink-0" aria-hidden="true" />
+              <span>
+                {disponibilidadQuery.error instanceof Error
+                  ? disponibilidadQuery.error.message
+                  : 'Error al consultar la disponibilidad de mesas.'}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                void disponibilidadQuery.refetch();
+              }}
+              className="h-control px-4 bg-surface border border-border hover:bg-canvas text-text text-sm font-medium rounded-control inline-flex items-center gap-1.5 shrink-0"
+            >
+              <RotateCcw className="w-4 h-4" aria-hidden="true" />
+              <span>Reintentar disponibilidad</span>
+            </button>
+          </div>
+        )}
+
+        {!disponibilidadQuery.isFetching &&
+          !disponibilidadQuery.isError &&
+          criteriosDisponibilidad !== null && (
+            <div className="pt-2 space-y-3" data-testid="disponibilidad-resultados">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold text-ink">
+                  Mesas disponibles para el {criteriosDisponibilidad.fecha} a las{' '}
+                  {criteriosDisponibilidad.horaInicio} ({criteriosDisponibilidad.duracion} min ·{' '}
+                  {criteriosDisponibilidad.personas} personas)
+                </h4>
+                <span className="text-xs font-medium text-muted">
+                  {mesasDisponibles.length}{' '}
+                  {mesasDisponibles.length === 1 ? 'mesa apta' : 'mesas aptas'}
+                </span>
+              </div>
+
+              {mesasDisponibles.length === 0 ? (
+                <div
+                  data-testid="disponibilidad-empty-state"
+                  className="bg-canvas border border-border rounded-card p-6 text-center space-y-1"
+                >
+                  <p className="text-sm font-semibold text-ink">
+                    No hay mesas disponibles en ese horario
+                  </p>
+                  <p className="text-xs text-muted">
+                    Ninguna mesa activa cumple con la capacidad solicitada o todas tienen reservas
+                    confirmadas en esa franja horaria.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {mesasDisponibles.map((mesa) => (
+                    <div
+                      key={mesa.mesaId}
+                      data-testid={`mesa-disponible-card-${mesa.numeroMesa}`}
+                      className="bg-primary-soft border border-primary rounded-card p-4 flex flex-col justify-between gap-3 transition-all"
+                    >
+                      <div className="space-y-1.5">
+                        <span className="inline-flex items-center gap-1.5 text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-full">
+                          <span
+                            className="w-2 h-2 rounded-full bg-emerald-500"
+                            aria-hidden="true"
+                          />
+                          <span>Disponible para reservar</span>
+                        </span>
+                        <h5 className="text-base font-bold text-ink">Mesa {mesa.numeroMesa}</h5>
+                        <p className="text-xs text-text font-medium">
+                          {mesa.capacidad} personas · {mesa.zona}
+                        </p>
+                      </div>
+
+                      {onSeleccionarMesaDisponible && (
+                        <button
+                          type="button"
+                          onClick={() => onSeleccionarMesaDisponible(mesa, criteriosDisponibilidad)}
+                          className="h-control w-full px-3 bg-primary hover:bg-primary-hover text-white text-xs font-medium rounded-control transition-colors inline-flex items-center justify-center gap-1.5"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" aria-hidden="true" />
+                          <span>Seleccionar Mesa {mesa.numeroMesa}</span>
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
       </section>
 
       {/* Panel de Agenda Diaria */}
