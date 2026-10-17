@@ -22,6 +22,23 @@ const CODIGO_POR_ESTADO: Readonly<Record<number, string>> = {
 
 const MENSAJE_ERROR_INTERNO = 'Error interno del servidor';
 
+/** Error 4xx que genera Express/body-parser (JSON mal formado, payload demasiado grande). */
+interface ErrorHttpExpress {
+  status: number;
+  message: string;
+}
+
+function esErrorHttpExpress(valor: unknown): valor is ErrorHttpExpress {
+  if (typeof valor !== 'object' || valor === null) return false;
+  const { status, message } = valor as Record<string, unknown>;
+  return (
+    typeof status === 'number' &&
+    status >= HttpStatus.BAD_REQUEST &&
+    status < HttpStatus.INTERNAL_SERVER_ERROR &&
+    typeof message === 'string'
+  );
+}
+
 /** Convierte cualquier excepción al formato de error estándar; nunca filtra detalles internos. */
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -45,17 +62,19 @@ export class AllExceptionsFilter implements ExceptionFilter {
       exception instanceof HttpException &&
       exception.getStatus() < HttpStatus.INTERNAL_SERVER_ERROR
     ) {
-      return this.desdeHttp(exception);
+      return this.desdeEstado(exception.getStatus(), exception.message);
+    }
+    if (esErrorHttpExpress(exception)) {
+      return this.desdeEstado(exception.status, exception.message);
     }
     return this.errorInterno(exception);
   }
 
-  private desdeHttp(exception: HttpException): ApiErrorResponseDto {
-    const statusCode = exception.getStatus();
+  private desdeEstado(statusCode: number, message: string): ApiErrorResponseDto {
     return {
       statusCode,
       code: CODIGO_POR_ESTADO[statusCode] ?? CODIGO_ERROR.ERROR_SOLICITUD,
-      message: exception.message,
+      message,
       details: {},
     };
   }

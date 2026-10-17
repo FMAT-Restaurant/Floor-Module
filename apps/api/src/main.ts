@@ -1,8 +1,14 @@
+import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
+import { configurarApp } from './app.setup';
 
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+const PUERTO_POR_DEFECTO = 3001;
+
+async function bootstrap(): Promise<void> {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bodyParser: false });
+  configurarApp(app);
 
   // Enable CORS for frontend client
   app.enableCors({
@@ -10,9 +16,9 @@ async function bootstrap() {
     credentials: true,
   });
 
-  const port = process.env.PORT || 3001;
-  await app.listen(port);
-  console.log(`[Floor-Module API] Running on http://localhost:${port}`);
+  const puerto = Number(process.env.PORT) || PUERTO_POR_DEFECTO;
+  await app.listen(puerto);
+  new Logger('Bootstrap').log(`Floor-Module API escuchando en http://localhost:${puerto}`);
 }
 
-bootstrap();
+void bootstrap();

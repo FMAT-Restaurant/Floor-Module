@@ -68,6 +68,28 @@ describe('AllExceptionsFilter · formato de error estándar (SPEC §1 y §9)', (
     );
   });
 
+  it('SPEC §1: un payload demasiado grande (error de body-parser) responde 413', () => {
+    const { host, status, json } = crearHost();
+    const error = Object.assign(new Error('request entity too large'), { status: 413 });
+
+    filtro.catch(error, host);
+
+    expect(status).toHaveBeenCalledWith(413);
+    expect(json).toHaveBeenCalledWith(
+      expect.objectContaining({ code: CODIGO_ERROR.PAYLOAD_DEMASIADO_GRANDE }),
+    );
+  });
+
+  it('un JSON mal formado (error de body-parser) responde 400 VALIDACION', () => {
+    const { host, status, json } = crearHost();
+    const error = Object.assign(new SyntaxError('Unexpected end of JSON input'), { status: 400 });
+
+    filtro.catch(error, host);
+
+    expect(status).toHaveBeenCalledWith(400);
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ code: CODIGO_ERROR.VALIDACION }));
+  });
+
   it('responde 500 ERROR_INTERNO sin filtrar el mensaje original', () => {
     const { host, status, json } = crearHost();
 
