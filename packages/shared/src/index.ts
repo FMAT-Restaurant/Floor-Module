@@ -2,7 +2,13 @@ export { EstadoMesa, EstadoReserva, EstadoEspera, EstadoUnion, RoleEnum } from '
 
 export { EVENT_TOPICS } from './events/index.js';
 
-export type { Mesa, Reserva, AsignacionMesero, ListaEspera, UnionMesa } from './interfaces/index.js';
+export type {
+  Mesa,
+  Reserva,
+  AsignacionMesero,
+  ListaEspera,
+  UnionMesa,
+} from './interfaces/index.js';
 
 export type {
   DiningSessionIniciadaPayload,
