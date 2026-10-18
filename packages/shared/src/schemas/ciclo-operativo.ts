@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { EstadoMesa } from '../enums';
-import { positiveIntSchema, uuidSchema } from './common';
+import { EstadoMesa } from '../enums/index.js';
+import { positiveIntSchema, uuidSchema } from './common.js';
 
 export const ocuparMesaSchema = z
   .object({

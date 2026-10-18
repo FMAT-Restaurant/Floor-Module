@@ -7,6 +7,7 @@ module.exports = {
   // @floor/shared es ESM y la API es CommonJS: igual que en jest.config.js, se usa su código fuente.
   moduleNameMapper: {
     '^@floor/shared$': '<rootDir>/../../packages/shared/src',
+    '^(\\.{1,2}/.*)\\.js$': '$1',
   },
   maxWorkers: 1, // las pruebas comparten una sola BD: se ejecutan en serie
   testTimeout: 20000,

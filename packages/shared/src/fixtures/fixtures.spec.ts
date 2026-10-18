@@ -8,7 +8,7 @@ import {
   reservaDtoSchema,
   roleSchema,
   unionDtoSchema,
-} from '../schemas';
+} from '../schemas/index.js';
 import {
   createGatewayAuthHeaders,
   FIXTURE_AUTH_USERS,
@@ -22,7 +22,7 @@ import {
   fixtureReservaProximaAlertaPayload,
   fixtureReservas,
   fixtureUniones,
-} from './index';
+} from './index.js';
 
 describe('Shared Fixtures Contract Conformance', () => {
   it('all fixtureMesas conform to mesaDtoSchema', () => {

@@ -6,7 +6,7 @@ import {
   EstadoUnion,
   RoleEnum,
   EVENT_TOPICS,
-} from './index';
+} from './index.js';
 
 describe('Shared Domain Contracts', () => {
   it('should maintain exact domain values for EstadoMesa enum', () => {

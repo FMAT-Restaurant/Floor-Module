@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EstadoEspera, EstadoMesa, EstadoReserva, EstadoUnion, RoleEnum } from '../enums';
+import { EstadoEspera, EstadoMesa, EstadoReserva, EstadoUnion, RoleEnum } from '../enums/index.js';
 import {
   actualizarEstadoEsperaSchema,
   actualizarEstadoMesaSchema,
@@ -31,7 +31,7 @@ import {
   reservaDtoSchema,
   roleSchema,
   unionDtoSchema,
-} from '../index';
+} from '../index.js';
 
 const MOCK_UUID_1 = '11111111-1111-4111-8111-111111111111';
 const MOCK_UUID_2 = '22222222-2222-4222-8222-222222222222';

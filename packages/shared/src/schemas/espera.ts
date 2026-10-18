@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { EstadoEspera } from '../enums';
-import { nombreClienteSchema, positiveIntSchema, telefonoSchema, uuidSchema } from './common';
+import { EstadoEspera } from '../enums/index.js';
+import { nombreClienteSchema, positiveIntSchema, telefonoSchema, uuidSchema } from './common.js';
 
 export const esperaParamSchema = z
   .object({
