@@ -18,6 +18,9 @@
       "persistent": true
     },
     "test": {},
+    "test:cov": {
+      "outputs": ["coverage/**"]
+    },
     "clean": {
       "cache": false
     }

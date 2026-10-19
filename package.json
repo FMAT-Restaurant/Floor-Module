@@ -12,6 +12,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "turbo run test",
+    "test:cov": "turbo run test:cov",
     "clean": "turbo run clean"
   },
   "devDependencies": {
