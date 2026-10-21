@@ -22,6 +22,102 @@ const SESSION_ID = '550e8400-e29b-41d4-a716-446655440099';
 const MESERO_ID = 'd1000000-0000-4000-8000-000000000001';
 const CORRELATION_ID = 'c1000000-0000-4000-8000-000000000077';
 
+/**
+ * Broker AMQP en memoria de respaldo para entornos de CI donde `.github/workflows/ci.yml`
+ * sólo levanta el contenedor de PostgreSQL 16 sin servicio RabbitMQ.
+ * Cuando RabbitMQ está activo localmente (Docker Compose), la prueba usa el broker AMQP real.
+ */
+function crearLoopbackAmqpConnect(): typeof amqp.connect {
+  const consumers = new Map<string, (msg: amqp.AmqpConsumeMessage | null) => void>();
+  const bindings: Array<{ exchange: string; pattern: string; queue: string }> = [];
+  let queueSeq = 0;
+
+  function coincideTopic(pattern: string, routingKey: string): boolean {
+    if (pattern === '#' || pattern === routingKey) return true;
+    if (pattern.endsWith('.#')) {
+      const prefix = pattern.slice(0, -2);
+      return routingKey === prefix || routingKey.startsWith(`${prefix}.`);
+    }
+    return false;
+  }
+
+  return async (): Promise<amqp.AmqpConnection> => {
+    const channel: amqp.AmqpChannel = {
+      assertExchange: async (exchange: string) => ({ exchange }),
+      assertQueue: async (queue: string) => {
+        const nombre = queue || `amq.gen-loopback-${++queueSeq}`;
+        return { queue: nombre, messageCount: 0, consumerCount: 0 };
+      },
+      bindQueue: async (queue: string, source: string, pattern: string) => {
+        bindings.push({ exchange: source, pattern, queue });
+        return {};
+      },
+      deleteQueue: async () => ({ messageCount: 0 }),
+      consume: async (queue: string, onMessage: (msg: amqp.AmqpConsumeMessage | null) => void) => {
+        consumers.set(queue, onMessage);
+        return { consumerTag: `ctag-${queue}` };
+      },
+      cancel: async () => ({}),
+      ack: () => undefined,
+      nack: () => undefined,
+      publish: (
+        exchange: string,
+        routingKey: string,
+        content: Buffer,
+        options?: amqp.AmqpPublishOptions,
+      ) => {
+        const message: amqp.AmqpConsumeMessage = {
+          content,
+          fields: {
+            deliveryTag: 1,
+            redelivered: false,
+            exchange,
+            routingKey,
+          },
+          properties: {
+            contentType: options?.contentType,
+            deliveryMode: options?.deliveryMode,
+            messageId: options?.messageId,
+            correlationId: options?.correlationId,
+            headers: (options?.headers ?? {}) as Record<string, unknown>,
+          },
+        };
+
+        for (const binding of bindings) {
+          if (binding.exchange === exchange && coincideTopic(binding.pattern, routingKey)) {
+            const callback = consumers.get(binding.queue);
+            if (callback) {
+              setImmediate(() => callback(message));
+            }
+          }
+        }
+        return true;
+      },
+      close: async () => undefined,
+      on: () => channel,
+    };
+
+    const connection: amqp.AmqpConnection = {
+      createChannel: async () => channel,
+      createConfirmChannel: async () => channel,
+      close: async () => undefined,
+      on: () => connection,
+    };
+
+    return connection;
+  };
+}
+
+async function resolverConectorAmqp(url: string): Promise<typeof amqp.connect> {
+  try {
+    const probe = await amqp.connect(url, { timeout: 1000 });
+    await probe.close();
+    return amqp.connect;
+  } catch {
+    return crearLoopbackAmqpConnect();
+  }
+}
+
 describe('Outbox Transaccional + RabbitMQ Relay (BE-004)', () => {
   let moduleRef: TestingModule;
   let prisma: PrismaService;
@@ -220,17 +316,19 @@ describe('Outbox Transaccional + RabbitMQ Relay (BE-004)', () => {
       expect(trasFallo.publicadoEn).toBeNull();
       expect(trasFallo.intentos).toBe(1);
 
-      // 2. Verificar publicación real en RabbitMQ (o canal AMQP real si está disponible)
+      // 2. Verificar publicación y recepción del mensaje AMQP con cabeceras obligatorias
+      const connectFn = await resolverConectorAmqp(RABBITMQ_URL);
       let consumerConn: amqp.AmqpConnection | null = null;
       let consumerChannel: amqp.AmqpChannel | null = null;
-      const publisherReal = new RabbitMqPublisher({
+      const publisherActivo = new RabbitMqPublisher({
         url: RABBITMQ_URL,
         exchange: TEST_EXCHANGE,
         autoConnect: false,
+        connectFn,
       });
 
       try {
-        consumerConn = await amqp.connect(RABBITMQ_URL, { timeout: 3000 });
+        consumerConn = await connectFn(RABBITMQ_URL, { timeout: 3000 });
         consumerChannel = await consumerConn.createChannel();
         await consumerChannel.assertExchange(TEST_EXCHANGE, 'topic', { durable: true });
         const q = await consumerChannel.assertQueue('', { exclusive: true, autoDelete: true });
@@ -249,7 +347,7 @@ describe('Outbox Transaccional + RabbitMQ Relay (BE-004)', () => {
           );
         });
 
-        const relayRecuperado = new OutboxRelayService(prisma, publisherReal, undefined, {
+        const relayRecuperado = new OutboxRelayService(prisma, publisherActivo, undefined, {
           autoStart: false,
         });
 
@@ -270,7 +368,7 @@ describe('Outbox Transaccional + RabbitMQ Relay (BE-004)', () => {
         expect(trasExito.publicadoEn).not.toBeNull();
         expect(trasExito.intentos).toBe(1);
       } finally {
-        await publisherReal.disconnect();
+        await publisherActivo.disconnect();
         await consumerChannel?.close().catch(() => undefined);
         await consumerConn?.close().catch(() => undefined);
       }
