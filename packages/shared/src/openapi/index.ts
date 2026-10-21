@@ -1,1 +1,1 @@
-export { openApiSpec, type OpenApiSpec } from './spec';
+export { openApiSpec, type OpenApiSpec } from './spec.js';

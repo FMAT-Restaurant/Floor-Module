@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { EstadoMesa } from '../enums';
-import { booleanQuerySchema, positiveIntSchema, uuidSchema, zonaSchema } from './common';
+import { EstadoMesa } from '../enums/index.js';
+import { booleanQuerySchema, positiveIntSchema, uuidSchema, zonaSchema } from './common.js';
 
 export const mesaParamSchema = z
   .object({

@@ -1,7 +1,7 @@
-import { EstadoMesa } from '../enums';
-import type { MesaDto, MesaEnVivoDto } from '../schemas';
-import { FIXTURE_MESERO_IDS } from './meseros';
-import { FIXTURE_UNION_IDS } from './uniones';
+import { EstadoMesa } from '../enums/index.js';
+import type { MesaDto, MesaEnVivoDto } from '../schemas/index.js';
+import { FIXTURE_MESERO_IDS } from './meseros.js';
+import { FIXTURE_UNION_IDS } from './uniones.js';
 
 export const FIXTURE_MESA_IDS = {
   MESA_1: 'a1000000-0000-4000-8000-000000000001',

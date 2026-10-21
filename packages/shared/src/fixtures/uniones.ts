@@ -1,5 +1,5 @@
-import { EstadoUnion } from '../enums';
-import type { UnionDto } from '../schemas';
+import { EstadoUnion } from '../enums/index.js';
+import type { UnionDto } from '../schemas/index.js';
 
 export const FIXTURE_UNION_IDS = {
   UNION_1: 'c1000000-0000-4000-8000-000000000001',

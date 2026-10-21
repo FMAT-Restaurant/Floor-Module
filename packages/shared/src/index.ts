@@ -1,17 +1,23 @@
-export { EstadoMesa, EstadoReserva, EstadoEspera, EstadoUnion, RoleEnum } from './enums';
+export { EstadoMesa, EstadoReserva, EstadoEspera, EstadoUnion, RoleEnum } from './enums/index.js';
 
-export { EVENT_TOPICS } from './events';
+export { EVENT_TOPICS } from './events/index.js';
 
-export type { Mesa, Reserva, AsignacionMesero, ListaEspera, UnionMesa } from './interfaces';
+export type {
+  Mesa,
+  Reserva,
+  AsignacionMesero,
+  ListaEspera,
+  UnionMesa,
+} from './interfaces/index.js';
 
 export type {
   DiningSessionIniciadaPayload,
   MesaEstadoActualizadoPayload,
   ReservaProximaAlertaPayload,
-} from './events';
+} from './events/index.js';
 
-export * from './schemas';
+export * from './schemas/index.js';
 
-export * from './openapi';
+export * from './openapi/index.js';
 
-export * from './fixtures';
+export * from './fixtures/index.js';

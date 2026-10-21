@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { EstadoReserva } from '../enums';
+import { EstadoReserva } from '../enums/index.js';
 import {
   duracionMinutosQuerySchema,
   duracionMinutosSchema,
@@ -10,7 +10,7 @@ import {
   positiveIntSchema,
   telefonoSchema,
   uuidSchema,
-} from './common';
+} from './common.js';
 
 export const reservaParamSchema = z
   .object({

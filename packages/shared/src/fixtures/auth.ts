@@ -1,6 +1,6 @@
-import type { GatewayAuthHeadersDto } from '../schemas/auth';
-import { RoleEnum } from '../enums';
-import { FIXTURE_MESERO_IDS } from './meseros';
+import type { GatewayAuthHeadersDto } from '../schemas/auth.js';
+import { RoleEnum } from '../enums/index.js';
+import { FIXTURE_MESERO_IDS } from './meseros.js';
 
 export interface AuthFixtureUser {
   userId: string;

@@ -1,4 +1,4 @@
-import type { AsignacionDto } from '../schemas';
+import type { AsignacionDto } from '../schemas/index.js';
 
 export const FIXTURE_MESERO_IDS = {
   CARLOS: 'd1000000-0000-4000-8000-000000000001',

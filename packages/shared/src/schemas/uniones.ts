@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { EstadoMesa, EstadoUnion } from '../enums';
-import { positiveIntSchema, uuidSchema, zonaSchema } from './common';
+import { EstadoMesa, EstadoUnion } from '../enums/index.js';
+import { positiveIntSchema, uuidSchema, zonaSchema } from './common.js';
 
 export const unionParamSchema = z
   .object({

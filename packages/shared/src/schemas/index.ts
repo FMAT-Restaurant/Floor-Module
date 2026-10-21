@@ -12,9 +12,9 @@ export {
   telefonoSchema,
   uuidSchema,
   zonaSchema,
-} from './common';
+} from './common.js';
 
-export { apiErrorResponseSchema, type ApiErrorResponseDto } from './api-error';
+export { apiErrorResponseSchema, type ApiErrorResponseDto } from './api-error.js';
 
 export {
   actualizarMesaSchema,
@@ -29,7 +29,7 @@ export {
   type MesaDto,
   type MesaEnVivoDto,
   type MesaParamDto,
-} from './mesas';
+} from './mesas.js';
 
 export {
   actualizarEstadoMesaResponseSchema,
@@ -40,7 +40,7 @@ export {
   type ActualizarEstadoMesaResponseDto,
   type OcuparMesaRequestDto,
   type OcuparMesaResponseDto,
-} from './ciclo-operativo';
+} from './ciclo-operativo.js';
 
 export {
   asignacionDtoSchema,
@@ -49,7 +49,7 @@ export {
   type AsignacionDto,
   type AsignarMeseroRequestDto,
   type ListarAsignacionesQueryDto,
-} from './meseros';
+} from './meseros.js';
 
 export {
   actualizarReservaSchema,
@@ -68,7 +68,7 @@ export {
   type ListarReservasQueryDto,
   type ReservaDto,
   type ReservaParamDto,
-} from './reservas';
+} from './reservas.js';
 
 export {
   crearUnionResponseSchema,
@@ -83,7 +83,7 @@ export {
   type ListarUnionesQueryDto,
   type UnionDto,
   type UnionParamDto,
-} from './uniones';
+} from './uniones.js';
 
 export {
   actualizarEstadoEsperaSchema,
@@ -96,13 +96,13 @@ export {
   type EsperaDto,
   type EsperaParamDto,
   type ListarEsperaQueryDto,
-} from './espera';
+} from './espera.js';
 
-export { healthDtoSchema, type HealthDto } from './operacion';
+export { healthDtoSchema, type HealthDto } from './operacion.js';
 
 export {
   gatewayAuthHeadersSchema,
   roleSchema,
   type GatewayAuthHeadersDto,
   type RoleDto,
-} from './auth';
+} from './auth.js';

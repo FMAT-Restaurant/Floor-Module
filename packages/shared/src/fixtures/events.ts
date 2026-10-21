@@ -1,11 +1,11 @@
-import { EstadoMesa } from '../enums';
+import { EstadoMesa } from '../enums/index.js';
 import type {
   DiningSessionIniciadaPayload,
   MesaEstadoActualizadoPayload,
   ReservaProximaAlertaPayload,
-} from '../events';
-import { FIXTURE_MESA_IDS } from './mesas';
-import { FIXTURE_RESERVA_IDS } from './reservas';
+} from '../events/index.js';
+import { FIXTURE_MESA_IDS } from './mesas.js';
+import { FIXTURE_RESERVA_IDS } from './reservas.js';
 
 export interface EsperaMesaDisponiblePayload {
   mesaId: string;

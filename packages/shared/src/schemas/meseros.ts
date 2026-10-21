@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { booleanQuerySchema, uuidSchema } from './common';
+import { booleanQuerySchema, uuidSchema } from './common.js';
 
 export const asignarMeseroSchema = z
   .object({

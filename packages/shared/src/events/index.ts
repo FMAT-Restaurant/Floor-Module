@@ -1,4 +1,4 @@
-import { EstadoMesa } from '../enums';
+import { EstadoMesa } from '../enums/index.js';
 
 export const EVENT_TOPICS = {
   DINING_SESSION_INICIADA: 'sala.dining_session.iniciada',

@@ -1,6 +1,6 @@
-import { EstadoEspera } from '../enums';
-import type { EsperaDto } from '../schemas';
-import { FIXTURE_MESA_IDS } from './mesas';
+import { EstadoEspera } from '../enums/index.js';
+import type { EsperaDto } from '../schemas/index.js';
+import { FIXTURE_MESA_IDS } from './mesas.js';
 
 export const FIXTURE_ESPERA_IDS = {
   ESPERA_1_EN_ESPERA: 'e1000000-0000-4000-8000-000000000001',

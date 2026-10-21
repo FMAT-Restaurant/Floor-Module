@@ -1,6 +1,6 @@
-import { EstadoReserva } from '../enums';
-import type { ReservaDto } from '../schemas';
-import { FIXTURE_MESA_IDS } from './mesas';
+import { EstadoReserva } from '../enums/index.js';
+import type { ReservaDto } from '../schemas/index.js';
+import { FIXTURE_MESA_IDS } from './mesas.js';
 
 export const FIXTURE_RESERVA_IDS = {
   RESERVA_1_PROXIMA: 'b1000000-0000-4000-8000-000000000001',

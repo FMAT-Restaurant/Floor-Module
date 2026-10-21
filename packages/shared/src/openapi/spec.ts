@@ -1,4 +1,4 @@
-import { EstadoEspera, EstadoMesa, EstadoReserva, EstadoUnion } from '../enums';
+import { EstadoEspera, EstadoMesa, EstadoReserva, EstadoUnion } from '../enums/index.js';
 
 const uuidPathParam = (name: string, description?: string) => ({
   name,
