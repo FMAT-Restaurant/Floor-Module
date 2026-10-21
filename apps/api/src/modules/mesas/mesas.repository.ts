@@ -27,8 +27,12 @@ function aRegistro(fila: FilaMesa): MesaRegistro {
 export class MesasRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  enTransaccion<T>(operacion: (repo: MesasRepository) => Promise<T>): Promise<T> {
-    return this.prisma.$transaction((tx) => operacion(new MesasRepository(tx as PrismaService)));
+  enTransaccion<T>(
+    operacion: (repo: MesasRepository, tx: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
+    return this.prisma.$transaction((tx) =>
+      operacion(new MesasRepository(tx as PrismaService), tx),
+    );
   }
 
   async listar(filtro: ListarMesasQueryDto): Promise<MesaRegistro[]> {

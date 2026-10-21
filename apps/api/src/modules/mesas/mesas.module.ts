@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { Reloj } from '../../common/reloj/reloj';
+import { EventsModule } from '../../events/events.module';
 import { AsignacionesController } from './asignaciones.controller';
 import { AsignacionesRepository } from './asignaciones.repository';
 import { AsignacionesService } from './asignaciones.service';
@@ -12,6 +13,7 @@ import { MesasService } from './mesas.service';
 import { VENTANA_RESERVA_PROXIMA_MINUTOS } from './mesas.tokens';
 
 @Module({
+  imports: [EventsModule],
   controllers: [MesasController, MesaEstadoController, AsignacionesController],
   providers: [
     MesasService,
