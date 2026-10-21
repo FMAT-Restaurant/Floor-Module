@@ -64,7 +64,7 @@ pnpm turbo run build lint test --force                        # ignorar caché d
 - Datos remotos con TanStack Query; los eventos Socket.io sólo invalidan queries.
 
 **Flujo Git y ramas**
-- Cada tarea se desarrolla en una rama propia derivada de `main` actualizada: `git checkout -b <tipo>/<ID>-<nombre-corto>`. Nunca commitear directo en `main`.
+- Cada tarea se desarrolla en una rama propia derivada de `main` sincronizada con el remoto: ejecutar **obligatoriamente** `git checkout main && git pull origin main && git checkout -b <tipo>/<ID>-<nombre-corto>` (no confiar en `git status` local sin hacer `pull`/`fetch` primero). Nunca commitear directo en `main`.
 - Nomenclatura: `feat/BE-001-crud-mesas`, `chore/SH-001-tooling-calidad`, `fix/BE-002-transicion-mesas`.
 - Pull Requests dirigidos a `main` vinculando el issue correspondiente (`Closes #1`). CI en verde obligatorio.
 
