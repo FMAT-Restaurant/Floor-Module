@@ -83,6 +83,37 @@ describe('MesaEstadoService · cambio manual de estado (SPEC §5.2)', () => {
         LIBRE,
       );
     });
+
+    it('RF-008: encola sala.mesa.estado_actualizado en Outbox dentro de la transacción cuando OutboxService está inyectado', async () => {
+      const txMock = { outboxEvento: { create: jest.fn() } };
+      repositorio.enTransaccion.mockImplementationOnce(
+        (operacion: (r: MesasRepository, tx?: unknown) => Promise<unknown>) =>
+          operacion(repositorio, txMock),
+      );
+      repositorio.buscarPorId.mockResolvedValue(mesa({ estadoFisico: OCUPADA }));
+      repositorio.transicionarEstado.mockResolvedValue(true);
+
+      const enqueue = jest.fn().mockResolvedValue(undefined);
+      const ahora = new Date('2030-01-15T12:00:00.000Z');
+      const conOutbox = new MesaEstadoService(
+        repositorio,
+        { enqueue } as unknown as ConstructorParameters<typeof MesaEstadoService>[1],
+        { ahora: () => ahora },
+      );
+
+      await conOutbox.actualizarEstado(MESA_ID, { estado: LIMPIEZA_PENDIENTE }, 'corr-123');
+
+      expect(enqueue).toHaveBeenCalledWith(txMock, {
+        routingKey: 'sala.mesa.estado_actualizado',
+        payload: {
+          mesaId: MESA_ID,
+          estado: LIMPIEZA_PENDIENTE,
+          unionId: null,
+          timestamp: ahora.toISOString(),
+        },
+        correlationId: 'corr-123',
+      });
+    });
   });
 
   describe('RN-07 · transiciones rechazadas → 409 TRANSICION_INVALIDA', () => {

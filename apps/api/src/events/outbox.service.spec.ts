@@ -6,8 +6,13 @@ import {
   fixtureReservaProximaAlertaPayload,
 } from '@floor/shared';
 import type { PrismaService } from '../prisma/prisma.service';
-import { OutboxService } from './outbox.service';
-import type { OutboxTransactionClient } from './outbox.types';
+import {
+  DEFAULT_OUTBOX_BATCH_SIZE,
+  DEFAULT_RABBITMQ_EXCHANGE,
+  EventsModule,
+  OutboxService,
+  type OutboxTransactionClient,
+} from './index';
 
 const EVENT_ID = 'f1000000-0000-4000-8000-000000000001';
 const CORRELATION_ID = 'c1000000-0000-4000-8000-000000000099';
@@ -52,6 +57,12 @@ describe('OutboxService (BE-004 · RF-008, RNF-005, ADR-006)', () => {
 
   beforeEach(() => {
     service = new OutboxService();
+  });
+
+  it('exporta correctamente EventsModule y constantes desde el índice público', () => {
+    expect(EventsModule).toBeDefined();
+    expect(DEFAULT_OUTBOX_BATCH_SIZE).toBe(50);
+    expect(DEFAULT_RABBITMQ_EXCHANGE).toBe('sala.events');
   });
 
   it('inserta en outbox_evento usando el TransactionClient (tx) con routingKey, payload, correlationId e intentos = 0', async () => {
@@ -135,11 +146,17 @@ describe('OutboxService (BE-004 · RF-008, RNF-005, ADR-006)', () => {
     expect(createMock).toHaveBeenCalledTimes(2);
   });
 
-  it('permite usar PrismaService por defecto o el alias enqueueEvent', async () => {
+  it('permite usar PrismaService por defecto o el alias enqueueEvent en ambas sobrecargas', async () => {
     const { tx, createMock } = crearTxMock();
     const conPrisma = new OutboxService(tx as unknown as PrismaService);
 
     await conPrisma.enqueue({
+      routingKey: EVENT_TOPICS.MESA_ESTADO_ACTUALIZADO,
+      payload: fixtureMesaEstadoActualizadoPayload,
+      correlationId: CORRELATION_ID,
+    });
+
+    await conPrisma.enqueueEvent({
       routingKey: EVENT_TOPICS.MESA_ESTADO_ACTUALIZADO,
       payload: fixtureMesaEstadoActualizadoPayload,
       correlationId: CORRELATION_ID,
@@ -151,25 +168,36 @@ describe('OutboxService (BE-004 · RF-008, RNF-005, ADR-006)', () => {
       correlationId: CORRELATION_ID,
     });
 
-    expect(createMock).toHaveBeenCalledTimes(2);
+    expect(createMock).toHaveBeenCalledTimes(3);
   });
 
-  it('rechaza routingKey desconocida o payload inválido', async () => {
+  it('rechaza routingKey desconocida, payload inválido o falta de cliente transaccional', async () => {
     const { tx } = crearTxMock();
 
-    await expect(
+    expect(() =>
       service.enqueue(tx, {
         routingKey:
           'sala.evento.inexistente' as unknown as typeof EVENT_TOPICS.MESA_ESTADO_ACTUALIZADO,
         payload: fixtureMesaEstadoActualizadoPayload,
       }),
-    ).rejects.toThrow(/Routing key de Outbox inválida/);
+    ).toThrow(/Routing key de Outbox inválida/);
 
-    await expect(
+    expect(() =>
       service.enqueue(tx, {
         routingKey: EVENT_TOPICS.MESA_ESTADO_ACTUALIZADO,
         payload: null as unknown as typeof fixtureMesaEstadoActualizadoPayload,
       }),
-    ).rejects.toThrow(/payload del evento Outbox debe ser un objeto JSON válido/);
+    ).toThrow(/payload del evento Outbox debe ser un objeto JSON válido/);
+
+    expect(() =>
+      service.enqueue({
+        routingKey: EVENT_TOPICS.MESA_ESTADO_ACTUALIZADO,
+        payload: fixtureMesaEstadoActualizadoPayload,
+      }),
+    ).toThrow(/Se requiere un TransactionClient/);
+
+    expect(() =>
+      (service as unknown as { enqueue: (txArg: unknown) => unknown }).enqueue(tx),
+    ).toThrow(/Se requiere el evento de dominio/);
   });
 });

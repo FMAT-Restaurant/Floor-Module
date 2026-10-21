@@ -108,7 +108,7 @@ export class RabbitMqPublisher implements OnModuleInit, OnModuleDestroy {
     this.connection = null;
     this.connectingPromise = null;
 
-    if (currentChannel) {
+    if (currentChannel !== null) {
       try {
         await currentChannel.close();
       } catch (error) {
@@ -117,7 +117,7 @@ export class RabbitMqPublisher implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    if (currentConnection) {
+    if (currentConnection !== null) {
       try {
         await currentConnection.close();
       } catch (error) {
@@ -163,17 +163,19 @@ export class RabbitMqPublisher implements OnModuleInit, OnModuleDestroy {
   }
 
   private async ensureChannel(): Promise<amqp.AmqpChannel> {
-    if (this.channel) {
+    if (this.channel !== null) {
       return this.channel;
     }
 
-    if (this.connectingPromise) {
-      return this.connectingPromise;
+    const enCurso = this.connectingPromise;
+    if (enCurso !== null) {
+      return enCurso;
     }
 
-    this.connectingPromise = this.establishChannel();
+    const nuevaPromesa = this.establishChannel();
+    this.connectingPromise = nuevaPromesa;
     try {
-      return await this.connectingPromise;
+      return await nuevaPromesa;
     } finally {
       this.connectingPromise = null;
     }

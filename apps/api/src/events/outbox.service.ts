@@ -48,18 +48,18 @@ export class OutboxService {
   /**
    * Encola un evento de dominio usando el cliente transaccional `tx` proporcionado.
    */
-  async enqueue<K extends OutboxRoutingKey>(
+  enqueue<K extends OutboxRoutingKey>(
     tx: OutboxTransactionClient,
     event: OutboxDomainEvent<K>,
   ): Promise<OutboxEvento>;
   /**
    * Encola un evento de dominio usando el cliente transaccional opcional (o `PrismaService` por defecto).
    */
-  async enqueue<K extends OutboxRoutingKey>(
+  enqueue<K extends OutboxRoutingKey>(
     event: OutboxDomainEvent<K>,
     tx?: OutboxTransactionClient,
   ): Promise<OutboxEvento>;
-  async enqueue(
+  enqueue(
     txOrEvent: OutboxTransactionClient | OutboxDomainEvent,
     maybeEventOrTx?: OutboxDomainEvent | OutboxTransactionClient,
   ): Promise<OutboxEvento> {
@@ -81,15 +81,15 @@ export class OutboxService {
   /**
    * Alias semántico de `enqueue` para compatibilidad con distintos consumidores internos.
    */
-  async enqueueEvent<K extends OutboxRoutingKey>(
+  enqueueEvent<K extends OutboxRoutingKey>(
     tx: OutboxTransactionClient,
     event: OutboxDomainEvent<K>,
   ): Promise<OutboxEvento>;
-  async enqueueEvent<K extends OutboxRoutingKey>(
+  enqueueEvent<K extends OutboxRoutingKey>(
     event: OutboxDomainEvent<K>,
     tx?: OutboxTransactionClient,
   ): Promise<OutboxEvento>;
-  async enqueueEvent(
+  enqueueEvent(
     txOrEvent: OutboxTransactionClient | OutboxDomainEvent,
     maybeEventOrTx?: OutboxDomainEvent | OutboxTransactionClient,
   ): Promise<OutboxEvento> {

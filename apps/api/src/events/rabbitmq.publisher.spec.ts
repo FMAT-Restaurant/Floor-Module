@@ -63,6 +63,8 @@ describe('RabbitMqPublisher (BE-004 · SPEC §6.1, ADR-003, ADR-006)', () => {
       connectFn,
     });
 
+    expect(publisher.getExchange()).toBe('sala.events');
+
     await publisher.publish({
       id: EVENT_ID,
       routingKey: EVENT_TOPICS.DINING_SESSION_INICIADA,
@@ -122,28 +124,53 @@ describe('RabbitMqPublisher (BE-004 · SPEC §6.1, ADR-003, ADR-006)', () => {
 
     await expect(publisher.onModuleInit()).resolves.toBeUndefined();
     expect(publisher.isConnected()).toBe(false);
+
+    // Con autoConnect=false no abre conexión en onModuleInit
+    const publisherSinAuto = new RabbitMqPublisher({
+      connectFn,
+      autoConnect: false,
+    });
+    await publisherSinAuto.onModuleInit();
+    expect(connectFn).toHaveBeenCalledTimes(1);
   });
 
-  it('reconecta automáticamente al publicar tras una caída previa de canal o conexión', async () => {
-    const { connectFn, channel, connectionHandlers } = crearAmqpMocks();
+  it('reconecta automáticamente al publicar tras eventos error y close de canal o conexión', async () => {
+    const { connectFn, channel, connectionHandlers, channelHandlers } = crearAmqpMocks();
     const publisher = new RabbitMqPublisher({ connectFn });
 
     await publisher.connect();
     expect(publisher.isConnected()).toBe(true);
 
-    // Simular desconexión del broker
+    // Simular error y cierre de canal
+    channelHandlers.get('error')?.(new Error('Channel error'));
+    channelHandlers.get('close')?.();
+    expect(publisher.isConnected()).toBe(false);
+
+    // Reconectar y luego simular error y cierre de conexión
+    await publisher.connect();
+    expect(publisher.isConnected()).toBe(true);
+    connectionHandlers.get('error')?.(new Error('Connection error'));
     connectionHandlers.get('close')?.();
     expect(publisher.isConnected()).toBe(false);
 
-    await publisher.publish({
-      id: EVENT_ID,
-      routingKey: EVENT_TOPICS.DINING_SESSION_INICIADA,
-      payload: fixtureDiningSessionIniciadaPayload,
-      correlationId: CORRELATION_ID,
-    });
+    // Publicaciones concurrentes reutilizan la misma promesa de conexión
+    await Promise.all([
+      publisher.publish({
+        id: EVENT_ID,
+        routingKey: EVENT_TOPICS.DINING_SESSION_INICIADA,
+        payload: fixtureDiningSessionIniciadaPayload,
+        correlationId: CORRELATION_ID,
+      }),
+      publisher.publish({
+        id: EVENT_ID,
+        routingKey: EVENT_TOPICS.DINING_SESSION_INICIADA,
+        payload: fixtureDiningSessionIniciadaPayload,
+        correlationId: CORRELATION_ID,
+      }),
+    ]);
 
-    expect(connectFn).toHaveBeenCalledTimes(2);
-    expect(channel.publish).toHaveBeenCalledTimes(1);
+    expect(connectFn).toHaveBeenCalledTimes(3);
+    expect(channel.publish).toHaveBeenCalledTimes(2);
     expect(publisher.isConnected()).toBe(true);
   });
 
@@ -162,14 +189,16 @@ describe('RabbitMqPublisher (BE-004 · SPEC §6.1, ADR-003, ADR-006)', () => {
     ).rejects.toThrow(/rechazó la publicación por saturación de buffer/);
   });
 
-  it('cierra limpiamente canal y conexión en onModuleDestroy', async () => {
+  it('cierra limpiamente canal y conexión en onModuleDestroy incluso si close arroja error', async () => {
     const { connectFn, channel, connection } = crearAmqpMocks();
+    channel.close.mockRejectedValueOnce(new Error('Channel already closed'));
+    connection.close.mockRejectedValueOnce(new Error('Connection already closed'));
     const publisher = new RabbitMqPublisher({ connectFn });
 
     await publisher.connect();
     expect(publisher.isConnected()).toBe(true);
 
-    await publisher.onModuleDestroy();
+    await expect(publisher.onModuleDestroy()).resolves.toBeUndefined();
 
     expect(channel.close).toHaveBeenCalledTimes(1);
     expect(connection.close).toHaveBeenCalledTimes(1);

@@ -1,9 +1,9 @@
 import type { OutboxEvento, Prisma } from '@prisma/client';
-import {
+import type {
+  DiningSessionIniciadaPayload,
   EVENT_TOPICS,
-  type DiningSessionIniciadaPayload,
-  type MesaEstadoActualizadoPayload,
-  type ReservaProximaAlertaPayload,
+  MesaEstadoActualizadoPayload,
+  ReservaProximaAlertaPayload,
 } from '@floor/shared';
 
 /**

@@ -68,8 +68,10 @@ describe('OutboxRelayService (BE-004 · RF-008, RNF-005, ADR-006)', () => {
       autoStart: false,
     });
 
-    const listener = jest.fn();
-    const desuscribir = relay.registerListener(listener);
+    const listenerOk = jest.fn();
+    const listenerConError = jest.fn().mockRejectedValueOnce(new Error('Fallo en listener local'));
+    const desuscribirOk = relay.registerListener(listenerOk);
+    const desuscribirErr = relay.registerListener(listenerConError);
 
     const procesados = await relay.processPendingEvents();
 
@@ -92,15 +94,16 @@ describe('OutboxRelayService (BE-004 · RF-008, RNF-005, ADR-006)', () => {
       where: { id: evento.id },
       data: { publicadoEn: AHORA },
     });
-    expect(listener).toHaveBeenCalledTimes(1);
-    expect(listener).toHaveBeenCalledWith(
+    expect(listenerOk).toHaveBeenCalledTimes(1);
+    expect(listenerOk).toHaveBeenCalledWith(
       expect.objectContaining({
         id: evento.id,
         publicadoEn: AHORA,
       }),
     );
 
-    desuscribir();
+    desuscribirOk();
+    desuscribirErr();
   });
 
   it('cuando RabbitMqPublisher.publish falla, mantiene publicadoEn: null e incrementa intentos en 1', async () => {
@@ -141,6 +144,23 @@ describe('OutboxRelayService (BE-004 · RF-008, RNF-005, ADR-006)', () => {
     });
   });
 
+  it('maneja errores de base de datos en findMany o al actualizar intentos sin derribar el relay', async () => {
+    const { prisma, findMany, update, publisher } = crearDependencias();
+    const relay = new OutboxRelayService(prisma, publisher, undefined, { autoStart: false });
+
+    findMany.mockRejectedValueOnce(new Error('DB connection lost'));
+    await expect(relay.processPendingEvents()).resolves.toBe(0);
+    expect(relay.isBusy()).toBe(false);
+
+    const evento = crearEventoPendiente();
+    findMany.mockResolvedValueOnce([evento]);
+    publisher.publish.mockRejectedValueOnce(new Error('Broker down'));
+    update.mockRejectedValueOnce(new Error('Update failed'));
+
+    await expect(relay.processPendingEvents()).resolves.toBe(0);
+    expect(relay.isBusy()).toBe(false);
+  });
+
   it('evita ejecuciones concurrentes solapadas mediante el bloqueo en memoria isProcessing', async () => {
     const { prisma, findMany, publisher, reloj } = crearDependencias();
     const evento = crearEventoPendiente();
@@ -179,13 +199,19 @@ describe('OutboxRelayService (BE-004 · RF-008, RNF-005, ADR-006)', () => {
       });
 
       relay.onModuleInit();
+      // Llamar startPolling de nuevo es idempotente
+      relay.startPolling();
       jest.advanceTimersByTime(500);
       await Promise.resolve();
+      await Promise.resolve();
       jest.advanceTimersByTime(500);
+      await Promise.resolve();
       await Promise.resolve();
       expect(findMany).toHaveBeenCalledTimes(2);
 
       relay.onModuleDestroy();
+      // Llamar stopPolling de nuevo cuando ya está detenido es idempotente
+      relay.stopPolling();
       jest.advanceTimersByTime(1000);
       await Promise.resolve();
       expect(findMany).toHaveBeenCalledTimes(2);

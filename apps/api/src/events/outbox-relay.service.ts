@@ -88,7 +88,7 @@ export class OutboxRelayService implements OnModuleInit, OnModuleDestroy {
    * Inicia el ciclo periódico de consulta y publicación de eventos pendientes.
    */
   startPolling(): void {
-    if (this.timer) {
+    if (this.timer !== null) {
       return;
     }
     this.timer = setInterval(() => {
@@ -101,7 +101,7 @@ export class OutboxRelayService implements OnModuleInit, OnModuleDestroy {
    * Detiene el ciclo periódico de consulta de eventos pendientes.
    */
   stopPolling(): void {
-    if (this.timer) {
+    if (this.timer !== null) {
       clearInterval(this.timer);
       this.timer = null;
     }
@@ -138,7 +138,6 @@ export class OutboxRelayService implements OnModuleInit, OnModuleDestroy {
     }
 
     this.isProcessing = true;
-    let publicados = 0;
 
     try {
       const pendientes = await this.prisma.outboxEvento.findMany({
@@ -150,14 +149,7 @@ export class OutboxRelayService implements OnModuleInit, OnModuleDestroy {
         take: this.batchSize,
       });
 
-      for (const evento of pendientes) {
-        const exito = await this.procesarEventoIndividual(evento);
-        if (exito) {
-          publicados += 1;
-        }
-      }
-
-      return publicados;
+      return await this.procesarLoteSecuencial(pendientes);
     } catch (error) {
       const mensaje = error instanceof Error ? error.message : String(error);
       this.logger.error(
@@ -166,10 +158,22 @@ export class OutboxRelayService implements OnModuleInit, OnModuleDestroy {
           error: mensaje,
         }),
       );
-      return publicados;
+      return 0;
     } finally {
       this.isProcessing = false;
     }
+  }
+
+  private async procesarLoteSecuencial(
+    pendientes: readonly OutboxEvento[],
+    indice = 0,
+  ): Promise<number> {
+    if (indice >= pendientes.length) {
+      return 0;
+    }
+    const exito = await this.procesarEventoIndividual(pendientes[indice]);
+    const resto = await this.procesarLoteSecuencial(pendientes, indice + 1);
+    return (exito ? 1 : 0) + resto;
   }
 
   private async procesarEventoIndividual(evento: OutboxEvento): Promise<boolean> {
@@ -225,20 +229,27 @@ export class OutboxRelayService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async notificarListeners(evento: OutboxEvento): Promise<void> {
-    for (const listener of this.listeners) {
-      try {
-        await listener(evento);
-      } catch (error) {
-        const mensaje = error instanceof Error ? error.message : String(error);
-        this.logger.warn(
-          JSON.stringify({
-            msg: 'Error en listener local post-publicación de Outbox',
-            eventId: evento.id,
-            routingKey: evento.routingKey,
-            error: mensaje,
-          }),
-        );
-      }
+    await Promise.all(
+      Array.from(this.listeners, (listener) => this.invocarListenerSeguro(listener, evento)),
+    );
+  }
+
+  private async invocarListenerSeguro(
+    listener: OutboxPublishedListener,
+    evento: OutboxEvento,
+  ): Promise<void> {
+    try {
+      await listener(evento);
+    } catch (error) {
+      const mensaje = error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        JSON.stringify({
+          msg: 'Error en listener local post-publicación de Outbox',
+          eventId: evento.id,
+          routingKey: evento.routingKey,
+          error: mensaje,
+        }),
+      );
     }
   }
 }
