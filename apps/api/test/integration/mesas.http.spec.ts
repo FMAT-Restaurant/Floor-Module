@@ -43,7 +43,7 @@ function crearMesaDb(datos: Partial<Prisma.MesaUncheckedCreateInput> & { numeroM
   return prisma.mesa.create({ data: { capacidad: 4, zona: 'Principal', ...datos } });
 }
 
-/** Inserta una reserva a N minutos de "ahora" sin depender de la zona horaria del servidor. */
+/** Inserta una reserva a N minutos de "ahora" en UTC (consistente con el trigger de SH-004). */
 async function insertarReserva(
   mesaId: string,
   minutosDesdeAhora: number,
@@ -57,7 +57,7 @@ async function insertarReserva(
            ini::date, ini::time, (ini + interval '30 minutes')::time, ${estado}::"EstadoReserva"
     FROM (
       SELECT (${AHORA_ISO}::timestamptz + make_interval(mins => ${minutosDesdeAhora}::int))
-             AT TIME ZONE current_setting('TimeZone') AS ini
+             AT TIME ZONE 'UTC' AS ini
     ) t`;
 }
 

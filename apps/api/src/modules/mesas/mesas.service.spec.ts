@@ -28,7 +28,10 @@ function mesa(parcial: Partial<MesaRegistro> = {}): MesaRegistro {
 }
 
 function crearRepositorio(): jest.Mocked<MesasRepository> {
-  return {
+  const repo = {
+    enTransaccion: jest.fn((operacion: (r: MesasRepository) => Promise<unknown>) =>
+      operacion(repo),
+    ),
     listar: jest.fn(),
     listarEnVivo: jest.fn(),
     buscarPorId: jest.fn(),
@@ -39,6 +42,7 @@ function crearRepositorio(): jest.Mocked<MesasRepository> {
     contarReservasConfirmadasFuturas: jest.fn(),
     reservasConfirmadasEntre: jest.fn(),
   } as unknown as jest.Mocked<MesasRepository>;
+  return repo;
 }
 
 async function capturar(promesa: Promise<unknown>): Promise<DomainException> {
@@ -126,13 +130,14 @@ describe('MesasService', () => {
   });
 
   describe('RN-15 · actualizar', () => {
-    it('modifica una mesa libre', async () => {
+    it('modifica una mesa libre dentro de una transacción', async () => {
       repositorio.buscarPorId.mockResolvedValue(mesa());
       repositorio.actualizar.mockResolvedValue(mesa({ capacidad: 6 }));
 
       const resultado = await servicio.actualizar(MESA_ID, { capacidad: 6 });
 
       expect(resultado.capacidad).toBe(6);
+      expect(repositorio.enTransaccion).toHaveBeenCalledTimes(1);
       expect(repositorio.existeMesaActivaConNumero).not.toHaveBeenCalled();
     });
 
@@ -184,12 +189,13 @@ describe('MesasService', () => {
   });
 
   describe('RN-18 · darDeBaja', () => {
-    it('da de baja una mesa libre, sin unión y sin reservas confirmadas', async () => {
+    it('da de baja una mesa libre, sin unión y sin reservas confirmadas dentro de una transacción', async () => {
       repositorio.buscarPorId.mockResolvedValue(mesa());
       repositorio.contarReservasConfirmadasFuturas.mockResolvedValue(0);
 
       await servicio.darDeBaja(MESA_ID);
 
+      expect(repositorio.enTransaccion).toHaveBeenCalledTimes(1);
       expect(repositorio.darDeBaja).toHaveBeenCalledWith(MESA_ID);
       expect(repositorio.contarReservasConfirmadasFuturas).toHaveBeenCalledWith(MESA_ID, AHORA);
     });

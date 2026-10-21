@@ -78,48 +78,52 @@ export class MesasService {
 
   /** RF-002 · RN-15: no se edita una mesa ocupada ni vinculada a una unión. */
   async actualizar(mesaId: string, datos: ActualizarMesaRequestDto): Promise<MesaDto> {
-    const mesa = await this.buscarActivaOFallar(mesaId);
-    if (mesa.unionMesaId) throw this.mesaEnUnion(mesa.id);
-    if (mesa.estadoFisico === EstadoMesa.OCUPADA) {
-      throw new DomainException(
-        HttpStatus.CONFLICT,
-        CODIGO_ERROR.MESA_NO_DISPONIBLE,
-        'La mesa está ocupada y no puede modificarse',
-        { mesaId: mesa.id },
-      );
-    }
-    if (datos.numeroMesa !== undefined && datos.numeroMesa !== mesa.numeroMesa) {
-      await this.exigirNumeroDisponible(datos.numeroMesa, mesa.id);
-    }
-    return aMesaDto(await this.repositorio.actualizar(mesa.id, datos));
+    return this.repositorio.enTransaccion(async (repo) => {
+      const mesa = await this.buscarActivaOFallar(mesaId, repo);
+      if (mesa.unionMesaId) throw this.mesaEnUnion(mesa.id);
+      if (mesa.estadoFisico === EstadoMesa.OCUPADA) {
+        throw new DomainException(
+          HttpStatus.CONFLICT,
+          CODIGO_ERROR.MESA_NO_DISPONIBLE,
+          'La mesa está ocupada y no puede modificarse',
+          { mesaId: mesa.id },
+        );
+      }
+      if (datos.numeroMesa !== undefined && datos.numeroMesa !== mesa.numeroMesa) {
+        await this.exigirNumeroDisponible(datos.numeroMesa, mesa.id, repo);
+      }
+      return aMesaDto(await repo.actualizar(mesa.id, datos));
+    });
   }
 
   /** RF-003 · RN-18: baja lógica sólo si está Libre, sin unión y sin reservas confirmadas. */
   async darDeBaja(mesaId: string): Promise<void> {
-    const mesa = await this.buscarActivaOFallar(mesaId);
-    if (mesa.unionMesaId) throw this.mesaEnUnion(mesa.id);
-    if (mesa.estadoFisico !== EstadoMesa.LIBRE) {
-      throw this.bajaRechazada('Sólo se puede dar de baja una mesa libre', {
-        mesaId: mesa.id,
-        motivo: 'MESA_NO_LIBRE',
-      });
-    }
-    const reservas = await this.repositorio.contarReservasConfirmadasFuturas(
-      mesa.id,
-      this.reloj.ahora(),
-    );
-    if (reservas > 0) {
-      throw this.bajaRechazada('La mesa tiene reservas confirmadas pendientes', {
-        mesaId: mesa.id,
-        motivo: 'RESERVAS_CONFIRMADAS',
-        reservas,
-      });
-    }
-    await this.repositorio.darDeBaja(mesa.id);
+    await this.repositorio.enTransaccion(async (repo) => {
+      const mesa = await this.buscarActivaOFallar(mesaId, repo);
+      if (mesa.unionMesaId) throw this.mesaEnUnion(mesa.id);
+      if (mesa.estadoFisico !== EstadoMesa.LIBRE) {
+        throw this.bajaRechazada('Sólo se puede dar de baja una mesa libre', {
+          mesaId: mesa.id,
+          motivo: 'MESA_NO_LIBRE',
+        });
+      }
+      const reservas = await repo.contarReservasConfirmadasFuturas(mesa.id, this.reloj.ahora());
+      if (reservas > 0) {
+        throw this.bajaRechazada('La mesa tiene reservas confirmadas pendientes', {
+          mesaId: mesa.id,
+          motivo: 'RESERVAS_CONFIRMADAS',
+          reservas,
+        });
+      }
+      await repo.darDeBaja(mesa.id);
+    });
   }
 
-  private async buscarActivaOFallar(mesaId: string): Promise<MesaRegistro> {
-    const mesa = await this.repositorio.buscarPorId(mesaId);
+  private async buscarActivaOFallar(
+    mesaId: string,
+    repo: MesasRepository = this.repositorio,
+  ): Promise<MesaRegistro> {
+    const mesa = await repo.buscarPorId(mesaId);
     if (!mesa?.activo) {
       throw new DomainException(
         HttpStatus.NOT_FOUND,
@@ -131,8 +135,12 @@ export class MesasService {
     return mesa;
   }
 
-  private async exigirNumeroDisponible(numeroMesa: number, excluirMesaId?: string): Promise<void> {
-    const existe = await this.repositorio.existeMesaActivaConNumero(numeroMesa, excluirMesaId);
+  private async exigirNumeroDisponible(
+    numeroMesa: number,
+    excluirMesaId?: string,
+    repo: MesasRepository = this.repositorio,
+  ): Promise<void> {
+    const existe = await repo.existeMesaActivaConNumero(numeroMesa, excluirMesaId);
     if (existe) {
       throw new DomainException(
         HttpStatus.CONFLICT,

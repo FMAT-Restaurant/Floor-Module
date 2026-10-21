@@ -26,6 +26,10 @@ function aRegistro(fila: FilaMesa): MesaRegistro {
 export class MesasRepository {
   constructor(private readonly prisma: PrismaService) {}
 
+  enTransaccion<T>(operacion: (repo: MesasRepository) => Promise<T>): Promise<T> {
+    return this.prisma.$transaction((tx) => operacion(new MesasRepository(tx as PrismaService)));
+  }
+
   async listar(filtro: ListarMesasQueryDto): Promise<MesaRegistro[]> {
     const where: Prisma.MesaWhereInput = {};
     if (!filtro.incluirInactivas) where.activo = true;
