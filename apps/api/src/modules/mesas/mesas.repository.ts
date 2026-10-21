@@ -3,6 +3,7 @@ import type { Mesa as FilaMesa, Prisma } from '@prisma/client';
 import type {
   ActualizarMesaRequestDto,
   CrearMesaRequestDto,
+  EstadoMesa,
   ListarMesasQueryDto,
 } from '@floor/shared';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -76,6 +77,24 @@ export class MesasRepository {
 
   async actualizar(mesaId: string, datos: ActualizarMesaRequestDto): Promise<MesaRegistro> {
     return aRegistro(await this.prisma.mesa.update({ where: { id: mesaId }, data: datos }));
+  }
+
+  /**
+   * RN-06 · RN-07: cambia el estado sólo si la mesa sigue activa, fuera de unión y en el estado
+   * esperado. Devuelve false si otro proceso la modificó antes (control de concurrencia).
+   */
+  async transicionarEstado(mesaId: string, desde: EstadoMesa, hasta: EstadoMesa): Promise<boolean> {
+    const { count } = await this.prisma.mesa.updateMany({
+      where: {
+        id: mesaId,
+        activo: true,
+        unionMesaId: null,
+        estadoFisico: estadoMesaAPrisma(desde),
+      },
+      // Ninguna transición manual lleva a Ocupada: la hora de ocupación siempre se limpia.
+      data: { estadoFisico: estadoMesaAPrisma(hasta), ocupadaDesde: null },
+    });
+    return count === 1;
   }
 
   async darDeBaja(mesaId: string): Promise<void> {
