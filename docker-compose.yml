@@ -13,6 +13,9 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - default
+      - restaurant-network
 
   rabbitmq:
     image: rabbitmq:3-management-alpine
@@ -26,7 +29,16 @@ services:
       - "15672:15672" # RabbitMQ Management Web UI
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - default
+      - restaurant-network
 
 volumes:
   postgres_data:
   rabbitmq_data:
+
+networks:
+  restaurant-network:
+    name: restaurant-network
+    external: true
+

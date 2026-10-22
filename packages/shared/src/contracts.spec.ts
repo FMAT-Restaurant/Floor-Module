@@ -47,4 +47,27 @@ describe('Shared Domain Contracts', () => {
     expect(EVENT_TOPICS.MESA_ESTADO_ACTUALIZADO).toBe('sala.mesa.estado_actualizado');
     expect(EVENT_TOPICS.RESERVA_PROXIMA_ALERTA).toBe('sala.reserva.proxima_alerta');
   });
+
+  it('should support generic EventEnvelope structure and DiningSessionIniciadaPayload alias', () => {
+    const payload = {
+      sessionId: '550e8400-e29b-41d4-a716-446655440099',
+      meseroId: 'd1000000-0000-4000-8000-000000000001',
+      comensales: 4,
+      numComensales: 4,
+      timestamp: '2026-10-21T18:00:00.000Z',
+    };
+
+    const envelope = {
+      eventId: 'e1000000-0000-4000-8000-000000000001',
+      eventType: EVENT_TOPICS.DINING_SESSION_INICIADA,
+      timestamp: '2026-10-21T18:00:00.000Z',
+      correlationId: 'c1000000-0000-4000-8000-000000000001',
+      data: payload,
+    };
+
+    expect(envelope.eventId).toBe('e1000000-0000-4000-8000-000000000001');
+    expect(envelope.eventType).toBe('sala.dining_session.iniciada');
+    expect(envelope.data.numComensales).toBe(4);
+    expect(envelope.data.comensales).toBe(4);
+  });
 });

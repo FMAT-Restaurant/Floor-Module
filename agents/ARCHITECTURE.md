@@ -178,13 +178,14 @@ salaModule/
 
 ## 8. Autenticación y autorización
 
-- **Autenticación perimetral:** El API Gateway valida la firma (`HS256`) y expiración del JWT emitido por Auth, y aplica sanitización perimetral anti-spoofing (`REQ-AUTH-019`), eliminando cabeceras `X-User-*` provenientes de clientes externos.
-- **Identidad propagada a Sala:** El Gateway inyecta hacia la red interna las siguientes cabeceras verificadas:
+- **Autenticación perimetral:** El API Gateway (Kong) valida la firma (`HS256`, emisor canónico `iss: "urn:fmat:restaurant:auth"`) y expiración del JWT emitido por Auth-Backend, y aplica sanitización perimetral anti-spoofing (`REQ-AUTH-019`), eliminando cabeceras `X-User-*` provenientes de clientes externos.
+- **Identidad propagada a Sala:** Kong inyecta hacia la red interna las siguientes cabeceras verificadas:
   - `X-User-Id`: UUID v4 del usuario (claim `sub`).
   - `X-Staff-Id`: Código de nómina del empleado con máscara fija `XYYYYYY` (ej: `"M000104"`) o `"ADMIN"` / `"ADM000001"`.
   - `X-User-Roles`: Lista de roles asignados separada por comas (ej: `"MESERO"` o `"HOST,MESERO"`).
-  - `X-Password-Temporary`: Booleano en texto (`"true"` / `"false"`). Si es `"true"`, el Gateway rechaza con HTTP 403 `PASSWORD_CHANGE_REQUIRED` antes de llegar a Sala.
-- **Desarrollo local independiente:** En ausencia del Gateway perimetral, `@floor/api` implementa un `JwtAuthGuard` local que valida el encabezado `Authorization: Bearer <token>` mediante la clave simétrica compartida `JWT_SECRET=fmat-restaurant-auth-secret-key-2026` (`HS256`).
+  - `X-User-Permissions`: Lista de permisos específicos asignados separada por comas.
+  - `X-Password-Temporary`: Filtrado perimetralmente por Kong. Si el claim `mustChangePassword` es `true`, Kong rechaza la petición con HTTP 403 `PASSWORD_CHANGE_REQUIRED` antes de alcanzar Sala, garantizando que ninguna solicitud con contraseña provisional llegue al backend.
+- **Desarrollo local independiente:** En ausencia del Gateway perimetral, `@floor/api` implementa un `JwtAuthGuard` local que valida el encabezado `Authorization: Bearer <token>` mediante la clave simétrica compartida `JWT_SECRET=fmat-restaurant-auth-secret-key-2026` (`HS256`, con emisor `urn:fmat:restaurant:auth`).
 - **Autorización:** `RolesGuard` aplica la matriz de permisos de SPEC §1.1 contrastando con los roles canónicos (`ADMINISTRADOR`, `HOST`, `MESERO`, `ROL_CAPITAN`).
 - **WebSocket:** El cliente envía el token en el handshake dentro del objeto `auth: { token: 'Bearer <token>' }` (o query param fallback `?token=...`). El gateway valida el token y vincula la identidad y roles al socket.
 - **Sincronización asíncrona de personal (RabbitMQ):** Auth publica eventos en el topic exchange `restaurant.staff.events` con routing keys `staff.*` (`staff.created`, `staff.roles.updated`, `staff.status.changed`, `staff.deleted`) con payload `{ userId, staffId, firstName, lastName, roles, isActive }`, evitando llamadas síncronas HTTP entre servicios.
@@ -233,9 +234,9 @@ salaModule/
 
 **ADR-003 — Integración saliente por RabbitMQ con routing keys `sala.*`** · Aceptado · Motivado por RNF-005, RNF-006, RNF-014
 - *Contexto:* Cocina y Pagos deben reaccionar al inicio del servicio sin acoplamiento temporal ni dependencias circulares.
-- *Decisión:* publicar eventos en topics RabbitMQ (AMQP). Sala no consume eventos externos.
-- *Descartadas:* llamadas HTTP síncronas; Redis Streams (descartado a favor de RabbitMQ ya presente en infraestructura).
-- *Consecuencias:* consistencia eventual garantizada mediante outbox transaccional.
+- *Decisión:* publicar eventos en topics RabbitMQ (AMQP) en el exchange `sala.events` empaquetados en `EventEnvelope`. Se reconfirma (INT-001) que **Sala no consume eventos externos** (no procesa eventos de comanda de Cocina ni eventos de cobro de Pagos); la integración es estrictamente saliente y unidireccional.
+- *Descartadas:* llamadas HTTP síncronas; Redis Streams (descartado a favor de RabbitMQ ya presente en infraestructura); consumo bidireccional de comandas o cobros.
+- *Consecuencias:* consistencia eventual garantizada mediante outbox transaccional y total desacoplamiento de dependencias externas.
 
 **ADR-004 — Tiempo real con Socket.io + invalidación TanStack Query** · Aceptado · Motivado por RNF-002, RNF-012
 - *Contexto:* terminales de meseros y hostess requieren actualización inmediata del salón.
@@ -257,14 +258,14 @@ salaModule/
 
 **ADR-007 — Autenticación delegada al API Gateway con fallback local HS256** · Aceptado · Motivado por RNF-007
 - *Contexto:* Auth y Gateway gestionan firmas JWT y tokens de acceso centralizados para toda la plataforma.
-- *Decisión:* Sala confía en las cabeceras sanitizadas inyectadas por el Gateway (`X-User-Id`, `X-Staff-Id`, `X-User-Roles`, `X-Password-Temporary`). Para desarrollo local desacoplado, `@floor/api` valida directamente tokens `HS256` con `JWT_SECRET=fmat-restaurant-auth-secret-key-2026`.
+- *Decisión:* Sala confía en las cabeceras sanitizadas inyectadas por el Gateway (`X-User-Id`, `X-Staff-Id`, `X-User-Roles`, `X-User-Permissions`). Para desarrollo local desacoplado, `@floor/api` valida directamente tokens `HS256` con `JWT_SECRET=fmat-restaurant-auth-secret-key-2026` e `iss: "urn:fmat:restaurant:auth"`.
 - *Consecuencias:* Arquitectura sin estado, desacoplamiento de credenciales y compatibilidad transparente entre desarrollo local y despliegue perimetral.
 
 **ADR-008 — Liberación de mesas sólo por confirmación operativa** · Aceptado · Motivado por RNF-014
 - *Contexto:* el cobro de la cuenta no significa que los comensales hayan abandonado físicamente la mesa.
-- *Decisión:* la transición `Ocupada → Limpieza pendiente → Libre` se realiza exclusivamente por confirmación del personal.
-- *Descartadas:* liberación automática al recibir `PagoCompletado`.
-- *Consecuencias:* fidelidad con la operativa real del restaurante.
+- *Decisión:* la transición `Ocupada → Limpieza pendiente → Libre` se realiza exclusivamente por confirmación del personal de sala. Se reconfirma (INT-001) que **Sala no reacciona a eventos de cobro (`PagoCompletado`) ni de órdenes para liberar mesas**, preservando la autonomía y control físico del salón.
+- *Descartadas:* liberación automática al recibir `PagoCompletado` o eventos de comanda terminada.
+- *Consecuencias:* fidelidad con la operativa real del restaurante y prevención de desajustes entre el estado real del salón y el motor de cobros.
 
 **ADR-009 — Restricción de uniones por zona física y código 409 normalizado** · Aceptado · Motivado por RNF-004
 - *Contexto:* unir mesas distantes genera desorden operativo; además, existía inconsistencia de códigos de error (400 vs 409).
@@ -286,7 +287,7 @@ salaModule/
 | DT-02 | Prisma ORM aprobado pero aún no instalado en `apps/api/package.json`. | Pendiente agregar dependencia y crear `schema.prisma`. |
 | DT-03 | `apps/api/tsconfig.json` con `strictNullChecks: false` y `noImplicitAny: false`. | Posibles errores de nulabilidad en backend no advertidos por el compilador. |
 | DT-04 | `@floor/shared` es ESM (`"type": "module"`) y la API compila a CommonJS. | Verificar compatibilidad de imports al conectar módulos de runtime. |
-| DT-05 | CORS `origin: '*'` con `credentials: true` en `apps/api/src/main.ts`. | Inseguro para producción e inválido en navegadores cuando hay credenciales. |
+| DT-05 | *(Resuelta - INT-001)* Configuración de CORS seguro con lista blanca de orígenes específicos (`CORS_ORIGIN`) y `credentials: true`. | Resuelto en `apps/api/src/main.ts`. |
 | DT-06 | `apps/web/tailwind.config.js` y `App.tsx` no tienen los tokens oficiales de la guía visual (usan colores temporales como `indigo`). | Incumple guía visual v2.0 (RNF-010). |
 | DT-07 | Interfaces históricas de shared usan `snake_case` y la API está definida en `camelCase`. | Mapear o migrar interfaces hacia convención unificada. |
 | DT-08 | Payloads de eventos sin campos explícitos de correlación/evento en AMQP. | Incorporar `x-event-id` y `x-correlation-id` en cabeceras de RabbitMQ. |

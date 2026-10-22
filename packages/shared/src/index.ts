@@ -11,6 +11,7 @@ export type {
 } from './interfaces/index.js';
 
 export type {
+  EventEnvelope,
   DiningSessionIniciadaPayload,
   MesaEstadoActualizadoPayload,
   ReservaProximaAlertaPayload,

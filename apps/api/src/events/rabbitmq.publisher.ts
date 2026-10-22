@@ -8,6 +8,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import * as amqp from 'amqplib';
+import type { EventEnvelope } from '@floor/shared';
 import type { OutboxPublishableEvent } from './outbox.types';
 
 export const RABBITMQ_PUBLISHER_OPTIONS = Symbol('RABBITMQ_PUBLISHER_OPTIONS');
@@ -141,7 +142,14 @@ export class RabbitMqPublisher implements OnModuleInit, OnModuleDestroy {
         ? event.correlationId.trim()
         : randomUUID();
 
-    const buffer = Buffer.from(JSON.stringify(event.payload), 'utf-8');
+    const envelope: EventEnvelope<unknown> = {
+      eventId: event.id,
+      eventType: event.routingKey,
+      timestamp: new Date().toISOString(),
+      correlationId,
+      data: event.payload,
+    };
+    const buffer = Buffer.from(JSON.stringify(envelope), 'utf-8');
 
     const accepted = channel.publish(this.exchange, event.routingKey, buffer, {
       contentType: 'application/json',

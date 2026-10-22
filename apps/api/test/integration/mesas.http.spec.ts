@@ -2,7 +2,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import { EstadoMesa, Prisma, PrismaClient } from '@prisma/client';
 import { AppModule } from '../../src/app.module';
-import { configurarApp } from '../../src/app.setup';
+import { configurarApp, PREFIJO_GLOBAL } from '../../src/app.setup';
 import { Reloj } from '../../src/common/reloj/reloj';
 
 /**
@@ -10,7 +10,7 @@ import { Reloj } from '../../src/common/reloj/reloj';
  * RN-08, RN-15, RN-18, RN-19). El reloj se fija para que RN-08 sea determinista.
  */
 const AHORA_ISO = '2030-01-15T12:00:00.000Z';
-const RUTA = '/sala/mesas';
+const RUTA = `/${PREFIJO_GLOBAL}/mesas`;
 const MESERO_ID = 'b1000000-0000-4000-8000-000000000001';
 const MESA_INEXISTENTE = 'a9999999-9999-4999-8999-999999999999';
 

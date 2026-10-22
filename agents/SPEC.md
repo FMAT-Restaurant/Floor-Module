@@ -12,14 +12,14 @@
 
 Satisface: RNF-007, RNF-008, RNF-009, RNF-011
 
-- **Base path:** `/sala` (enrutado por el API Gateway). Puerto local de la API: `3001`.
+- **Base path:** `/api/v1/floor` (enrutado por Kong / API Gateway de la organización; con fallback de desarrollo `/sala` configurable mediante `GLOBAL_PREFIX`). Puerto por defecto: `8085` (con fallback a `3001` si no está en producción y no se define `PORT`).
 - **Formato:** JSON UTF-8. Campos en la API y eventos en `camelCase`; columnas de BD en `snake_case`.
 - **Fechas:** ISO-8601. Instantes en UTC con offset (`2026-10-07T20:30:00Z`); `fecha` como `YYYY-MM-DD`, `hora` como `HH:mm` en la zona horaria del restaurante.
-- **Identidad:** El API Gateway valida el JWT y propaga la identidad mediante cabeceras HTTP sanitizadas (modelo Anti-Spoofing, `REQ-AUTH-019`). En desarrollo local independiente sin Gateway, Sala valida directamente el JWT mediante Guard con `HS256` y clave `JWT_SECRET=fmat-restaurant-auth-secret-key-2026`:
+- **Identidad:** El API Gateway (Kong) valida la firma (`HS256`, `iss: "urn:fmat:restaurant:auth"`) y expiración del JWT, propagando la identidad mediante cabeceras HTTP sanitizadas (modelo Anti-Spoofing, `REQ-AUTH-019`). En desarrollo local independiente sin Gateway, Sala valida directamente el JWT mediante Guard con `HS256` y clave `JWT_SECRET=fmat-restaurant-auth-secret-key-2026`:
   - `X-User-Id`: UUID v4 del usuario (claim canónico `sub`).
   - `X-Staff-Id`: Código de nómina del usuario (claim `staffId`, ej: `"M000104"` o `"ADMIN"`).
   - `X-User-Roles`: Lista de roles autorizados separada por comas (ej: `"MESERO"` o `"HOST,MESERO"`).
-  - `X-Password-Temporary`: Booleano en texto (`"true"` \| `"false"`, derivado de `mustChangePassword`). Si es `"true"`, el Gateway rechaza con HTTP 403 `PASSWORD_CHANGE_REQUIRED` antes de llegar a Sala.
+  - `X-Password-Temporary`: Filtrado perimetralmente por Kong. Si el claim `mustChangePassword` es `true`, Kong rechaza la petición con HTTP 403 `PASSWORD_CHANGE_REQUIRED` antes de alcanzar el servicio Floor-Module, garantizando que Sala no procese solicitudes con credenciales provisionales activas.
   Sala responde 401 si falta identidad válida o 403 si el rol no tiene permisos para la acción.
 - **Correlación:** cabecera `x-correlation-id` (se genera si no viene); se propaga en logs, respuestas y en los metadatos de eventos AMQP.
 - **Tamaño máximo de request:** 64 KB → 413.
@@ -388,6 +388,9 @@ type EsperaDto = {
 |---|---|---|
 | GET | `/health` | 200 `{ status: 'ok', db: 'up', broker: 'up' }` / 503 si alguna dependencia crítica cae. |
 
+> **Enrutamiento de Health Check (INT-001):**
+> `GET /health` responde en `/health` directo (excluido del prefijo global mediante `app.setGlobalPrefix(PREFIJO_GLOBAL, { exclude: ['health'] })` para probes de Kubernetes, Docker Compose y health checks del host) y en `/api/v1/floor/health` perimetral (a través del API Gateway / Kong para monitores externos y observabilidad agregada).
+
 ---
 
 ## 6. Contratos asíncronos
@@ -398,9 +401,24 @@ Satisface: RF-005, RF-008, RF-009, RF-016, RF-020, RNF-002, RNF-005
 
 | Routing key (`EVENT_TOPICS`) | Payload | Consumidores |
 |---|---|---|
-| `sala.dining_session.iniciada` | `DiningSessionIniciadaPayload` (con `sessionId` UUID v4 generado por Sala) | Órdenes y Cocina, Cuenta y Pagos |
+| `sala.dining_session.iniciada` | `DiningSessionIniciadaPayload` (con `sessionId` UUID v4 generado por Sala y soporte de alias `numComensales` junto a `comensales`) | Órdenes y Cocina, Cuenta y Pagos |
 | `sala.mesa.estado_actualizado` | `MesaEstadoActualizadoPayload` | Monitores de sala, Gateways de frontend |
 | `sala.reserva.proxima_alerta` | `ReservaProximaAlertaPayload` | Estaciones de recepción y Hostess |
+
+#### Envoltorio estándar de eventos (`EventEnvelope`)
+Todo evento publicado por Sala en el exchange `topic` (`sala.events`) viaja empaquetado dentro de la interfaz genérica `EventEnvelope<T>` (`INT-001`):
+
+```ts
+export interface EventEnvelope<T> {
+  eventId: string;        // UUID v4 único del registro outbox (deduplicación e idempotencia)
+  eventType: string;      // Routing key AMQP del evento (ej: 'sala.dining_session.iniciada')
+  timestamp: string;      // Fecha/hora ISO-8601 UTC de publicación
+  correlationId?: string; // ID de correlación distribuida
+  data: T;                // Carga útil de dominio (ej: DiningSessionIniciadaPayload)
+}
+```
+
+- En `DiningSessionIniciadaPayload`, se provee compatibilidad con el ecosistema de comandas mediante el alias opcional `numComensales?: number` reflejando el mismo valor que `comensales: number`.
 
 Cabeceras AMQP obligatorias:
 - `x-event-id`: UUID v4 único (deduplicación at-least-once).

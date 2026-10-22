@@ -2,13 +2,13 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import { EstadoMesa, Prisma, PrismaClient } from '@prisma/client';
 import { AppModule } from '../../src/app.module';
-import { configurarApp } from '../../src/app.setup';
+import { configurarApp, PREFIJO_GLOBAL } from '../../src/app.setup';
 
 /**
  * BE-002 · PATCH /sala/mesas/{mesaId}/estado contra PostgreSQL real
  * (RF-006, RF-007, RN-06, RN-07, RN-15) y códigos de error 409 (SPEC §5.2).
  */
-const RUTA = '/sala/mesas';
+const RUTA = `/${PREFIJO_GLOBAL}/mesas`;
 const MESA_INEXISTENTE = 'a9999999-9999-4999-8999-999999999999';
 const OCUPADA_DESDE = new Date('2030-01-15T11:15:00.000Z');
 
