@@ -356,7 +356,14 @@ describe('Outbox Transaccional + RabbitMQ Relay (BE-004)', () => {
 
         const msg = await mensajeRecibidoPromesa;
         expect(msg.fields.routingKey).toBe(EVENT_TOPICS.MESA_ESTADO_ACTUALIZADO);
-        expect(JSON.parse(msg.content.toString('utf-8'))).toEqual(payload);
+        const recibido = JSON.parse(msg.content.toString('utf-8'));
+        expect(recibido).toMatchObject({
+          eventId: eventoCreado.id,
+          eventType: EVENT_TOPICS.MESA_ESTADO_ACTUALIZADO,
+          correlationId: CORRELATION_ID,
+          data: payload,
+        });
+        expect(new Date(recibido.timestamp).toISOString()).toBe(recibido.timestamp);
         expect(msg.properties.contentType).toBe('application/json');
         expect(msg.properties.deliveryMode).toBe(2);
         expect(msg.properties.headers['x-event-id']).toBe(eventoCreado.id);

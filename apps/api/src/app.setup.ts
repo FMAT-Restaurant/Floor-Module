@@ -1,8 +1,8 @@
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
-/** SPEC §1: base path `/sala`. */
-export const PREFIJO_GLOBAL = 'sala';
+/** INT-001 / SPEC §1: base path `/api/v1/floor` (con fallback de desarrollo `/sala`). */
+export const PREFIJO_GLOBAL = process.env.GLOBAL_PREFIX || 'api/v1/floor';
 
 /** SPEC §1: tamaño máximo de request 64 KB → 413. */
 export const LIMITE_CUERPO_JSON = '64kb';
@@ -14,6 +14,6 @@ export const LIMITE_CUERPO_JSON = '64kb';
  */
 export function configurarApp(app: NestExpressApplication): void {
   app.useBodyParser('json', { limit: LIMITE_CUERPO_JSON });
-  app.setGlobalPrefix(PREFIJO_GLOBAL);
+  app.setGlobalPrefix(PREFIJO_GLOBAL, { exclude: ['health'] });
   app.useGlobalFilters(new AllExceptionsFilter());
 }

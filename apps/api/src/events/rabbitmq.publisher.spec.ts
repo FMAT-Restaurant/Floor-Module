@@ -81,7 +81,15 @@ describe('RabbitMqPublisher (BE-004 · SPEC §6.1, ADR-003, ADR-006)', () => {
     const [exchange, routingKey, buffer, options] = channel.publish.mock.calls[0];
     expect(exchange).toBe('sala.events');
     expect(routingKey).toBe(EVENT_TOPICS.DINING_SESSION_INICIADA);
-    expect(JSON.parse(buffer.toString('utf-8'))).toEqual(fixtureDiningSessionIniciadaPayload);
+    const envelope = JSON.parse(buffer.toString('utf-8'));
+    expect(envelope).toEqual({
+      eventId: EVENT_ID,
+      eventType: EVENT_TOPICS.DINING_SESSION_INICIADA,
+      timestamp: expect.any(String),
+      correlationId: CORRELATION_ID,
+      data: fixtureDiningSessionIniciadaPayload,
+    });
+    expect(new Date(envelope.timestamp).toISOString()).toBe(envelope.timestamp);
     expect(options).toEqual({
       contentType: 'application/json',
       deliveryMode: 2,
@@ -107,8 +115,13 @@ describe('RabbitMqPublisher (BE-004 · SPEC §6.1, ADR-003, ADR-006)', () => {
       correlationId: null,
     });
 
-    const options = channel.publish.mock.calls[0][3];
+    const [, , bufferNulo, options] = channel.publish.mock.calls[0];
+    const envelopeNulo = JSON.parse(bufferNulo.toString('utf-8'));
     expect(options?.correlationId).toMatch(UUID_V4_REGEX);
+    expect(envelopeNulo.correlationId).toBe(options?.correlationId);
+    expect(envelopeNulo.eventId).toBe(EVENT_ID);
+    expect(envelopeNulo.eventType).toBe(EVENT_TOPICS.DINING_SESSION_INICIADA);
+    expect(envelopeNulo.data).toEqual(fixtureDiningSessionIniciadaPayload);
     expect(options?.headers?.['x-event-id']).toBe(EVENT_ID);
     expect(options?.headers?.['x-correlation-id']).toBe(options?.correlationId);
   });

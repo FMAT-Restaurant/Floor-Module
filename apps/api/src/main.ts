@@ -4,17 +4,17 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { configurarApp } from './app.setup';
 
-const PUERTO_POR_DEFECTO = 3001;
+const PUERTO_POR_DEFECTO = process.env.NODE_ENV === 'production' ? 8085 : 3001;
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bodyParser: false });
   configurarApp(app);
 
-  // Enable CORS for frontend client
-  app.enableCors({
-    origin: '*',
-    credentials: true,
-  });
+  // DT-05: CORS seguro con orígenes específicos
+  const origenes = process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim())
+    : ['http://localhost:3000', 'http://localhost:5173'];
+  app.enableCors({ origin: origenes, credentials: true });
 
   const puerto = Number(process.env.PORT) || PUERTO_POR_DEFECTO;
   await app.listen(puerto);

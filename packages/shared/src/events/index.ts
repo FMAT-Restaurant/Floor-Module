@@ -6,6 +6,14 @@ export const EVENT_TOPICS = {
   RESERVA_PROXIMA_ALERTA: 'sala.reserva.proxima_alerta',
 } as const;
 
+export interface EventEnvelope<T> {
+  eventId: string;
+  eventType: string;
+  timestamp: string;
+  correlationId?: string;
+  data: T;
+}
+
 export interface DiningSessionIniciadaPayload {
   sessionId: string;
   mesaId?: number | string;
@@ -13,6 +21,7 @@ export interface DiningSessionIniciadaPayload {
   mesasIds?: Array<number | string>;
   meseroId: string;
   comensales: number;
+  numComensales?: number;
   timestamp: string;
 }
 

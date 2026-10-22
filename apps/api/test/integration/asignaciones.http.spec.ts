@@ -2,13 +2,15 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { AppModule } from '../../src/app.module';
-import { configurarApp } from '../../src/app.setup';
+import { configurarApp, PREFIJO_GLOBAL } from '../../src/app.setup';
 import { Reloj } from '../../src/common/reloj/reloj';
 
 /**
  * BE-003 · Pruebas HTTP y transaccionales de PUT /sala/mesas/:mesaId/mesero
  * y GET /sala/asignaciones contra PostgreSQL real (RF-010, RF-011, RN-16, SPEC §5.3).
  */
+const RUTA_MESAS = `/${PREFIJO_GLOBAL}/mesas`;
+const RUTA_ASIGNACIONES = `/${PREFIJO_GLOBAL}/asignaciones`;
 const T1_ISO = '2030-01-15T12:00:00.000Z';
 const T2_ISO = '2030-01-15T13:30:00.000Z';
 const MESERO_1 = 'd1000000-0000-4000-8000-000000000001';
@@ -75,7 +77,7 @@ describe('API /sala/mesas/:mesaId/mesero y /sala/asignaciones (BE-003)', () => {
     it('RF-010: asigna inicialmente un mesero a una mesa activa y responde 200 con AsignacionDto', async () => {
       const mesa = await crearMesaDb({ numeroMesa: 1 });
 
-      const { status, cuerpo } = await peticion('PUT', `/sala/mesas/${mesa.id}/mesero`, {
+      const { status, cuerpo } = await peticion('PUT', `${RUTA_MESAS}/${mesa.id}/mesero`, {
         meseroId: MESERO_1,
       });
 
@@ -93,11 +95,11 @@ describe('API /sala/mesas/:mesaId/mesero y /sala/asignaciones (BE-003)', () => {
     it('RF-011 · RN-16: reasignar cierra la asignación previa y crea la nueva en la misma transacción', async () => {
       const mesa = await crearMesaDb({ numeroMesa: 1 });
 
-      const inicial = await peticion('PUT', `/sala/mesas/${mesa.id}/mesero`, {
+      const inicial = await peticion('PUT', `${RUTA_MESAS}/${mesa.id}/mesero`, {
         meseroId: MESERO_1,
       });
       instanteActual = new Date(T2_ISO);
-      const reasignada = await peticion('PUT', `/sala/mesas/${mesa.id}/mesero`, {
+      const reasignada = await peticion('PUT', `${RUTA_MESAS}/${mesa.id}/mesero`, {
         meseroId: MESERO_2,
       });
 
@@ -134,8 +136,8 @@ describe('API /sala/mesas/:mesaId/mesero y /sala/asignaciones (BE-003)', () => {
       const mesa = await crearMesaDb({ numeroMesa: 1 });
 
       const [r1, r2] = await Promise.all([
-        peticion('PUT', `/sala/mesas/${mesa.id}/mesero`, { meseroId: MESERO_1 }),
-        peticion('PUT', `/sala/mesas/${mesa.id}/mesero`, { meseroId: MESERO_2 }),
+        peticion('PUT', `${RUTA_MESAS}/${mesa.id}/mesero`, { meseroId: MESERO_1 }),
+        peticion('PUT', `${RUTA_MESAS}/${mesa.id}/mesero`, { meseroId: MESERO_2 }),
       ]);
 
       expect([r1.status, r2.status]).toEqual([200, 200]);
@@ -148,23 +150,23 @@ describe('API /sala/mesas/:mesaId/mesero y /sala/asignaciones (BE-003)', () => {
     it('refleja el mesero asignado y reasignado en GET /sala/mesas/estado-en-vivo', async () => {
       const mesa = await crearMesaDb({ numeroMesa: 1 });
 
-      await peticion('PUT', `/sala/mesas/${mesa.id}/mesero`, { meseroId: MESERO_1 });
-      const enVivo1 = await peticion<Json[]>('GET', '/sala/mesas/estado-en-vivo');
+      await peticion('PUT', `${RUTA_MESAS}/${mesa.id}/mesero`, { meseroId: MESERO_1 });
+      const enVivo1 = await peticion<Json[]>('GET', `${RUTA_MESAS}/estado-en-vivo`);
       expect(enVivo1.cuerpo[0]).toMatchObject({ mesaId: mesa.id, meseroId: MESERO_1 });
 
       instanteActual = new Date(T2_ISO);
-      await peticion('PUT', `/sala/mesas/${mesa.id}/mesero`, { meseroId: MESERO_2 });
-      const enVivo2 = await peticion<Json[]>('GET', '/sala/mesas/estado-en-vivo');
+      await peticion('PUT', `${RUTA_MESAS}/${mesa.id}/mesero`, { meseroId: MESERO_2 });
+      const enVivo2 = await peticion<Json[]>('GET', `${RUTA_MESAS}/estado-en-vivo`);
       expect(enVivo2.cuerpo[0]).toMatchObject({ mesaId: mesa.id, meseroId: MESERO_2 });
     });
 
     it('responde 404 MESA_NO_ENCONTRADA si la mesa no existe o fue dada de baja lógica', async () => {
       const inactiva = await crearMesaDb({ numeroMesa: 1, activo: false });
 
-      const noExiste = await peticion('PUT', `/sala/mesas/${MESA_INEXISTENTE}/mesero`, {
+      const noExiste = await peticion('PUT', `${RUTA_MESAS}/${MESA_INEXISTENTE}/mesero`, {
         meseroId: MESERO_1,
       });
-      const dadaDeBaja = await peticion('PUT', `/sala/mesas/${inactiva.id}/mesero`, {
+      const dadaDeBaja = await peticion('PUT', `${RUTA_MESAS}/${inactiva.id}/mesero`, {
         meseroId: MESERO_1,
       });
 
@@ -181,7 +183,7 @@ describe('API /sala/mesas/:mesaId/mesero y /sala/asignaciones (BE-003)', () => {
       ['meseroId es UUID v1 y no v4', MESA_INEXISTENTE, { meseroId: UUID_V1_INVALIDO }],
       ['propiedad desconocida en body', MESA_INEXISTENTE, { meseroId: MESERO_1, extra: true }],
     ])('SPEC §8: %s responde 400 VALIDACION', async (_caso, mesaId, cuerpo) => {
-      const respuesta = await peticion('PUT', `/sala/mesas/${mesaId}/mesero`, cuerpo);
+      const respuesta = await peticion('PUT', `${RUTA_MESAS}/${mesaId}/mesero`, cuerpo);
 
       expect(respuesta.status).toBe(400);
       expect(respuesta.cuerpo).toMatchObject({ statusCode: 400, code: 'VALIDACION' });
@@ -193,13 +195,13 @@ describe('API /sala/mesas/:mesaId/mesero y /sala/asignaciones (BE-003)', () => {
       const mesa1 = await crearMesaDb({ numeroMesa: 1 });
       const mesa2 = await crearMesaDb({ numeroMesa: 2 });
 
-      await peticion('PUT', `/sala/mesas/${mesa1.id}/mesero`, { meseroId: MESERO_1 });
+      await peticion('PUT', `${RUTA_MESAS}/${mesa1.id}/mesero`, { meseroId: MESERO_1 });
       instanteActual = new Date(T2_ISO);
       // Reasignar mesa1 (deja una inactiva de MESERO_1 y una activa de MESERO_2) y asignar mesa2
-      await peticion('PUT', `/sala/mesas/${mesa1.id}/mesero`, { meseroId: MESERO_2 });
-      await peticion('PUT', `/sala/mesas/${mesa2.id}/mesero`, { meseroId: MESERO_1 });
+      await peticion('PUT', `${RUTA_MESAS}/${mesa1.id}/mesero`, { meseroId: MESERO_2 });
+      await peticion('PUT', `${RUTA_MESAS}/${mesa2.id}/mesero`, { meseroId: MESERO_1 });
 
-      const { status, cuerpo } = await peticion<Json[]>('GET', '/sala/asignaciones');
+      const { status, cuerpo } = await peticion<Json[]>('GET', RUTA_ASIGNACIONES);
 
       expect(status).toBe(200);
       expect(cuerpo).toHaveLength(2);
@@ -210,18 +212,18 @@ describe('API /sala/mesas/:mesaId/mesero y /sala/asignaciones (BE-003)', () => {
       const mesa1 = await crearMesaDb({ numeroMesa: 1 });
       const mesa2 = await crearMesaDb({ numeroMesa: 2 });
 
-      await peticion('PUT', `/sala/mesas/${mesa1.id}/mesero`, { meseroId: MESERO_1 });
+      await peticion('PUT', `${RUTA_MESAS}/${mesa1.id}/mesero`, { meseroId: MESERO_1 });
       instanteActual = new Date(T2_ISO);
-      await peticion('PUT', `/sala/mesas/${mesa1.id}/mesero`, { meseroId: MESERO_2 });
-      await peticion('PUT', `/sala/mesas/${mesa2.id}/mesero`, { meseroId: MESERO_1 });
+      await peticion('PUT', `${RUTA_MESAS}/${mesa1.id}/mesero`, { meseroId: MESERO_2 });
+      await peticion('PUT', `${RUTA_MESAS}/${mesa2.id}/mesero`, { meseroId: MESERO_1 });
 
       const activasMesero1 = await peticion<Json[]>(
         'GET',
-        `/sala/asignaciones?meseroId=${MESERO_1}`,
+        `${RUTA_ASIGNACIONES}?meseroId=${MESERO_1}`,
       );
       const inactivasMesero1 = await peticion<Json[]>(
         'GET',
-        `/sala/asignaciones?meseroId=${MESERO_1}&activo=false`,
+        `${RUTA_ASIGNACIONES}?meseroId=${MESERO_1}&activo=false`,
       );
 
       expect(activasMesero1.status).toBe(200);
@@ -247,7 +249,7 @@ describe('API /sala/mesas/:mesaId/mesero y /sala/asignaciones (BE-003)', () => {
       ['meseroId es UUID v1', `meseroId=${UUID_V1_INVALIDO}`],
       ['activo inválido', 'activo=no-booleano'],
     ])('SPEC §8: query inválida (%s) responde 400 VALIDACION', async (_caso, query) => {
-      const { status, cuerpo } = await peticion('GET', `/sala/asignaciones?${query}`);
+      const { status, cuerpo } = await peticion('GET', `${RUTA_ASIGNACIONES}?${query}`);
 
       expect(status).toBe(400);
       expect(cuerpo).toMatchObject({ statusCode: 400, code: 'VALIDACION' });

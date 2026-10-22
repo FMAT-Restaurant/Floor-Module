@@ -219,4 +219,27 @@ describe('OutboxRelayService (BE-004 · RF-008, RNF-005, ADR-006)', () => {
       jest.useRealTimers();
     }
   });
+
+  it('despacha al publicador la estructura requerida para serializar el EventEnvelope AMQP (INT-001)', async () => {
+    const { prisma, findMany, publisher, reloj } = crearDependencias();
+    const evento = crearEventoPendiente({
+      id: 'e1000000-0000-4000-8000-000000000099',
+      routingKey: EVENT_TOPICS.DINING_SESSION_INICIADA,
+      payload: fixtureDiningSessionIniciadaPayload as unknown as OutboxEvento['payload'],
+      correlationId: 'c1000000-0000-4000-8000-000000000099',
+    });
+    findMany.mockResolvedValueOnce([evento]);
+
+    const relay = new OutboxRelayService(prisma, publisher, reloj, { autoStart: false });
+    await relay.processPendingEvents();
+
+    expect(publisher.publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'e1000000-0000-4000-8000-000000000099',
+        routingKey: 'sala.dining_session.iniciada',
+        correlationId: 'c1000000-0000-4000-8000-000000000099',
+        payload: fixtureDiningSessionIniciadaPayload,
+      }),
+    );
+  });
 });
