@@ -456,5 +456,110 @@ describe('MesaEstadoService · ocupar mesa y dining session (BE-006 · SPEC §5.
       expect(error.getResponse()).toMatchObject({ code: CODIGO_ERROR.MESA_NO_DISPONIBLE });
       expect(enqueueMock).not.toHaveBeenCalled();
     });
+
+    it('evalúa reserva próxima desde flag booleano en el registro de mesa o mediante reservasConfirmadasEntre y fallback sin métodos', async () => {
+      // 1. Flag booleano directo en mesa (true sin forzarOcupacion -> 409, true con forzarOcupacion -> 200)
+      repositorio.buscarPorId.mockResolvedValueOnce(
+        mesa({ estadoFisico: LIBRE, capacidad: 4, tieneReservaProxima: true }),
+      );
+      const errReservaFlag = await capturar(
+        servicio.ocupar(MESA_ID, { comensales: 2 }, MESERO_ID, '   '),
+      );
+      expect(errReservaFlag.getStatus()).toBe(409);
+      expect(errReservaFlag.getResponse()).toMatchObject({
+        code: CODIGO_ERROR.RESERVA_PROXIMA_PRESENTE,
+      });
+
+      // 2. Fallback a reservasConfirmadasEntre cuando repo.tieneReservaProxima no está definido
+      const repoConReservasEntre = {
+        enTransaccion: jest.fn((op: (r: unknown, tx?: unknown) => Promise<unknown>) =>
+          op(repoConReservasEntre, undefined),
+        ),
+        buscarPorId: jest
+          .fn()
+          .mockResolvedValueOnce(mesa({ estadoFisico: LIBRE, capacidad: 4 }))
+          .mockResolvedValueOnce(mesa({ estadoFisico: LIBRE, capacidad: 4 })),
+        reservasConfirmadasEntre: jest
+          .fn()
+          .mockImplementationOnce(async (desde: Date) => [
+            { mesaId: MESA_ID, inicio: new Date(desde.getTime() + 10 * 60_000) },
+            { mesaId: 'otra-mesa', inicio: new Date(desde.getTime() + 5 * 60_000) },
+          ])
+          .mockResolvedValueOnce(undefined),
+        transicionarEstado: jest.fn().mockResolvedValue(true),
+      } as unknown as jest.Mocked<MesasRepository>;
+
+      const servicioSinReloj = new MesaEstadoService(repoConReservasEntre, {
+        enqueue: enqueueMock,
+      } as unknown as ConstructorParameters<typeof MesaEstadoService>[1]);
+
+      const errReservaEntre = await capturar(
+        servicioSinReloj.ocupar(MESA_ID, { comensales: 2 }, MESERO_ID),
+      );
+      expect(errReservaEntre.getStatus()).toBe(409);
+      expect(errReservaEntre.getResponse()).toMatchObject({
+        code: CODIGO_ERROR.RESERVA_PROXIMA_PRESENTE,
+      });
+
+      // Con reservasConfirmadasEntre devolviendo undefined y sin tx en OutboxService
+      const okSinReservas = await servicioSinReloj.ocupar(
+        MESA_ID,
+        { comensales: 2 },
+        MESERO_ID,
+        '   ',
+      );
+      expect(okSinReservas.estado).toBe(OCUPADA);
+      expect(repoConReservasEntre.transicionarEstado).toHaveBeenCalledWith(MESA_ID, LIBRE, OCUPADA);
+      expect(enqueueMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          routingKey: EVENT_TOPICS.DINING_SESSION_INICIADA,
+          correlationId: expect.stringMatching(PATRON_UUID_V4),
+        }),
+      );
+
+      // 3. Fallback cuando el repositorio no define métodos de reserva ni ocuparMesa/transicionarEstado y usa registrarEventoOutbox
+      const registrarEventoOutbox = jest.fn().mockResolvedValue(undefined);
+      const repoMinimo = {
+        enTransaccion: jest.fn((op: (r: unknown, tx?: unknown) => Promise<unknown>) =>
+          op(repoMinimo, undefined),
+        ),
+        buscarPorId: jest.fn().mockResolvedValue(mesa({ estadoFisico: LIBRE, capacidad: 4 })),
+        registrarEventoOutbox,
+      } as unknown as jest.Mocked<MesasRepository>;
+
+      const servicioMinimo = new MesaEstadoService(repoMinimo);
+      const resMinimo = await servicioMinimo.ocupar(MESA_ID, { comensales: 2 }, MESERO_ID);
+      expect(resMinimo.estado).toBe(OCUPADA);
+      expect(registrarEventoOutbox).toHaveBeenCalledTimes(1);
+
+      // 4. Fallback cuando tampoco existe registrarEventoOutbox
+      const repoSinOutbox = {
+        enTransaccion: jest.fn((op: (r: unknown, tx?: unknown) => Promise<unknown>) =>
+          op(repoSinOutbox, undefined),
+        ),
+        buscarPorId: jest.fn().mockResolvedValue(mesa({ estadoFisico: LIBRE, capacidad: 4 })),
+      } as unknown as jest.Mocked<MesasRepository>;
+      const servicioSinNada = new MesaEstadoService(repoSinOutbox);
+      const resSinNada = await servicioSinNada.ocupar(MESA_ID, { comensales: 2 }, MESERO_ID);
+      expect(resSinNada.estado).toBe(OCUPADA);
+    });
+
+    it('actualizarEstado usa new Date() cuando no se inyecta Reloj pero sí OutboxService', async () => {
+      const txLocal = { outboxEvento: { create: jest.fn() } };
+      repositorio.enTransaccion.mockImplementationOnce(
+        (operacion: (r: MesasRepository, tx?: unknown) => Promise<unknown>) =>
+          operacion(repositorio, txLocal),
+      );
+      repositorio.buscarPorId.mockResolvedValueOnce(mesa({ estadoFisico: OCUPADA }));
+      repositorio.transicionarEstado.mockResolvedValueOnce(true);
+
+      const enqueue = jest.fn().mockResolvedValue(undefined);
+      const servicioConOutboxSinReloj = new MesaEstadoService(repositorio, {
+        enqueue,
+      } as unknown as ConstructorParameters<typeof MesaEstadoService>[1]);
+
+      await servicioConOutboxSinReloj.actualizarEstado(MESA_ID, { estado: LIMPIEZA_PENDIENTE });
+      expect(enqueue).toHaveBeenCalledTimes(1);
+    });
   });
 });
