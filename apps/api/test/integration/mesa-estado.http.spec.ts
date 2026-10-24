@@ -41,6 +41,10 @@ function cambiarEstado(mesaId: string, cuerpo: unknown) {
   return peticion('PATCH', `${RUTA}/${mesaId}/estado`, cuerpo);
 }
 
+function ocuparMesaHttp(mesaId: string, cuerpo: unknown) {
+  return peticion('POST', `${RUTA}/${mesaId}/ocupar`, cuerpo);
+}
+
 function crearMesaDb(datos: Partial<Prisma.MesaUncheckedCreateInput> = {}) {
   return prisma.mesa.create({
     data: { numeroMesa: 1, capacidad: 4, zona: 'Principal', ...datos },
@@ -226,6 +230,55 @@ describe('PATCH /sala/mesas/{mesaId}/estado (BE-002)', () => {
       const { status } = await cambiarEstado(mesa.id, { estado: 'Limpieza pendiente' });
 
       expect(status).toBe(404);
+    });
+  });
+
+  describe('POST /api/v1/floor/mesas/{mesaId}/ocupar (BE-006)', () => {
+    it('ocupa una mesa Libre, genera sessionId UUID v4 y registra sala.dining_session.iniciada en outbox con EventEnvelope', async () => {
+      const mesa = await crearMesaDb({ capacidad: 4 });
+
+      const { status, cuerpo } = await ocuparMesaHttp(mesa.id, { comensales: 3 });
+
+      expect(status).toBe(200);
+      expect(cuerpo).toMatchObject({
+        mesaId: mesa.id,
+        estado: 'Ocupada',
+        sessionId: expect.any(String),
+      });
+
+      const fila = await prisma.mesa.findUniqueOrThrow({ where: { id: mesa.id } });
+      expect(fila.estadoFisico).toBe(EstadoMesa.Ocupada);
+      expect(fila.ocupadaDesde).not.toBeNull();
+
+      const eventos = await prisma.outboxEvento.findMany();
+      expect(eventos).toHaveLength(1);
+      expect(eventos[0].routingKey).toBe('sala.dining_session.iniciada');
+      expect(eventos[0].payload).toMatchObject({
+        eventId: expect.any(String),
+        eventType: 'sala.dining_session.iniciada',
+        timestamp: expect.any(String),
+        correlationId: expect.any(String),
+        data: {
+          sessionId: cuerpo.sessionId,
+          mesaId: mesa.id,
+          comensales: 3,
+          numComensales: 3,
+        },
+      });
+    });
+
+    it('responde 409 SOBRECUPO_DETECTADO cuando comensales supera capacidad sin forzarSobrecupo', async () => {
+      const mesa = await crearMesaDb({ capacidad: 4 });
+
+      const { status, cuerpo } = await ocuparMesaHttp(mesa.id, { comensales: 6 });
+
+      expect(status).toBe(409);
+      expect(cuerpo).toMatchObject({
+        statusCode: 409,
+        code: 'SOBRECUPO_DETECTADO',
+      });
+      const totalEventos = await prisma.outboxEvento.count();
+      expect(totalEventos).toBe(0);
     });
   });
 });

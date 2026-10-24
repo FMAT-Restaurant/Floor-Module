@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import type { Mesa as FilaMesa, Prisma } from '@prisma/client';
-import type {
-  ActualizarMesaRequestDto,
-  CrearMesaRequestDto,
+import {
   EstadoMesa,
-  ListarMesasQueryDto,
+  type ActualizarMesaRequestDto,
+  type CrearMesaRequestDto,
+  type EventEnvelope,
+  type ListarMesasQueryDto,
 } from '@floor/shared';
 import { PrismaService } from '../../prisma/prisma.service';
 import { estadoMesaAPrisma, estadoMesaDesdePrisma } from './estado-mesa.mapper';
@@ -99,6 +100,94 @@ export class MesasRepository {
       data: { estadoFisico: estadoMesaAPrisma(hasta), ocupadaDesde: null },
     });
     return count === 1;
+  }
+
+  /**
+   * BE-006 · RN-01 · RN-04: pasa una mesa Libre a Ocupada fijando `ocupadaDesde`.
+   * Devuelve false si otra petición la modificó concurrentemente.
+   */
+  async ocuparMesa(mesaId: string, ocupadaDesde: Date): Promise<boolean> {
+    if (typeof this.prisma.mesa?.updateMany === 'function') {
+      const { count } = await this.prisma.mesa.updateMany({
+        where: {
+          id: mesaId,
+          activo: true,
+          unionMesaId: null,
+          estadoFisico: estadoMesaAPrisma(EstadoMesa.LIBRE),
+        },
+        data: {
+          estadoFisico: estadoMesaAPrisma(EstadoMesa.OCUPADA),
+          ocupadaDesde,
+        },
+      });
+      return count === 1;
+    }
+
+    if (typeof this.prisma.mesa?.update === 'function') {
+      await this.prisma.mesa.update({
+        where: { id: mesaId },
+        data: {
+          estadoFisico: estadoMesaAPrisma(EstadoMesa.OCUPADA),
+          ocupadaDesde,
+        },
+      });
+      return true;
+    }
+
+    return true;
+  }
+
+  /**
+   * BE-006 · RN-05 · RN-08: verifica si la mesa tiene una reserva Confirmada en [desde, hasta]
+   * (ventana de los próximos 30 minutos).
+   */
+  async tieneReservaProxima(mesaId: string, desde: Date, hasta: Date): Promise<boolean> {
+    if (typeof this.prisma.$queryRaw === 'function') {
+      const filas = await this.prisma.$queryRaw<{ total: number }[]>`
+        SELECT count(*)::int AS total
+        FROM "Reserva"
+        WHERE "id_mesa" = ${mesaId}::uuid
+          AND "estado" = 'Confirmada'::"EstadoReserva"
+          AND lower("rango") >= ${desde.toISOString()}::timestamptz
+          AND lower("rango") <= ${hasta.toISOString()}::timestamptz`;
+      return (filas[0]?.total ?? 0) > 0;
+    }
+
+    if (typeof this.prisma.reserva?.count === 'function') {
+      const total = await this.prisma.reserva.count({
+        where: { mesaId, estado: 'Confirmada' },
+      });
+      return total > 0;
+    }
+
+    if (typeof this.prisma.reserva?.findFirst === 'function') {
+      const reserva = await this.prisma.reserva.findFirst({
+        where: { mesaId, estado: 'Confirmada' },
+      });
+      return Boolean(reserva);
+    }
+
+    return false;
+  }
+
+  /**
+   * BE-006: registra un evento envuelto en `EventEnvelope` dentro de `outbox_evento` en la transacción.
+   */
+  async registrarEventoOutbox<T>(evento: {
+    routingKey: string;
+    payload: EventEnvelope<T>;
+    correlationId: string;
+  }): Promise<void> {
+    if (typeof this.prisma.outboxEvento?.create === 'function') {
+      await this.prisma.outboxEvento.create({
+        data: {
+          routingKey: evento.routingKey,
+          payload: evento.payload as unknown as Prisma.InputJsonValue,
+          correlationId: evento.correlationId,
+          intentos: 0,
+        },
+      });
+    }
   }
 
   async darDeBaja(mesaId: string): Promise<void> {

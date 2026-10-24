@@ -1,4 +1,9 @@
-import { EstadoMesa } from '@floor/shared';
+import {
+  EstadoMesa,
+  EVENT_TOPICS,
+  type DiningSessionIniciadaPayload,
+  type EventEnvelope,
+} from '@floor/shared';
 import { CODIGO_ERROR } from '../../common/errors/codigos-error';
 import type { DomainException } from '../../common/errors/domain.exception';
 import type { MesaRegistro } from './mesa.registro';
@@ -8,6 +13,8 @@ import type { MesasRepository } from './mesas.repository';
 const { LIBRE, OCUPADA, LIMPIEZA_PENDIENTE } = EstadoMesa;
 const MESA_ID = 'a1000000-0000-4000-8000-000000000001';
 const UNION_ID = 'c1000000-0000-4000-8000-000000000001';
+const MESERO_ID = 'd1000000-0000-4000-8000-000000000001';
+const PATRON_UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function mesa(parcial: Partial<MesaRegistro> = {}): MesaRegistro {
   return {
@@ -25,11 +32,14 @@ function mesa(parcial: Partial<MesaRegistro> = {}): MesaRegistro {
 
 function crearRepositorio(): jest.Mocked<MesasRepository> {
   const repo = {
-    enTransaccion: jest.fn((operacion: (r: MesasRepository) => Promise<unknown>) =>
+    enTransaccion: jest.fn((operacion: (r: MesasRepository, tx?: unknown) => Promise<unknown>) =>
       operacion(repo),
     ),
     buscarPorId: jest.fn(),
     transicionarEstado: jest.fn(),
+    ocuparMesa: jest.fn().mockResolvedValue(true),
+    tieneReservaProxima: jest.fn().mockResolvedValue(false),
+    registrarEventoOutbox: jest.fn().mockResolvedValue(undefined),
   } as unknown as jest.Mocked<MesasRepository>;
   return repo;
 }
@@ -203,6 +213,248 @@ describe('MesaEstadoService · cambio manual de estado (SPEC §5.2)', () => {
 
       expect(error.getStatus()).toBe(404);
       expect(repositorio.transicionarEstado).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe('MesaEstadoService · ocupar mesa y dining session (BE-006 · SPEC §5.2, F1)', () => {
+  let repositorio: jest.Mocked<MesasRepository>;
+  let txOutboxCreate: jest.Mock;
+  let txMock: { outboxEvento: { create: jest.Mock } };
+  let enqueueMock: jest.Mock;
+  let servicio: MesaEstadoService;
+  const ahora = new Date('2030-01-15T12:00:00.000Z');
+
+  beforeEach(() => {
+    repositorio = crearRepositorio();
+    txOutboxCreate = jest.fn().mockResolvedValue(undefined);
+    txMock = { outboxEvento: { create: txOutboxCreate } };
+    enqueueMock = jest.fn().mockImplementation(async (_tx: unknown, evento: unknown) => {
+      await txOutboxCreate({ data: evento });
+    });
+
+    repositorio.enTransaccion.mockImplementation(
+      (operacion: (r: MesasRepository, tx?: unknown) => Promise<unknown>) =>
+        operacion(repositorio, txMock),
+    );
+
+    servicio = new MesaEstadoService(
+      repositorio,
+      { enqueue: enqueueMock } as unknown as ConstructorParameters<typeof MesaEstadoService>[1],
+      { ahora: () => ahora },
+    );
+  });
+
+  describe('Lógica de validación (HTTP 409)', () => {
+    it('RN-02: lanza 409 SOBRECUPO_DETECTADO si comensales supera la capacidad y forzarSobrecupo es undefined o false', async () => {
+      repositorio.buscarPorId.mockResolvedValue(
+        mesa({ estadoFisico: LIBRE, capacidad: 4, ocupadaDesde: null }),
+      );
+
+      const errorUndefined = await capturar(servicio.ocupar(MESA_ID, { comensales: 6 }, MESERO_ID));
+      const errorFalse = await capturar(
+        servicio.ocupar(MESA_ID, { comensales: 5, forzarSobrecupo: false }, MESERO_ID),
+      );
+
+      expect(errorUndefined.getStatus()).toBe(409);
+      expect(errorUndefined.getResponse()).toMatchObject({
+        statusCode: 409,
+        code: CODIGO_ERROR.SOBRECUPO_DETECTADO,
+        details: { mesaId: MESA_ID, comensales: 6, capacidad: 4 },
+      });
+
+      expect(errorFalse.getStatus()).toBe(409);
+      expect(errorFalse.getResponse()).toMatchObject({
+        statusCode: 409,
+        code: CODIGO_ERROR.SOBRECUPO_DETECTADO,
+        details: { mesaId: MESA_ID, comensales: 5, capacidad: 4 },
+      });
+
+      expect(repositorio.ocuparMesa).not.toHaveBeenCalled();
+      expect(enqueueMock).not.toHaveBeenCalled();
+      expect(txOutboxCreate).not.toHaveBeenCalled();
+    });
+
+    it('RN-05: lanza 409 RESERVA_PROXIMA_PRESENTE si la mesa tiene reserva en los próximos 30 min y forzarOcupacion es undefined o false', async () => {
+      repositorio.buscarPorId.mockResolvedValue(
+        mesa({ estadoFisico: LIBRE, capacidad: 4, ocupadaDesde: null }),
+      );
+      repositorio.tieneReservaProxima.mockResolvedValue(true);
+
+      const errorUndefined = await capturar(servicio.ocupar(MESA_ID, { comensales: 4 }, MESERO_ID));
+      const errorFalse = await capturar(
+        servicio.ocupar(MESA_ID, { comensales: 4, forzarOcupacion: false }, MESERO_ID),
+      );
+
+      expect(errorUndefined.getStatus()).toBe(409);
+      expect(errorUndefined.getResponse()).toMatchObject({
+        statusCode: 409,
+        code: CODIGO_ERROR.RESERVA_PROXIMA_PRESENTE,
+        details: { mesaId: MESA_ID },
+      });
+
+      expect(errorFalse.getStatus()).toBe(409);
+      expect(errorFalse.getResponse()).toMatchObject({
+        statusCode: 409,
+        code: CODIGO_ERROR.RESERVA_PROXIMA_PRESENTE,
+        details: { mesaId: MESA_ID },
+      });
+
+      expect(repositorio.ocuparMesa).not.toHaveBeenCalled();
+      expect(enqueueMock).not.toHaveBeenCalled();
+      expect(txOutboxCreate).not.toHaveBeenCalled();
+    });
+
+    it('RN-01 / RN-15: lanza 409 MESA_NO_DISPONIBLE si no está Libre, 409 MESA_EN_UNION si está en unión y 404 si no existe', async () => {
+      repositorio.buscarPorId.mockResolvedValueOnce(mesa({ estadoFisico: OCUPADA }));
+      const errOcupada = await capturar(servicio.ocupar(MESA_ID, { comensales: 2 }, MESERO_ID));
+      expect(errOcupada.getStatus()).toBe(409);
+      expect(errOcupada.getResponse()).toMatchObject({ code: CODIGO_ERROR.MESA_NO_DISPONIBLE });
+
+      repositorio.buscarPorId.mockResolvedValueOnce(
+        mesa({ estadoFisico: LIBRE, unionMesaId: UNION_ID }),
+      );
+      const errUnion = await capturar(servicio.ocupar(MESA_ID, { comensales: 2 }, MESERO_ID));
+      expect(errUnion.getStatus()).toBe(409);
+      expect(errUnion.getResponse()).toMatchObject({ code: CODIGO_ERROR.MESA_EN_UNION });
+
+      repositorio.buscarPorId.mockResolvedValueOnce(null);
+      const errNoExiste = await capturar(servicio.ocupar(MESA_ID, { comensales: 2 }, MESERO_ID));
+      expect(errNoExiste.getStatus()).toBe(404);
+      expect(errNoExiste.getResponse()).toMatchObject({ code: CODIGO_ERROR.MESA_NO_ENCONTRADA });
+    });
+  });
+
+  describe('Ejecución transaccional, estado Ocupada y persistencia Outbox (EventEnvelope)', () => {
+    it('actualiza la mesa a Ocupada, genera sessionId UUID v4 y registra sala.dining_session.iniciada con EventEnvelope y numComensales', async () => {
+      repositorio.buscarPorId.mockResolvedValue(
+        mesa({ estadoFisico: LIBRE, capacidad: 4, ocupadaDesde: null }),
+      );
+      repositorio.tieneReservaProxima.mockResolvedValue(false);
+
+      const resultado = await servicio.ocupar(
+        MESA_ID,
+        { comensales: 3 },
+        { id: MESERO_ID },
+        'corr-006',
+      );
+
+      expect(resultado.mesaId).toBe(MESA_ID);
+      expect(resultado.estado).toBe(OCUPADA);
+      expect(resultado.sessionId).toMatch(PATRON_UUID_V4);
+
+      expect(repositorio.enTransaccion).toHaveBeenCalledTimes(1);
+      expect(repositorio.ocuparMesa).toHaveBeenCalledWith(MESA_ID, ahora);
+      expect(enqueueMock).toHaveBeenCalledTimes(1);
+
+      const [txArg, outboxEvent] = enqueueMock.mock.calls[0] as [
+        unknown,
+        {
+          routingKey: string;
+          correlationId: string;
+          payload: EventEnvelope<DiningSessionIniciadaPayload>;
+        },
+      ];
+
+      expect(txArg).toBe(txMock);
+      expect(outboxEvent.routingKey).toBe(EVENT_TOPICS.DINING_SESSION_INICIADA);
+      expect(outboxEvent.correlationId).toBe('corr-006');
+
+      const envelope = outboxEvent.payload;
+      expect(envelope.eventId).toMatch(PATRON_UUID_V4);
+      expect(envelope.eventType).toBe(EVENT_TOPICS.DINING_SESSION_INICIADA);
+      expect(envelope.timestamp).toBe(ahora.toISOString());
+      expect(envelope.correlationId).toBe('corr-006');
+      expect(envelope.data).toEqual({
+        sessionId: resultado.sessionId,
+        mesaId: MESA_ID,
+        unionId: null,
+        meseroId: MESERO_ID,
+        comensales: 3,
+        numComensales: 3,
+        timestamp: ahora.toISOString(),
+      });
+    });
+
+    it('permite la ocupación cuando se envían forzarSobrecupo: true y forzarOcupacion: true', async () => {
+      repositorio.buscarPorId.mockResolvedValue(
+        mesa({ estadoFisico: LIBRE, capacidad: 4, ocupadaDesde: null }),
+      );
+      repositorio.tieneReservaProxima.mockResolvedValue(true);
+
+      const resultado = await servicio.ocupar(
+        MESA_ID,
+        { comensales: 6, forzarSobrecupo: true, forzarOcupacion: true },
+        MESERO_ID,
+      );
+
+      expect(resultado).toEqual({
+        mesaId: MESA_ID,
+        estado: OCUPADA,
+        sessionId: expect.stringMatching(PATRON_UUID_V4),
+      });
+      expect(repositorio.ocuparMesa).toHaveBeenCalledWith(MESA_ID, ahora);
+      expect(enqueueMock).toHaveBeenCalledTimes(1);
+
+      const envelope = enqueueMock.mock.calls[0][1]
+        .payload as EventEnvelope<DiningSessionIniciadaPayload>;
+      expect(envelope.data.comensales).toBe(6);
+      expect(envelope.data.numComensales).toBe(6);
+      expect(envelope.data.meseroId).toBe(MESERO_ID);
+    });
+
+    it('persiste directamente en tx.outboxEvento.create dentro de la transacción cuando OutboxService no está inyectado', async () => {
+      const servicioSinOutbox = new MesaEstadoService(repositorio, undefined, {
+        ahora: () => ahora,
+      });
+      repositorio.buscarPorId.mockResolvedValue(
+        mesa({ estadoFisico: LIBRE, capacidad: 4, ocupadaDesde: null }),
+      );
+
+      const resultado = await servicioSinOutbox.ocuparMesa(
+        MESA_ID,
+        { comensales: 2 },
+        MESERO_ID,
+        'corr-tx-directo',
+      );
+
+      expect(resultado.estado).toBe(OCUPADA);
+      expect(txOutboxCreate).toHaveBeenCalledTimes(1);
+      expect(txOutboxCreate).toHaveBeenCalledWith({
+        data: {
+          routingKey: EVENT_TOPICS.DINING_SESSION_INICIADA,
+          correlationId: 'corr-tx-directo',
+          intentos: 0,
+          payload: {
+            eventId: expect.stringMatching(PATRON_UUID_V4),
+            eventType: EVENT_TOPICS.DINING_SESSION_INICIADA,
+            timestamp: ahora.toISOString(),
+            correlationId: 'corr-tx-directo',
+            data: {
+              sessionId: resultado.sessionId,
+              mesaId: MESA_ID,
+              unionId: null,
+              meseroId: MESERO_ID,
+              comensales: 2,
+              numComensales: 2,
+              timestamp: ahora.toISOString(),
+            },
+          },
+        },
+      });
+    });
+
+    it('responde 409 MESA_NO_DISPONIBLE si otra petición ocupó la mesa de forma concurrente', async () => {
+      repositorio.buscarPorId.mockResolvedValue(
+        mesa({ estadoFisico: LIBRE, capacidad: 4, ocupadaDesde: null }),
+      );
+      repositorio.ocuparMesa.mockResolvedValueOnce(false);
+
+      const error = await capturar(servicio.ocupar(MESA_ID, { comensales: 2 }, MESERO_ID));
+
+      expect(error.getStatus()).toBe(409);
+      expect(error.getResponse()).toMatchObject({ code: CODIGO_ERROR.MESA_NO_DISPONIBLE });
+      expect(enqueueMock).not.toHaveBeenCalled();
     });
   });
 });

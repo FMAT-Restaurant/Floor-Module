@@ -2,18 +2,22 @@ import type { OutboxEvento, Prisma } from '@prisma/client';
 import type {
   DiningSessionIniciadaPayload,
   EVENT_TOPICS,
+  EventEnvelope,
   MesaEstadoActualizadoPayload,
   ReservaProximaAlertaPayload,
 } from '@floor/shared';
 
 /**
  * Mapa de routing keys oficiales (`EVENT_TOPICS`) a sus payloads tipados en `@floor/shared`
- * (SPEC.md §6.1, ADR-003).
+ * (SPEC.md §6.1, ADR-003). Soporta tanto payload plano como envuelto en `EventEnvelope`.
  */
 export interface OutboxEventPayloadMap {
-  [EVENT_TOPICS.DINING_SESSION_INICIADA]: DiningSessionIniciadaPayload;
-  [EVENT_TOPICS.MESA_ESTADO_ACTUALIZADO]: MesaEstadoActualizadoPayload;
-  [EVENT_TOPICS.RESERVA_PROXIMA_ALERTA]: ReservaProximaAlertaPayload;
+  [EVENT_TOPICS.DINING_SESSION_INICIADA]:
+    DiningSessionIniciadaPayload | EventEnvelope<DiningSessionIniciadaPayload>;
+  [EVENT_TOPICS.MESA_ESTADO_ACTUALIZADO]:
+    MesaEstadoActualizadoPayload | EventEnvelope<MesaEstadoActualizadoPayload>;
+  [EVENT_TOPICS.RESERVA_PROXIMA_ALERTA]:
+    ReservaProximaAlertaPayload | EventEnvelope<ReservaProximaAlertaPayload>;
 }
 
 export type OutboxRoutingKey = (typeof EVENT_TOPICS)[keyof typeof EVENT_TOPICS];
