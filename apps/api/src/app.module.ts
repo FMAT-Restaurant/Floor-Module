@@ -1,10 +1,11 @@
 import { Module } from '@nestjs/common';
 import { EventsModule } from './events/events.module';
+import { GatewaysModule } from './gateways/gateways.module';
 import { MesasModule } from './modules/mesas/mesas.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
-  imports: [PrismaModule, EventsModule, MesasModule],
+  imports: [PrismaModule, EventsModule, GatewaysModule, MesasModule],
   controllers: [],
   providers: [],
 })
