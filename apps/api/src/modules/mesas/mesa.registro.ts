@@ -10,6 +10,7 @@ export interface MesaRegistro {
   unionMesaId: string | null;
   activo: boolean;
   ocupadaDesde: Date | null;
+  tieneReservaProxima?: boolean;
 }
 
 export interface MesaEnVivoRegistro extends MesaRegistro {
@@ -20,4 +21,11 @@ export interface MesaEnVivoRegistro extends MesaRegistro {
 export interface ReservaProximaRegistro {
   mesaId: string;
   inicio: Date;
+}
+
+export interface ReservaProximaConflicto {
+  reservaId: string;
+  nombreContacto: string;
+  horaInicio: string;
+  cantidadPersonas: number;
 }
