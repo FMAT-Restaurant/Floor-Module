@@ -29,6 +29,7 @@ beforeAll(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   server.resetHandlers();
   mockDb.reset();
 });
@@ -308,6 +309,8 @@ describe('MSW Integration: REST Endpoints and Realistic Mock Responses', () => {
 
   describe('Reservas Endpoints (SPEC §5.4)', () => {
     it('POST /sala/reservas creates reservation or responds 409 on overlap (RN-09)', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-10-11T12:00:00-06:00'));
       const resOk = await fetch('http://localhost:3000/sala/reservas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -348,6 +351,26 @@ describe('MSW Integration: REST Endpoints and Realistic Mock Responses', () => {
       expect(err.code).toBe('RESERVA_SOLAPADA');
     });
 
+    it('rechaza No-show antes y exactamente en el límite de tolerancia (RN-11)', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      for (const hora of ['14:14:59', '14:15:00']) {
+        vi.setSystemTime(new Date(`2026-10-11T${hora}-06:00`));
+        const response = await fetch(
+          `http://localhost:3000/sala/reservas/${FIXTURE_RESERVA_IDS.RESERVA_1_PROXIMA}/no-show`,
+          { method: 'POST' },
+        );
+        expect(response.status).toBe(409);
+        expect((await response.json()).code).toBe('TRANSICION_INVALIDA');
+      }
+      vi.setSystemTime(new Date('2026-10-11T14:15:01-06:00'));
+      const response = await fetch(
+        `http://localhost:3000/sala/reservas/${FIXTURE_RESERVA_IDS.RESERVA_1_PROXIMA}/no-show`,
+        { method: 'POST' },
+      );
+      expect(response.status).toBe(200);
+      expect((await response.json()).estado).toBe(EstadoReserva.NO_SHOW);
+    });
+
     it('GET /sala/reservas/disponibilidad returns free compatible tables', async () => {
       const res = await fetch(
         'http://localhost:3000/sala/reservas/disponibilidad?fecha=2026-10-11&horaInicio=14:00&duracion=90&personas=4',
@@ -360,6 +383,8 @@ describe('MSW Integration: REST Endpoints and Realistic Mock Responses', () => {
     });
 
     it('POST /sala/reservas/:id/cancelar and no-show transition reservation correctly', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-10-12T00:00:00-06:00'));
       // Cancelar reserva 1
       const resCancel = await fetch(
         `http://localhost:3000/sala/reservas/${FIXTURE_RESERVA_IDS.RESERVA_1_PROXIMA}/cancelar`,

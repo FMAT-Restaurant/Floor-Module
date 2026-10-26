@@ -33,7 +33,12 @@ import {
   type ReservaDto,
   type UnionDto,
 } from '@floor/shared';
-import { esReservaConfirmadaFutura } from '../lib/reservas';
+import {
+  esReservaConfirmadaFutura,
+  esInicioReservaFuturo,
+  getDuracionReserva,
+  puedeRegistrarNoShow,
+} from '../lib/reservas';
 
 export class MockApiError extends Error {
   constructor(
@@ -484,16 +489,40 @@ export class MockDatabase {
     );
   }
 
+  private validarDatosReserva(
+    data: ActualizarReservaRequestDto & {
+      mesaId: string;
+      fecha: string;
+      horaInicio: string;
+      duracion: number;
+      cantidadPersonas: number;
+    },
+  ) {
+    const mesa = this.mesas.find((item) => item.mesaId === data.mesaId && item.activo);
+    if (!mesa)
+      throw new MockApiError(404, 'MESA_NO_ENCONTRADA', 'La mesa no existe o está inactiva.');
+    if (
+      !esInicioReservaFuturo(data.fecha, data.horaInicio) ||
+      data.duracion < 15 ||
+      data.duracion > 480 ||
+      !Number.isInteger(data.cantidadPersonas) ||
+      data.cantidadPersonas < 1 ||
+      data.cantidadPersonas > mesa.capacidad
+    ) {
+      throw new MockApiError(
+        400,
+        'VALIDACION_FALLIDA',
+        'Revisa el inicio futuro, la duración y la capacidad de la mesa.',
+      );
+    }
+  }
+
   crearReserva(data: CrearReservaRequestDto): {
     reservaId: string;
     mesaId: string;
     estado: EstadoReserva;
   } {
-    const mesaExiste = this.mesas.some((m) => m.mesaId === data.mesaId && m.activo);
-    if (!mesaExiste) {
-      throw new MockApiError(404, 'MESA_NO_ENCONTRADA', `Mesa ${data.mesaId} no encontrada`);
-    }
-
+    this.validarDatosReserva(data);
     const startMin = timeToMinutes(data.horaInicio);
     const endMin = startMin + data.duracion;
     const horaFin = minutesToTime(endMin);
@@ -563,10 +592,17 @@ export class MockDatabase {
     if (data.duracion !== undefined) {
       endMin = startMin + data.duracion;
     } else {
-      const durActual = timeToMinutes(reserva.horaFin) - timeToMinutes(reserva.horaInicio);
+      const durActual = getDuracionReserva(reserva);
       endMin = startMin + durActual;
     }
     const targetHoraFin = minutesToTime(endMin);
+    this.validarDatosReserva({
+      mesaId: targetMesaId,
+      fecha: targetFecha,
+      horaInicio: targetHoraInicio,
+      duracion: endMin - startMin,
+      cantidadPersonas: data.cantidadPersonas ?? reserva.cantidadPersonas,
+    });
 
     // Validar solapamiento con otras reservas
     const solapa = this.reservas.some((r) => {
@@ -630,6 +666,12 @@ export class MockDatabase {
         'Solo se pueden marcar como No-show reservas en estado Confirmada',
       );
     }
+    if (!puedeRegistrarNoShow(reserva))
+      throw new MockApiError(
+        409,
+        'TRANSICION_INVALIDA',
+        'Aún no ha transcurrido la tolerancia de No-show.',
+      );
     reserva.estado = EstadoReserva.NO_SHOW;
     return clone(reserva);
   }

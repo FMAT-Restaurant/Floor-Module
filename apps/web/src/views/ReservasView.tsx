@@ -1,4 +1,4 @@
-import React, { useCallback, useId, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   AlertCircle,
@@ -26,7 +26,13 @@ import { getMesas } from '../api/services/mesas.service';
 import { getReservas, verificarDisponibilidad } from '../api/services/reservas.service';
 import { queryKeys } from '../api/queryKeys';
 import { useSalaSocket } from '../hooks/useSalaSocket';
-import { getFechaLocalHoy } from '../lib/reservas';
+import {
+  getFechaLocalHoy,
+  puedeRegistrarNoShow,
+  NO_SHOW_TOLERANCIA_MINUTOS,
+} from '../lib/reservas';
+import { ReservaFormModal, type ReservaInicial } from '../components/Reservas/ReservaFormModal';
+import { ConfirmarReservaModal } from '../components/Reservas/ConfirmarReservaModal';
 import { cn } from '../lib/utils';
 
 export interface ReservasViewProps {
@@ -110,6 +116,20 @@ export function ReservasView({
   onSeleccionarMesaDisponible,
 }: ReservasViewProps): React.JSX.Element {
   const id = useId();
+  const [ahora, setAhora] = useState(() => new Date());
+  useEffect(() => {
+    const timer = window.setInterval(() => setAhora(new Date()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const [formulario, setFormulario] = useState<{
+    inicial: ReservaInicial;
+    reserva?: ReservaDto;
+  } | null>(null);
+  const [confirmacion, setConfirmacion] = useState<{
+    reserva: ReservaDto;
+    accion: 'cancelar' | 'no-show';
+  } | null>(null);
+  const [mensaje, setMensaje] = useState<string | null>(null);
   const [selectedFecha, setSelectedFecha] = useState<string>(
     () => initialFecha ?? getFechaLocalHoy(),
   );
@@ -301,35 +321,30 @@ export function ReservasView({
 
   return (
     <section className="space-y-6" aria-labelledby={`${id}-title`}>
-      {/* Encabezado y selector de fecha */}
-      <div className="bg-surface border border-border rounded-card p-4 sm:p-6 shadow-subtle flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div>
-          <h2 id={`${id}-title`} className="text-xl font-bold text-ink">
-            Agenda de reservas
-          </h2>
-          <p className="text-sm text-muted mt-1">
-            Consulta los bloques horarios del día y verifica la disponibilidad de mesas en el salón.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-end gap-2">
-          <DatePicker
-            id={`${id}-fecha-agenda`}
-            label="Fecha de agenda"
-            value={selectedFecha}
-            onChange={(nuevaFecha) => handleCambiarFechaAgenda(nuevaFecha)}
-          />
+      {mensaje && (
+        <p
+          role="status"
+          className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-card p-4 text-sm"
+        >
+          <span aria-hidden="true">● </span>
+          {mensaje}
+        </p>
+      )}
+      {mesasQuery.isError && (
+        <div
+          role="alert"
+          className="bg-red-50 border border-red-200 rounded-card p-4 text-sm text-red-800"
+        >
+          No se pudieron cargar las mesas para crear o reprogramar reservas.{' '}
           <button
             type="button"
-            onClick={() => handleCambiarFechaAgenda(getFechaLocalHoy())}
-            className="h-control px-4 bg-surface border border-border hover:bg-canvas text-text text-sm font-medium rounded-control transition-colors inline-flex items-center justify-center gap-1.5 focus-visible:ring-2 focus-visible:ring-primary"
+            onClick={() => void mesasQuery.refetch()}
+            className="h-control px-3 border rounded-control"
           >
-            <CalendarIcon className="w-4 h-4 text-primary" aria-hidden="true" />
-            <span>Hoy</span>
+            Reintentar mesas
           </button>
         </div>
-      </div>
-
+      )}
       {/* Banner de alerta reactiva por evento WebSocket reserva.proxima_alerta (RF-016) */}
       {alertaProxima && (
         <div
@@ -611,16 +626,26 @@ export function ReservasView({
                         </p>
                       </div>
 
-                      {onSeleccionarMesaDisponible && (
-                        <button
-                          type="button"
-                          onClick={() => onSeleccionarMesaDisponible(mesa, criteriosDisponibilidad)}
-                          className="h-control w-full px-3 bg-primary hover:bg-primary-hover text-white text-xs font-medium rounded-control transition-colors inline-flex items-center justify-center gap-1.5"
-                        >
-                          <CheckCircle2 className="w-3.5 h-3.5" aria-hidden="true" />
-                          <span>Seleccionar Mesa {mesa.numeroMesa}</span>
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onSeleccionarMesaDisponible?.(mesa, criteriosDisponibilidad);
+                          setMensaje(null);
+                          setFormulario({
+                            inicial: {
+                              mesaId: mesa.mesaId,
+                              fecha: criteriosDisponibilidad.fecha,
+                              horaInicio: criteriosDisponibilidad.horaInicio,
+                              duracion: criteriosDisponibilidad.duracion,
+                              cantidadPersonas: criteriosDisponibilidad.personas,
+                            },
+                          });
+                        }}
+                        className="h-control w-full px-3 bg-primary hover:bg-primary-hover text-white text-xs font-medium rounded-control transition-colors inline-flex items-center justify-center gap-1.5"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" aria-hidden="true" />
+                        <span>Seleccionar Mesa {mesa.numeroMesa}</span>
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -631,6 +656,27 @@ export function ReservasView({
 
       {/* Panel de Agenda Diaria */}
       <div className="bg-surface border border-border rounded-card p-4 sm:p-6 shadow-subtle space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+          <h2 id={`${id}-title`} className="text-xl font-bold text-ink">
+            Agenda de reservas
+          </h2>
+          <div className="flex flex-wrap items-end gap-2">
+            <DatePicker
+              id={`${id}-fecha-agenda`}
+              label="Fecha de agenda"
+              value={selectedFecha}
+              onChange={(nuevaFecha) => handleCambiarFechaAgenda(nuevaFecha)}
+            />
+            <button
+              type="button"
+              onClick={() => handleCambiarFechaAgenda(getFechaLocalHoy())}
+              className="h-control px-4 bg-surface border border-border hover:bg-canvas text-text text-sm font-medium rounded-control transition-colors inline-flex items-center justify-center gap-1.5 focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <CalendarIcon className="w-4 h-4 text-primary" aria-hidden="true" />
+              <span>Hoy</span>
+            </button>
+          </div>
+        </div>
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 border-b border-border pb-4">
           {/* Pestañas por estado */}
           <nav
@@ -817,6 +863,9 @@ export function ReservasView({
                   <th scope="col" className="px-4 py-3 text-right">
                     Estado
                   </th>
+                  <th scope="col" className="px-4 py-3 text-right">
+                    Acciones
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border block md:table-row-group">
@@ -857,6 +906,45 @@ export function ReservasView({
                     <td className="block md:table-cell md:px-4 md:py-3.5 md:text-right">
                       <EstadoReservaBadge estado={reserva.estado} />
                     </td>
+                    <td className="block md:table-cell md:px-4 md:py-3.5">
+                      {reserva.estado === EstadoReserva.CONFIRMADA && (
+                        <div className="flex flex-wrap md:justify-end gap-2">
+                          <button
+                            type="button"
+                            disabled={mesasQuery.isPending || mesasQuery.isError}
+                            onClick={() => {
+                              setMensaje(null);
+                              setFormulario({ reserva, inicial: { fecha: reserva.fecha } });
+                            }}
+                            className="h-control px-3 border border-border rounded-control text-sm disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-primary"
+                          >
+                            Reprogramar reserva
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMensaje(null);
+                              setConfirmacion({ reserva, accion: 'cancelar' });
+                            }}
+                            className="h-control px-3 border border-border rounded-control text-sm text-red-700 focus-visible:ring-2 focus-visible:ring-primary"
+                          >
+                            Cancelar reserva
+                          </button>
+                          <button
+                            type="button"
+                            disabled={!puedeRegistrarNoShow(reserva, ahora)}
+                            title={`Disponible tras más de ${NO_SHOW_TOLERANCIA_MINUTOS} minutos desde el inicio`}
+                            onClick={() => {
+                              setMensaje(null);
+                              setConfirmacion({ reserva, accion: 'no-show' });
+                            }}
+                            className="h-control px-3 border border-border rounded-control text-sm disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-primary"
+                          >
+                            Registrar No-show
+                          </button>
+                        </div>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -864,6 +952,47 @@ export function ReservasView({
           </div>
         )}
       </div>
+      {formulario && (
+        <ReservaFormModal
+          reserva={formulario.reserva}
+          inicial={formulario.inicial}
+          mesas={mesas}
+          onClose={() => setFormulario(null)}
+          onSuccess={(fecha) => {
+            setSelectedFecha(fecha);
+            setDispFecha(fecha);
+            setSelectedEstado('Todas');
+            setSelectedMesaId('Todas');
+            setSelectedFranja('Todas');
+            setMensaje(
+              formulario.reserva
+                ? 'Reserva reprogramada correctamente.'
+                : 'Reserva creada correctamente.',
+            );
+            setFormulario(null);
+          }}
+        />
+      )}
+      {confirmacion && (
+        <ConfirmarReservaModal
+          reserva={
+            reservas.find((item) => item.reservaId === confirmacion.reserva.reservaId) ??
+            confirmacion.reserva
+          }
+          accion={confirmacion.accion}
+          ahora={ahora}
+          mesaLabel={formatMesaLabel(confirmacion.reserva.mesaId)}
+          onClose={() => setConfirmacion(null)}
+          onSuccess={() => {
+            setMensaje(
+              confirmacion.accion === 'cancelar'
+                ? 'Reserva cancelada correctamente.'
+                : 'No-show registrado correctamente.',
+            );
+            setConfirmacion(null);
+          }}
+        />
+      )}
     </section>
   );
 }
