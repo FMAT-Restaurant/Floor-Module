@@ -26,7 +26,7 @@ export function Modal({ title, description, pending, onClose, children }: ModalP
     const dialog = dialogRef.current;
     dialog?.focus();
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      if (event.key === 'Escape' && !event.defaultPrevented) {
         event.preventDefault();
         event.stopPropagation();
         if (!pendingRef.current) closeRef.current();

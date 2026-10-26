@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Clock } from 'lucide-react';
+import { getHoraLocalAhora } from '../../lib/reservas';
 import { cn } from '../../lib/utils';
 
 export interface TimePickerProps {
@@ -60,16 +61,19 @@ export function TimePicker({
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopImmediatePropagation();
         setIsOpen(false);
+        containerRef.current?.querySelector('input')?.focus();
       }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keydown', handleKeyDown, true);
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('keydown', handleKeyDown, true);
     };
   }, [isOpen]);
 
@@ -101,9 +105,8 @@ export function TimePicker({
   };
 
   const handleSetCurrentTime = () => {
-    const now = new Date();
-    const h = String(now.getHours()).padStart(2, '0');
-    const roundedMin = Math.floor(now.getMinutes() / stepMinutes) * stepMinutes;
+    const [h, minutos] = getHoraLocalAhora().split(':');
+    const roundedMin = Math.floor(Number(minutos) / stepMinutes) * stepMinutes;
     const m = String(roundedMin % 60).padStart(2, '0');
     onChange(`${h}:${m}`);
     setIsOpen(false);

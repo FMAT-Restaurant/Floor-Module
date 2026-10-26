@@ -1,6 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { TimePicker } from './TimePicker';
+
+afterEach(() => vi.useRealTimers());
 
 describe('TimePicker', () => {
   it('renderiza label, input de tiempo y valor inicial', () => {
@@ -86,7 +88,9 @@ describe('TimePicker', () => {
     expect(screen.getByLabelText(/Hora de inicio/)).toHaveAttribute('aria-invalid', 'true');
   });
 
-  it('permite usar el botón Ahora para redondear a los 15 minutos más cercanos', () => {
+  it('permite usar Ahora con la hora del restaurante y redondea a 15 minutos', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-25T20:37:00Z'));
     const handleChange = vi.fn();
     render(
       <TimePicker id="test-time" label="Hora de inicio" value="12:00" onChange={handleChange} />,
@@ -95,7 +99,7 @@ describe('TimePicker', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Abrir selector de hora' }));
     fireEvent.click(screen.getByRole('button', { name: 'Ahora' }));
 
-    expect(handleChange).toHaveBeenCalled();
+    expect(handleChange).toHaveBeenCalledWith('14:30');
     expect(screen.queryByTestId('timepicker-popover-test-time')).not.toBeInTheDocument();
   });
 });

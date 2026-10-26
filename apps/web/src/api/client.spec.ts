@@ -1,5 +1,5 @@
 import { http, HttpResponse } from 'msw';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { apiClient, ApiError, buildUrl, isApiError, setBaseUrl, setSessionToken } from './index';
 import { queryClient } from './queryClient';
 import {
@@ -36,6 +36,7 @@ beforeAll(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   server.resetHandlers();
   mockDb.reset();
   setSessionToken(null);
@@ -332,6 +333,8 @@ describe('API Client Unit Tests & Error Handling', () => {
       });
 
       it('crearReserva creates a confirmed booking', async () => {
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(new Date('2026-10-11T12:00:00-06:00'));
         const res = await crearReserva({
           mesaId: FIXTURE_MESA_IDS.MESA_7,
           fecha: '2026-10-11',
@@ -353,6 +356,8 @@ describe('API Client Unit Tests & Error Handling', () => {
       });
 
       it('noShowReserva marks expired booking as No-show', async () => {
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(new Date('2026-10-12T00:00:00-06:00'));
         const noShow = await noShowReserva(FIXTURE_RESERVA_IDS.RESERVA_2_FUTURA);
         expect(noShow.estado).toBe(EstadoReserva.NO_SHOW);
       });
