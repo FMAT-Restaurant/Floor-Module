@@ -11,12 +11,12 @@ import {
   Query,
 } from '@nestjs/common';
 import {
-  EstadoReserva,
   actualizarReservaSchema,
   consultarDisponibilidadQuerySchema,
   crearReservaSchema,
   listarReservasQuerySchema,
   reservaParamSchema,
+  type ActualizarReservaRequestDto,
   type ConsultarDisponibilidadQueryDto,
   type CrearReservaRequestDto,
   type CrearReservaResponseDto,
@@ -25,13 +25,9 @@ import {
   type ReservaDto,
   type ReservaParamDto,
 } from '@floor/shared';
+import { ROLES_GESTION_SALA, ROLES_OPERACION_SALA, Roles } from '../../common/auth/auth.decorators';
 import { ZodValidationPipe, type EsquemaValidable } from '../../common/pipes/zod-validation.pipe';
-import { ReservasService, type ActualizarReservaEntrada } from './reservas.service';
-
-const ESTADOS_PATCH_PERMITIDOS = new Set<string>([
-  EstadoReserva.CONFIRMADA,
-  EstadoReserva.CANCELADA,
-]);
+import { ReservasService } from './reservas.service';
 
 export const esquemaDisponibilidad: EsquemaValidable = {
   safeParse(valor: unknown) {
@@ -58,32 +54,6 @@ export const esquemaActualizar: EsquemaValidable = {
       delete raw.hora;
     }
 
-    const estadoRaw = raw.estado;
-    if (estadoRaw !== undefined) {
-      if (typeof estadoRaw !== 'string' || !ESTADOS_PATCH_PERMITIDOS.has(estadoRaw)) {
-        return {
-          success: false,
-          error: {
-            issues: [{ path: ['estado'], message: 'Estado de reserva inválido' }],
-          },
-        };
-      }
-      const sinEstado = { ...raw };
-      delete sinEstado.estado;
-      if (Object.keys(sinEstado).length === 0) {
-        return {
-          success: true,
-          data: { estado: estadoRaw as EstadoReserva },
-        };
-      }
-      const parsed = actualizarReservaSchema.safeParse(sinEstado);
-      if (!parsed.success) return parsed;
-      return {
-        success: true,
-        data: { ...parsed.data, estado: estadoRaw as EstadoReserva },
-      };
-    }
-
     return actualizarReservaSchema.safeParse(raw);
   },
 };
@@ -100,12 +70,14 @@ export class ReservasController {
   constructor(private readonly servicio: ReservasService) {}
 
   @Get()
+  @Roles(...ROLES_OPERACION_SALA)
   listar(@Query(validarFiltroListado) query: ListarReservasQueryDto): Promise<ReservaDto[]> {
     return this.servicio.listar(query);
   }
 
   // Debe declararse antes de ':reservaId' para que 'disponibilidad' no se interprete como un UUID.
   @Get('disponibilidad')
+  @Roles(...ROLES_OPERACION_SALA)
   consultarDisponibilidad(
     @Query(validarDisponibilidad) query: ConsultarDisponibilidadQueryDto,
   ): Promise<MesaDto[]> {
@@ -113,30 +85,35 @@ export class ReservasController {
   }
 
   @Get(':reservaId')
+  @Roles(...ROLES_OPERACION_SALA)
   obtener(@Param(validarParams) { reservaId }: ReservaParamDto): Promise<ReservaDto> {
     return this.servicio.obtener(reservaId);
   }
 
   @Post()
+  @Roles(...ROLES_GESTION_SALA)
   crear(@Body(validarCreacion) cuerpo: CrearReservaRequestDto): Promise<CrearReservaResponseDto> {
     return this.servicio.crear(cuerpo);
   }
 
   @Patch(':reservaId')
+  @Roles(...ROLES_GESTION_SALA)
   actualizar(
     @Param(validarParams) { reservaId }: ReservaParamDto,
-    @Body(validarActualizacion) cuerpo: ActualizarReservaEntrada,
+    @Body(validarActualizacion) cuerpo: ActualizarReservaRequestDto,
   ): Promise<ReservaDto> {
     return this.servicio.actualizar(reservaId, cuerpo);
   }
 
   @Post(':reservaId/cancelar')
+  @Roles(...ROLES_GESTION_SALA)
   @HttpCode(HttpStatus.OK)
   cancelar(@Param(validarParams) { reservaId }: ReservaParamDto): Promise<ReservaDto> {
     return this.servicio.cancelar(reservaId);
   }
 
   @Delete(':reservaId')
+  @Roles(...ROLES_GESTION_SALA)
   eliminar(@Param(validarParams) { reservaId }: ReservaParamDto): Promise<ReservaDto> {
     return this.servicio.cancelar(reservaId);
   }

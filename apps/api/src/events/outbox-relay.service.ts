@@ -206,6 +206,10 @@ export class OutboxRelayService implements OnModuleInit, OnModuleDestroy {
         }),
       );
 
+      if (evento.intentos === 0) {
+        await this.notificarListeners(evento);
+      }
+
       try {
         await this.prisma.outboxEvento.update({
           where: { id: evento.id },

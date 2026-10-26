@@ -170,12 +170,18 @@ describe('ReservasRepository', () => {
     ).rejects.toThrow('DB connection lost');
   });
 
-  it('actualizar y actualizarEstado actualizan la fila y traducen errores de solapamiento', async () => {
+  it('actualizar y actualizarEstado exigen estado Confirmada en where, reinician alertaEmitida: false y traducen P2025 y solapamiento (IMP-07, IMP-08)', async () => {
+    const errorP2025 = new Prisma.PrismaClientKnownRequestError(
+      'An operation failed because it depends on one or more records that were required but not found.',
+      { code: 'P2025', clientVersion: CLIENT_VERSION },
+    );
     const update = jest
       .fn()
-      .mockResolvedValueOnce(filaReservaMock({ estado: EstadoReservaPrisma.Cancelada }))
+      .mockResolvedValueOnce(filaReservaMock({ alertaEmitida: false }))
       .mockRejectedValueOnce(errorExclusionSolapada())
-      .mockResolvedValueOnce(filaReservaMock({ estado: EstadoReservaPrisma.Cancelada }));
+      .mockRejectedValueOnce(errorP2025)
+      .mockResolvedValueOnce(filaReservaMock({ estado: EstadoReservaPrisma.Cancelada }))
+      .mockRejectedValueOnce(errorP2025);
     const repo = new ReservasRepository({ reserva: { update } } as unknown as PrismaService);
 
     const actualizada = await repo.actualizar(RESERVA_ID, {
@@ -184,9 +190,19 @@ describe('ReservasRepository', () => {
       fecha: '2030-01-15',
       horaInicio: '20:00',
       horaFin: '21:30',
-      estado: EstadoReserva.CANCELADA,
     });
-    expect(actualizada.estado).toBe(EstadoReserva.CANCELADA);
+    expect(actualizada.estado).toBe(EstadoReserva.CONFIRMADA);
+    expect(update).toHaveBeenNthCalledWith(1, {
+      where: { id: RESERVA_ID, estado: EstadoReservaPrisma.Confirmada },
+      data: {
+        mesaId: MESA_ID,
+        cantidadPersonas: 4,
+        fechaReserva: fechaAPrisma('2030-01-15'),
+        horaInicio: horaAPrisma('20:00'),
+        horaFin: horaAPrisma('21:30'),
+        alertaEmitida: false,
+      },
+    });
 
     await expect(
       repo.actualizar(RESERVA_ID, {
@@ -201,8 +217,30 @@ describe('ReservasRepository', () => {
       response: expect.objectContaining({ code: CODIGO_ERROR.RESERVA_SOLAPADA }),
     });
 
+    await expect(
+      repo.actualizar(RESERVA_ID, {
+        mesaId: MESA_ID,
+        cantidadPersonas: 4,
+        fecha: '2030-01-15',
+        horaInicio: '20:00',
+        horaFin: '21:30',
+      }),
+    ).rejects.toMatchObject({
+      status: 409,
+      response: expect.objectContaining({ code: CODIGO_ERROR.TRANSICION_INVALIDA }),
+    });
+
     const cancelada = await repo.actualizarEstado(RESERVA_ID, EstadoReserva.CANCELADA);
     expect(cancelada.estado).toBe(EstadoReserva.CANCELADA);
+    expect(update).toHaveBeenNthCalledWith(4, {
+      where: { id: RESERVA_ID, estado: EstadoReservaPrisma.Confirmada },
+      data: { estado: EstadoReservaPrisma.Cancelada },
+    });
+
+    await expect(repo.actualizarEstado(RESERVA_ID, EstadoReserva.CANCELADA)).rejects.toMatchObject({
+      status: 409,
+      response: expect.objectContaining({ code: CODIGO_ERROR.TRANSICION_INVALIDA }),
+    });
   });
 
   it('enTransaccion ejecuta sobre el cliente transaccional y traduce violaciones de exclusión', async () => {

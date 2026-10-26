@@ -25,14 +25,23 @@ interface Respuesta<T> {
 
 type Json = Record<string, unknown>;
 
+const HOST_USER_ID = 'e1000000-0000-4000-8000-000000000002';
+const MESERO_USER_ID = 'b1000000-0000-4000-8000-000000000001';
+
 async function peticion<T = Json>(
   metodo: string,
   ruta: string,
   cuerpo?: unknown,
+  headersExtra: Record<string, string> = {},
 ): Promise<Respuesta<T>> {
   const respuesta = await fetch(`${baseUrl}${ruta}`, {
     method: metodo,
-    headers: { 'content-type': 'application/json' },
+    headers: {
+      'content-type': 'application/json',
+      'x-user-id': HOST_USER_ID,
+      'x-user-roles': 'HOST',
+      ...headersExtra,
+    },
     body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo),
   });
   const texto = await respuesta.text();
@@ -459,6 +468,58 @@ describe('API /api/v1/floor/reservas (BE-007)', () => {
       expect(patchInexistente.cuerpo).toMatchObject({ code: 'RESERVA_NO_ENCONTRADA' });
       expect(deleteInexistente.status).toBe(404);
       expect(deleteInexistente.cuerpo).toMatchObject({ code: 'RESERVA_NO_ENCONTRADA' });
+    });
+
+    it('BLOQ-06 · SPEC §1.1: MESERO puede consultar GET /reservas (200) pero recibe 403 NO_AUTORIZADO al intentar POST /reservas o POST /reservas/:id/cancelar', async () => {
+      const mesa = await crearMesaDb({ numeroMesa: 1, capacidad: 4 });
+      const { cuerpo: creada } = await peticion('POST', RUTA, {
+        mesaId: mesa.id,
+        fecha: '2030-01-15',
+        horaInicio: '19:00',
+        duracion: 90,
+        cantidadPersonas: 2,
+        cliente: { nombre: 'Cliente Host', tel: '5512345678' },
+      });
+
+      const headersMesero = {
+        'x-user-id': MESERO_USER_ID,
+        'x-user-roles': 'MESERO',
+      };
+
+      const consultaMesero = await peticion<Json[]>('GET', RUTA, undefined, headersMesero);
+      expect(consultaMesero.status).toBe(200);
+      expect(consultaMesero.cuerpo).toHaveLength(1);
+
+      const postMesero = await peticion(
+        'POST',
+        RUTA,
+        {
+          mesaId: mesa.id,
+          fecha: '2030-01-15',
+          horaInicio: '21:00',
+          duracion: 60,
+          cantidadPersonas: 2,
+          cliente: { nombre: 'Intento Mesero', tel: '5512345678' },
+        },
+        headersMesero,
+      );
+      expect(postMesero.status).toBe(403);
+      expect(postMesero.cuerpo).toMatchObject({
+        statusCode: 403,
+        code: 'NO_AUTORIZADO',
+      });
+
+      const cancelarMesero = await peticion(
+        'POST',
+        `${RUTA}/${creada.reservaId as string}/cancelar`,
+        undefined,
+        headersMesero,
+      );
+      expect(cancelarMesero.status).toBe(403);
+      expect(cancelarMesero.cuerpo).toMatchObject({
+        statusCode: 403,
+        code: 'NO_AUTORIZADO',
+      });
     });
   });
 });

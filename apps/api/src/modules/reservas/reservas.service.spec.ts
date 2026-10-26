@@ -72,7 +72,9 @@ describe('ReservasService (BE-007)', () => {
 
   beforeEach(() => {
     repositorio = crearRepositorioMock();
-    servicio = new ReservasService(repositorio);
+    servicio = new ReservasService(repositorio, {
+      ahora: () => new Date('2030-01-15T12:00:00.000Z'),
+    });
   });
 
   describe('POST · crear (RF-012, RN-09, RN-10)', () => {
@@ -84,6 +86,42 @@ describe('ReservasService (BE-007)', () => {
       cantidadPersonas: 4,
       cliente: { nombre: 'Laura Pérez', tel: '+52 999 123 4567' },
     };
+
+    it('RN-10 · IMP-06: rechaza con 400 VALIDACION cuando se intenta crear o reprogramar una reserva en el pasado', async () => {
+      const errCrearPasado = await capturar(
+        servicio.crear({
+          ...payloadBase,
+          fecha: '2030-01-15',
+          horaInicio: '11:30',
+        }),
+      );
+      expect(errCrearPasado.getStatus()).toBe(400);
+      expect(errCrearPasado.getResponse()).toMatchObject({
+        statusCode: 400,
+        code: CODIGO_ERROR.VALIDACION,
+        message: 'La reserva debe iniciar en el futuro',
+        details: { fecha: '2030-01-15', horaInicio: '11:30' },
+      });
+      expect(repositorio.crear).not.toHaveBeenCalled();
+
+      repositorio.buscarPorId.mockResolvedValue(reservaMock());
+      repositorio.buscarMesaActiva.mockResolvedValue(mesaMock({ capacidad: 4 }));
+
+      const errReprogramarPasado = await capturar(
+        servicio.actualizar(RESERVA_ID, {
+          fecha: '2030-01-15',
+          horaInicio: '12:00',
+        }),
+      );
+      expect(errReprogramarPasado.getStatus()).toBe(400);
+      expect(errReprogramarPasado.getResponse()).toMatchObject({
+        statusCode: 400,
+        code: CODIGO_ERROR.VALIDACION,
+        message: 'La reserva debe iniciar en el futuro',
+        details: { fecha: '2030-01-15', horaInicio: '12:00' },
+      });
+      expect(repositorio.actualizar).not.toHaveBeenCalled();
+    });
 
     it('crea la reserva si cantidadPersonas > 0 y <= capacidad de la mesa', async () => {
       repositorio.buscarMesaActiva.mockResolvedValue(mesaMock({ capacidad: 4 }));
@@ -248,21 +286,6 @@ describe('ReservasService (BE-007)', () => {
         horaFin: '22:00',
         cantidadPersonas: 5,
       });
-    });
-
-    it('permite cambiar estado a Cancelada mediante PATCH si está Confirmada', async () => {
-      repositorio.buscarPorId.mockResolvedValue(reservaMock());
-      repositorio.actualizarEstado.mockResolvedValue(
-        reservaMock({ estado: EstadoReserva.CANCELADA }),
-      );
-
-      const resultado = await servicio.actualizar(RESERVA_ID, { estado: EstadoReserva.CANCELADA });
-
-      expect(resultado.estado).toBe(EstadoReserva.CANCELADA);
-      expect(repositorio.actualizarEstado).toHaveBeenCalledWith(
-        RESERVA_ID,
-        EstadoReserva.CANCELADA,
-      );
     });
 
     it.each([EstadoReserva.COMPLETADA, EstadoReserva.CANCELADA, EstadoReserva.NO_SHOW])(

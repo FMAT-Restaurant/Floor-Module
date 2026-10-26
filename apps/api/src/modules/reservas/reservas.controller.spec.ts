@@ -95,36 +95,32 @@ describe('ReservasController', () => {
       expect(esquemaDisponibilidad.safeParse(null).success).toBe(false);
     });
 
-    it('valida payloads parciales, alias hora y estado en esquemaActualizar', () => {
+    it('valida payloads parciales con actualizarReservaSchema y rechaza cambio de estado por PATCH (IMP-08)', () => {
       expect(esquemaActualizar.safeParse(null).success).toBe(false);
       expect(esquemaActualizar.safeParse([]).success).toBe(false);
+      expect(esquemaActualizar.safeParse({}).success).toBe(false);
 
       const conHora = esquemaActualizar.safeParse({ hora: '20:30', duracion: 60 });
       expect(conHora.success).toBe(true);
       expect(conHora.data).toEqual({ horaInicio: '20:30', duracion: 60 });
 
-      const soloEstado = esquemaActualizar.safeParse({ estado: EstadoReserva.CANCELADA });
-      expect(soloEstado.success).toBe(true);
-      expect(soloEstado.data).toEqual({ estado: EstadoReserva.CANCELADA });
+      const conEstadoCancelada = esquemaActualizar.safeParse({
+        estado: EstadoReserva.CANCELADA,
+      });
+      expect(conEstadoCancelada.success).toBe(false);
 
-      const estadoYCampos = esquemaActualizar.safeParse({
-        estado: EstadoReserva.CONFIRMADA,
+      const conCantidadValida = esquemaActualizar.safeParse({
         cantidadPersonas: 3,
       });
-      expect(estadoYCampos.success).toBe(true);
-      expect(estadoYCampos.data).toEqual({
-        estado: EstadoReserva.CONFIRMADA,
+      expect(conCantidadValida.success).toBe(true);
+      expect(conCantidadValida.data).toEqual({
         cantidadPersonas: 3,
       });
 
-      const estadoInvalido = esquemaActualizar.safeParse({ estado: 'Invalido' });
-      expect(estadoInvalido.success).toBe(false);
-
-      const estadoConCampoInvalido = esquemaActualizar.safeParse({
-        estado: EstadoReserva.CONFIRMADA,
+      const conCampoInvalido = esquemaActualizar.safeParse({
         cantidadPersonas: 0,
       });
-      expect(estadoConCampoInvalido.success).toBe(false);
+      expect(conCampoInvalido.success).toBe(false);
     });
   });
 });

@@ -1,11 +1,14 @@
-import { Injectable } from '@nestjs/common';
-import type {
+import { HttpStatus, Injectable } from '@nestjs/common';
+import {
   EstadoMesa as EstadoMesaPrisma,
-  Mesa as FilaMesa,
-  Prisma,
-  Reserva as FilaReserva,
+  EstadoReserva as EstadoReservaPrisma,
+  type Mesa as FilaMesa,
+  type Prisma,
+  type Reserva as FilaReserva,
 } from '@prisma/client';
 import type { EstadoReserva, ListarReservasQueryDto } from '@floor/shared';
+import { CODIGO_ERROR } from '../../common/errors/codigos-error';
+import { DomainException } from '../../common/errors/domain.exception';
 import { traducirErrorPrisma } from '../../common/errors/prisma-error.translator';
 import { PrismaService } from '../../prisma/prisma.service';
 import { estadoMesaDesdePrisma } from '../mesas/estado-mesa.mapper';
@@ -74,7 +77,21 @@ function aMesaRegistro(fila: FilaMesa | FilaMesaCruda): MesaRegistro {
   };
 }
 
-function relanzarTraducido(error: unknown): never {
+function esErrorPrismaP2025(error: unknown): boolean {
+  return (
+    typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'P2025'
+  );
+}
+
+function relanzarTraducido(error: unknown, reservaIdEnTransicion?: string): never {
+  if (reservaIdEnTransicion && esErrorPrismaP2025(error)) {
+    throw new DomainException(
+      HttpStatus.CONFLICT,
+      CODIGO_ERROR.TRANSICION_INVALIDA,
+      'La reserva ya no se encuentra en estado Confirmada y no puede modificarse ni cancelarse',
+      { reservaId: reservaIdEnTransicion },
+    );
+  }
   const traducido = traducirErrorPrisma(error);
   if (traducido) {
     throw traducido;
@@ -149,39 +166,40 @@ export class ReservasRepository {
   }
 
   /**
-   * RF-013 · RN-09: reprograma o modifica la reserva recalculando su `tstzrange` en PostgreSQL.
-   * Si el nuevo horario colisiona con otra reserva Confirmada de la mesa, traduce la violación
-   * de exclusión `reserva_no_solapada_excl` a 409 `RESERVA_SOLAPADA`.
+   * RF-013 · RN-09 · RN-20: reprograma o modifica la reserva recalculando su `tstzrange` en PostgreSQL,
+   * reiniciando `alertaEmitida = false` (IMP-07) y exigiendo `estado: Confirmada` en la cláusula
+   * `where` para evitar condiciones de carrera TOCTOU (IMP-08).
    */
   async actualizar(reservaId: string, datos: ActualizarReservaDatos): Promise<ReservaRegistro> {
     construirTstzRange(datos.fecha, datos.horaInicio, datos.horaFin);
     try {
       const fila = await this.prisma.reserva.update({
-        where: { id: reservaId },
+        where: { id: reservaId, estado: EstadoReservaPrisma.Confirmada },
         data: {
           mesaId: datos.mesaId,
           cantidadPersonas: datos.cantidadPersonas,
           fechaReserva: fechaAPrisma(datos.fecha),
           horaInicio: horaAPrisma(datos.horaInicio),
           horaFin: horaAPrisma(datos.horaFin),
+          alertaEmitida: false,
           ...(datos.estado !== undefined ? { estado: estadoReservaAPrisma(datos.estado) } : {}),
         },
       });
       return aReservaRegistro(fila);
     } catch (error) {
-      relanzarTraducido(error);
+      relanzarTraducido(error, reservaId);
     }
   }
 
   async actualizarEstado(reservaId: string, estado: EstadoReserva): Promise<ReservaRegistro> {
     try {
       const fila = await this.prisma.reserva.update({
-        where: { id: reservaId },
+        where: { id: reservaId, estado: EstadoReservaPrisma.Confirmada },
         data: { estado: estadoReservaAPrisma(estado) },
       });
       return aReservaRegistro(fila);
     } catch (error) {
-      relanzarTraducido(error);
+      relanzarTraducido(error, reservaId);
     }
   }
 

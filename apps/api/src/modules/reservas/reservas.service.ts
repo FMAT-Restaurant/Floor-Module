@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable, Optional } from '@nestjs/common';
 import {
   EstadoReserva,
   type ActualizarReservaRequestDto,
@@ -12,10 +12,12 @@ import {
 import { CODIGO_ERROR } from '../../common/errors/codigos-error';
 import { DomainException } from '../../common/errors/domain.exception';
 import { traducirErrorPrisma } from '../../common/errors/prisma-error.translator';
+import { Reloj } from '../../common/reloj/reloj';
 import { aMesaDto } from '../mesas/mesa.dto.mapper';
 import {
   calcularDuracionMinutos,
   calcularHoraFin,
+  construirTstzRange,
   esEstadoModificable,
   validarFecha,
 } from './domain/rango-reserva';
@@ -39,7 +41,6 @@ export type ConsultarDisponibilidadEntrada = Partial<ConsultarDisponibilidadQuer
 
 export type ActualizarReservaEntrada = Partial<ActualizarReservaRequestDto> & {
   hora?: string;
-  estado?: EstadoReserva;
 };
 
 function traducirORelanzar(error: unknown): never {
@@ -55,11 +56,15 @@ function traducirORelanzar(error: unknown): never {
 
 @Injectable()
 export class ReservasService {
-  constructor(private readonly repositorio: ReservasRepository) {}
+  constructor(
+    private readonly repositorio: ReservasRepository,
+    @Optional() private readonly reloj: Reloj = new Reloj(),
+  ) {}
 
   /**
    * RF-012 · RN-09 · RN-10 · RNF-003: registra una nueva reserva en estado `Confirmada`.
-   * Valida que `cantidadPersonas` sea > 0 y <= capacidad de la mesa activa seleccionada.
+   * Valida que `cantidadPersonas` sea > 0 y <= capacidad de la mesa activa seleccionada,
+   * y que el inicio de la reserva sea en el futuro (`RN-10`).
    * La base de datos genera el `tstzrange` y aplica la restricción `EXCLUDE` (`reserva_no_solapada_excl`),
    * traduciendo cualquier solapamiento temporal a 409 `RESERVA_SOLAPADA`.
    */
@@ -69,6 +74,16 @@ export class ReservasService {
     }
     validarFecha(datos.fecha);
     const horaFin = calcularHoraFin(datos.horaInicio, datos.duracion);
+    const rango = construirTstzRange(datos.fecha, datos.horaInicio, horaFin);
+
+    if (rango.inicio.getTime() <= this.reloj.ahora().getTime()) {
+      throw new DomainException(
+        HttpStatus.BAD_REQUEST,
+        CODIGO_ERROR.VALIDACION,
+        'La reserva debe iniciar en el futuro',
+        { fecha: datos.fecha, horaInicio: datos.horaInicio },
+      );
+    }
 
     const mesa = await this.repositorio.buscarMesaActiva(datos.mesaId);
     if (!mesa) {
@@ -148,7 +163,8 @@ export class ReservasService {
 
   /**
    * RF-013 · RF-014 · RN-09 · RN-10 · RN-11: reprograma o modifica una reserva existente.
-   * Valida que la reserva no esté ya completada o cancelada antes de modificar su estado o su franja horaria.
+   * Valida que la reserva esté en estado `Confirmada` y que cuando se reprograme fecha u hora,
+   * el nuevo inicio sea en el futuro (`RN-10`).
    */
   async actualizar(reservaId: string, datos: ActualizarReservaEntrada): Promise<ReservaDto> {
     try {
@@ -160,19 +176,6 @@ export class ReservasService {
 
         if (!esEstadoModificable(reserva.estado)) {
           throw reservaNoModificable(reserva.id, reserva.estado);
-        }
-
-        const tieneCambiosHorarioOMesa =
-          datos.mesaId !== undefined ||
-          datos.fecha !== undefined ||
-          datos.horaInicio !== undefined ||
-          datos.hora !== undefined ||
-          datos.duracion !== undefined ||
-          datos.cantidadPersonas !== undefined;
-
-        if (datos.estado && !tieneCambiosHorarioOMesa) {
-          const actualizadaEstado = await repo.actualizarEstado(reserva.id, datos.estado);
-          return aReservaDto(actualizadaEstado);
         }
 
         const mesaDestinoId = datos.mesaId ?? reserva.mesaId;
@@ -196,6 +199,18 @@ export class ReservasService {
         const duracion =
           datos.duracion ?? calcularDuracionMinutos(reserva.horaInicio, reserva.horaFin);
         const horaFin = calcularHoraFin(horaInicio, duracion);
+        const rango = construirTstzRange(fecha, horaInicio, horaFin);
+
+        const reprogramaFechaOHora =
+          datos.fecha !== undefined || datos.horaInicio !== undefined || datos.hora !== undefined;
+        if (reprogramaFechaOHora && rango.inicio.getTime() <= this.reloj.ahora().getTime()) {
+          throw new DomainException(
+            HttpStatus.BAD_REQUEST,
+            CODIGO_ERROR.VALIDACION,
+            'La reserva debe iniciar en el futuro',
+            { fecha, horaInicio },
+          );
+        }
 
         const actualizada = await repo.actualizar(reserva.id, {
           mesaId: mesa.id,
@@ -203,7 +218,6 @@ export class ReservasService {
           fecha,
           horaInicio,
           horaFin,
-          estado: datos.estado,
         });
 
         return aReservaDto(actualizada);
