@@ -37,7 +37,12 @@ async function peticion<T = Json>(
 ): Promise<Respuesta<T>> {
   const respuesta = await fetch(`${baseUrl}${ruta}`, {
     method: metodo,
-    headers: { 'content-type': 'application/json' },
+    headers: {
+      'content-type': 'application/json',
+      'x-user-id': 'e1000000-0000-4000-8000-000000000001',
+      'x-staff-id': 'ADMIN',
+      'x-user-roles': 'ADMINISTRADOR',
+    },
     body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo),
   });
   const texto = await respuesta.text();
