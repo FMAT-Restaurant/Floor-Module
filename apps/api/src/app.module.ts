@@ -7,10 +7,11 @@ import { EventsModule } from './events/events.module';
 import { GatewaysModule } from './gateways/gateways.module';
 import { HealthModule } from './modules/health/health.module';
 import { MesasModule } from './modules/mesas/mesas.module';
+import { ReservasModule } from './modules/reservas/reservas.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
-  imports: [PrismaModule, EventsModule, GatewaysModule, MesasModule, HealthModule],
+  imports: [PrismaModule, EventsModule, GatewaysModule, MesasModule, ReservasModule, HealthModule],
   controllers: [],
   providers: [
     {
