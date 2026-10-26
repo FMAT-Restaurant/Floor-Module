@@ -16,7 +16,7 @@ describe('configurarApp (INT-001, SPEC §1)', () => {
       limit: LIMITE_CUERPO_JSON,
     });
     expect(appMock.setGlobalPrefix).toHaveBeenCalledWith(PREFIJO_GLOBAL, {
-      exclude: ['health'],
+      exclude: ['health', 'api/v1/floor/health'],
     });
     expect(appMock.useGlobalFilters).toHaveBeenCalledWith(expect.any(AllExceptionsFilter));
   });

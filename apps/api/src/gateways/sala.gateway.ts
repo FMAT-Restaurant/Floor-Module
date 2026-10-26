@@ -125,6 +125,34 @@ export function resolverSalasSolicitadas(payload: unknown): SalaTematica[] {
 }
 
 /**
+ * Extrae el payload interno si un evento de Outbox fue envuelto en un `EventEnvelope`
+ * (`{ eventId, eventType, payload }` o `{ eventId, eventType, data }`).
+ */
+export function desempaquetarPayloadOutbox(rawPayload: unknown): Record<string, unknown> | null {
+  if (typeof rawPayload !== 'object' || rawPayload === null || Array.isArray(rawPayload)) {
+    return null;
+  }
+  const candidato = rawPayload as Record<string, unknown>;
+  if (typeof candidato.eventId === 'string' && typeof candidato.eventType === 'string') {
+    if (
+      typeof candidato.payload === 'object' &&
+      candidato.payload !== null &&
+      !Array.isArray(candidato.payload)
+    ) {
+      return candidato.payload as Record<string, unknown>;
+    }
+    if (
+      typeof candidato.data === 'object' &&
+      candidato.data !== null &&
+      !Array.isArray(candidato.data)
+    ) {
+      return candidato.data as Record<string, unknown>;
+    }
+  }
+  return candidato;
+}
+
+/**
  * BE-005 · Gateway WebSocket de Sala y Reservas bajo el namespace `/sala`
  * (RF-009, RNF-002, SPEC §6.2, ADR-004, ADR-007).
  */
@@ -316,19 +344,22 @@ export class SalaWebSocketGateway
 
   /**
    * Procesa un evento publicado por `OutboxRelayService` y lo difunde por WebSocket.
+   * Si el payload viene envuelto accidentalmente en un `EventEnvelope` (`{ eventId, eventType, payload | data }`),
+   * extrae el payload de dominio plano antes de emitir conforme a SPEC.md §6.2 (BLOQ-04).
    */
   procesarEventoOutbox(evento: Pick<OutboxEvento, 'routingKey' | 'payload'>): void {
-    if (!evento || typeof evento.payload !== 'object' || evento.payload === null) {
+    const payloadPlano = desempaquetarPayloadOutbox(evento?.payload);
+    if (!evento || !payloadPlano) {
       return;
     }
 
     if (evento.routingKey === EVENT_TOPICS.MESA_ESTADO_ACTUALIZADO) {
-      this.emitirMesaEstadoActualizado(evento.payload as unknown as MesaEstadoActualizadoPayload);
+      this.emitirMesaEstadoActualizado(payloadPlano as unknown as MesaEstadoActualizadoPayload);
       return;
     }
 
     if (evento.routingKey === EVENT_TOPICS.RESERVA_PROXIMA_ALERTA) {
-      this.emitirReservaProximaAlerta(evento.payload as unknown as ReservaProximaAlertaPayload);
+      this.emitirReservaProximaAlerta(payloadPlano as unknown as ReservaProximaAlertaPayload);
     }
   }
 

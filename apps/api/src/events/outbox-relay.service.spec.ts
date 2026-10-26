@@ -106,9 +106,13 @@ describe('OutboxRelayService (BE-004 · RF-008, RNF-005, ADR-006)', () => {
     desuscribirErr();
   });
 
-  it('cuando RabbitMqPublisher.publish falla, mantiene publicadoEn: null e incrementa intentos en 1', async () => {
+  it('cuando RabbitMqPublisher.publish falla, mantiene publicadoEn: null, incrementa intentos y notifica listeners locales en el primer intento (intentos === 0)', async () => {
     const { prisma, findMany, update, publisher, reloj } = crearDependencias();
-    const eventoFallido = crearEventoPendiente({
+    const eventoPrimerIntentoFallido = crearEventoPendiente({
+      id: 'e1000000-0000-4000-8000-000000000009',
+      intentos: 0,
+    });
+    const eventoReintentoFallido = crearEventoPendiente({
       id: 'e1000000-0000-4000-8000-000000000010',
       intentos: 2,
     });
@@ -117,31 +121,54 @@ describe('OutboxRelayService (BE-004 · RF-008, RNF-005, ADR-006)', () => {
       routingKey: EVENT_TOPICS.DINING_SESSION_INICIADA,
       payload: fixtureDiningSessionIniciadaPayload as unknown as OutboxEvento['payload'],
     });
-    findMany.mockResolvedValueOnce([eventoFallido, eventoExitoso]);
+    findMany.mockResolvedValueOnce([
+      eventoPrimerIntentoFallido,
+      eventoReintentoFallido,
+      eventoExitoso,
+    ]);
 
     publisher.publish
+      .mockRejectedValueOnce(new Error('Broker RabbitMQ desconectado'))
       .mockRejectedValueOnce(new Error('Broker RabbitMQ desconectado'))
       .mockResolvedValueOnce(undefined);
 
     const relay = new OutboxRelayService(prisma, publisher, reloj, { autoStart: false });
+    const listener = jest.fn();
+    relay.registerListener(listener);
 
     const procesados = await relay.processPendingEvents();
 
-    // El primer evento falló y el segundo se publicó con éxito sin abortar el lote
+    // Los primeros dos eventos fallaron en AMQP y el tercero se publicó con éxito
     expect(procesados).toBe(1);
-    expect(update).toHaveBeenCalledTimes(2);
+    expect(update).toHaveBeenCalledTimes(3);
     expect(update).toHaveBeenNthCalledWith(1, {
-      where: { id: eventoFallido.id },
+      where: { id: eventoPrimerIntentoFallido.id },
       data: {
         intentos: { increment: 1 },
       },
     });
     expect(update).toHaveBeenNthCalledWith(2, {
+      where: { id: eventoReintentoFallido.id },
+      data: {
+        intentos: { increment: 1 },
+      },
+    });
+    expect(update).toHaveBeenNthCalledWith(3, {
       where: { id: eventoExitoso.id },
       data: {
         publicadoEn: AHORA,
       },
     });
+    // Notificó en el primer intento fallido (intentos === 0) y en el evento exitoso, pero no en intentos === 2
+    expect(listener).toHaveBeenCalledTimes(2);
+    expect(listener).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ id: eventoPrimerIntentoFallido.id }),
+    );
+    expect(listener).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ id: eventoExitoso.id, publicadoEn: AHORA }),
+    );
   });
 
   it('maneja errores de base de datos en findMany o al actualizar intentos sin derribar el relay', async () => {

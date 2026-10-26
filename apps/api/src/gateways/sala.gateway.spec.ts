@@ -78,26 +78,55 @@ describe('SalaWebSocketGateway y utilidades JWT (BE-005)', () => {
       ).toBeNull();
 
       // Firma con otro secreto
-      const otroSecreto = firmarTokenJwtHs256({ sub: 'u1' }, 'otro-secreto');
+      const subValido = '550e8400-e29b-41d4-a716-446655440001';
+      const otroSecreto = firmarTokenJwtHs256(
+        { sub: subValido, iss: 'urn:fmat:restaurant:auth' },
+        'otro-secreto',
+      );
       expect(verificarTokenJwtHs256(otroSecreto, DEFAULT_JWT_SECRET)).toBeNull();
 
-      // Payload sin sub válido
-      const sinSub = firmarTokenJwtHs256({ sub: '   ' });
+      // Payload sin sub válido o sub que no es UUID v4
+      const sinSub = firmarTokenJwtHs256({ sub: '   ', iss: 'urn:fmat:restaurant:auth' });
       expect(verificarTokenJwtHs256(sinSub)).toBeNull();
+      const subNoUuid = firmarTokenJwtHs256({ sub: 'u1', iss: 'urn:fmat:restaurant:auth' });
+      expect(verificarTokenJwtHs256(subNoUuid)).toBeNull();
 
-      // Token expirado
+      // Token con iss inválido o mustChangePassword: true (IMP-04)
+      const issInvalido = firmarTokenJwtHs256({
+        sub: subValido,
+        iss: 'urn:otro:emisor',
+      });
+      expect(verificarTokenJwtHs256(issInvalido)).toBeNull();
+
+      const passwordTemporal = firmarTokenJwtHs256({
+        sub: subValido,
+        iss: 'urn:fmat:restaurant:auth',
+        mustChangePassword: true,
+      });
+      expect(verificarTokenJwtHs256(passwordTemporal)).toBeNull();
+
+      // Token expirado o con nbf en el futuro
       const expirado = firmarTokenJwtHs256({
-        sub: 'u1',
+        sub: subValido,
+        iss: 'urn:fmat:restaurant:auth',
         exp: Math.floor(Date.now() / 1000) - 60,
       });
       expect(verificarTokenJwtHs256(expirado)).toBeNull();
 
+      const nbfFuturo = firmarTokenJwtHs256({
+        sub: subValido,
+        iss: 'urn:fmat:restaurant:auth',
+        nbf: Math.floor(Date.now() / 1000) + 60,
+      });
+      expect(verificarTokenJwtHs256(nbfFuturo)).toBeNull();
+
       // Token con exp futuro válido
       const vigente = firmarTokenJwtHs256({
-        sub: 'u1',
+        sub: subValido,
+        iss: 'urn:fmat:restaurant:auth',
         exp: Math.floor(Date.now() / 1000) + 3600,
       });
-      expect(verificarTokenJwtHs256(vigente)?.sub).toBe('u1');
+      expect(verificarTokenJwtHs256(vigente)?.sub).toBe(subValido);
     });
 
     it('extrae el token en orden de prioridad: auth.token -> headers.authorization -> query.token', () => {
@@ -288,6 +317,21 @@ describe('SalaWebSocketGateway y utilidades JWT (BE-005)', () => {
       // Emite también con arrays en mesa y reserva
       gateway.emitirMesaEstadoActualizado(payloadMesa, [SALA_WS_ROOMS.PLANO]);
       gateway.emitirReservaProximaAlerta(payloadReserva, [SALA_WS_ROOMS.RECEPCION]);
+
+      // Desempaqueta EventEnvelope accidental ({ eventId, eventType, payload }) antes de emitir por WS (BLOQ-04)
+      emitRoomMock.mockClear();
+      gateway.procesarEventoOutbox({
+        routingKey: EVENT_TOPICS.MESA_ESTADO_ACTUALIZADO,
+        payload: {
+          eventId: 'e1000000-0000-4000-8000-000000000001',
+          eventType: EVENT_TOPICS.MESA_ESTADO_ACTUALIZADO,
+          payload: payloadMesa,
+        } as any,
+      });
+      expect(emitRoomMock).toHaveBeenCalledWith(
+        SALA_WS_EVENTS.MESA_ESTADO_ACTUALIZADO,
+        payloadMesa,
+      );
 
       // Ignora payloads nulos o cuando server no está definido
       gateway.procesarEventoOutbox({ routingKey: 'otro', payload: null as any });

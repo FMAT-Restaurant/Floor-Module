@@ -11,6 +11,10 @@ import type { ApiErrorResponseDto } from '@floor/shared';
 import { CODIGO_ERROR } from '../errors/codigos-error';
 import { DomainException } from '../errors/domain.exception';
 import { traducirErrorPrisma } from '../errors/prisma-error.translator';
+import {
+  CORRELATION_ID_HEADER,
+  resolverCorrelationId,
+} from '../interceptors/correlation.interceptor';
 
 const CODIGO_POR_ESTADO: Readonly<Record<number, string>> = {
   [HttpStatus.BAD_REQUEST]: CODIGO_ERROR.VALIDACION,
@@ -45,7 +49,16 @@ export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name);
 
   catch(exception: unknown, host: ArgumentsHost): void {
-    const respuesta = host.switchToHttp().getResponse<Response>();
+    const http = host.switchToHttp();
+    const respuesta = http.getResponse<Response>();
+    if (typeof respuesta.setHeader === 'function') {
+      const request =
+        typeof http.getRequest === 'function'
+          ? http.getRequest<{ headers?: Record<string, unknown> }>()
+          : undefined;
+      const correlationId = resolverCorrelationId(request?.headers);
+      respuesta.setHeader(CORRELATION_ID_HEADER, correlationId);
+    }
     const cuerpo = this.aCuerpoDeError(exception);
     respuesta.status(cuerpo.statusCode).json(cuerpo);
   }

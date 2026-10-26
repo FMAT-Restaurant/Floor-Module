@@ -78,6 +78,23 @@ describe('SalaWebSocketGateway Integración E2E (BE-005)', () => {
       }),
     ).rejects.toThrow(/UNAUTHORIZED/);
 
+    const conPasswordTemporal = conectarCliente({
+      auth: {
+        token: `Bearer ${firmarTokenJwtHs256({
+          sub: '550e8400-e29b-41d4-a716-446655440010',
+          roles: ['MESERO'],
+          iss: 'urn:fmat:restaurant:auth',
+          mustChangePassword: true,
+        })}`,
+      },
+    });
+    await expect(
+      new Promise<void>((resolve, reject) => {
+        conPasswordTemporal.once('connect', () => resolve());
+        conPasswordTemporal.once('connect_error', (err) => reject(err));
+      }),
+    ).rejects.toThrow(/UNAUTHORIZED/);
+
     const conToken = conectarCliente({
       auth: { token: `Bearer ${tokenValido}` },
     });

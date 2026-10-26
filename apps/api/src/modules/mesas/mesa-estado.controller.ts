@@ -7,6 +7,7 @@ import {
   type MesaParamDto,
 } from '@floor/shared';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
+import { ROLES_OPERACION_SALA, Roles } from '../../common/auth/auth.decorators';
 import { MesaEstadoService } from './mesa-estado.service';
 
 const validarParams = new ZodValidationPipe(mesaParamSchema);
@@ -18,6 +19,7 @@ export class MesaEstadoController {
   constructor(private readonly servicio: MesaEstadoService) {}
 
   @Patch(':mesaId/estado')
+  @Roles(...ROLES_OPERACION_SALA)
   actualizarEstado(
     @Param(validarParams) { mesaId }: MesaParamDto,
     @Body(validarEstado) cuerpo: ActualizarEstadoMesaRequestDto,
