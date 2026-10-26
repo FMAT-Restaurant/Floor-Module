@@ -105,28 +105,38 @@ describe('Integración HTTP BE-011: IdentityGuard, RolesGuard, CorrelationInterc
     await app.close();
   });
 
-  describe('GET /health y exclusión del prefijo global', () => {
-    it('expone GET /health en la raíz sin requerir autenticación y reporta PostgreSQL y RabbitMQ up', async () => {
-      const res = await fetch(`${baseUrl}/health`);
-      const body = await res.json();
+  describe('GET /health y /api/v1/floor/health (SPEC §5.7, INT-001)', () => {
+    it('expone GET /health y GET /api/v1/floor/health sin requerir autenticación y reporta PostgreSQL y RabbitMQ up', async () => {
+      const resDirecto = await fetch(`${baseUrl}/health`);
+      const bodyDirecto = await resDirecto.json();
 
-      expect(res.status).toBe(200);
-      expect(body).toEqual({
+      expect(resDirecto.status).toBe(200);
+      expect(bodyDirecto).toEqual({
         status: 'ok',
         db: 'up',
         broker: 'up',
       });
-      expect(res.headers.get(CORRELATION_ID_HEADER)).toEqual(expect.any(String));
+      expect(resDirecto.headers.get(CORRELATION_ID_HEADER)).toEqual(expect.any(String));
+
+      const resPerimetral = await fetch(`${baseUrl}/api/v1/floor/health`);
+      const bodyPerimetral = await resPerimetral.json();
+
+      expect(resPerimetral.status).toBe(200);
+      expect(bodyPerimetral).toEqual({
+        status: 'ok',
+        db: 'up',
+        broker: 'up',
+      });
     });
 
-    it('reporta estado degraded cuando PostgreSQL o el canal AMQP fallan manteniendo HTTP 200', async () => {
+    it('reporta estado degraded con HTTP 503 cuando PostgreSQL o el canal AMQP fallan', async () => {
       prismaMock.$queryRaw.mockRejectedValueOnce(new Error('Postgres offline'));
       publisherMock.isConnected.mockReturnValueOnce(false);
 
       const res = await fetch(`${baseUrl}/health`);
       const body = await res.json();
 
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(503);
       expect(body).toEqual({
         status: 'degraded',
         db: 'down',
@@ -148,19 +158,55 @@ describe('Integración HTTP BE-011: IdentityGuard, RolesGuard, CorrelationInterc
       expect(res.headers.get(CORRELATION_ID_HEADER)).toEqual(expect.any(String));
     });
 
-    it('autentica con cabeceras de Kong e ignora X-Password-Temporary', async () => {
+    it('autentica con cabeceras de Kong cuando X-Password-Temporary no es true', async () => {
       const res = await fetch(`${baseUrl}/${PREFIJO_GLOBAL}/mesas`, {
         headers: {
           'X-User-Id': MESERO_ID,
           'X-Staff-Id': 'M000104',
           'X-User-Roles': 'MESERO',
           'X-User-Permissions': 'mesas:read',
-          'X-Password-Temporary': 'true',
+          'X-Password-Temporary': 'false',
         },
       });
 
       expect(res.status).toBe(200);
       await expect(res.json()).resolves.toEqual([MESA_MOCK]);
+    });
+
+    it('rechaza con 403 PASSWORD_CHANGE_REQUIRED cuando X-Password-Temporary es true o JWT tiene mustChangePassword: true', async () => {
+      const resKong = await fetch(`${baseUrl}/${PREFIJO_GLOBAL}/mesas`, {
+        headers: {
+          'X-User-Id': MESERO_ID,
+          'X-Staff-Id': 'M000104',
+          'X-User-Roles': 'MESERO',
+          'X-Password-Temporary': 'true',
+        },
+      });
+
+      expect(resKong.status).toBe(403);
+      await expect(resKong.json()).resolves.toMatchObject({
+        statusCode: 403,
+        code: 'PASSWORD_CHANGE_REQUIRED',
+      });
+
+      const tokenProvisional = firmarJwtHs256({
+        sub: MESERO_ID,
+        roles: ['MESERO'],
+        iss: JWT_ISSUER,
+        mustChangePassword: true,
+      });
+
+      const resJwt = await fetch(`${baseUrl}/${PREFIJO_GLOBAL}/mesas`, {
+        headers: {
+          Authorization: `Bearer ${tokenProvisional}`,
+        },
+      });
+
+      expect(resJwt.status).toBe(403);
+      await expect(resJwt.json()).resolves.toMatchObject({
+        statusCode: 403,
+        code: 'PASSWORD_CHANGE_REQUIRED',
+      });
     });
 
     it('autentica por fallback local usando JWT HS256 con iss urn:fmat:restaurant:auth', async () => {

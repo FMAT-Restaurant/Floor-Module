@@ -50,13 +50,40 @@ describe('RolesGuard (BE-011, SPEC §1.1, ARCHITECTURE §8)', () => {
     expect(guard.canActivate(context)).toBe(true);
   });
 
-  it('permite el acceso cuando el endpoint no declara roles requeridos', () => {
-    const { context, reflector } = crearContextoRoles({
+  it('rechaza con 403 NO_AUTORIZADO (deny-by-default) cuando el endpoint no es público y no declara roles requeridos o declara arreglo vacío', () => {
+    const sinRoles = crearContextoRoles({
       rolesRequeridos: undefined,
+      user: {
+        userId: 'e1000000-0000-4000-8000-000000000001',
+        roles: [ROL.ADMINISTRADOR],
+        permissions: [],
+      },
     });
-    const guard = new RolesGuard(reflector);
+    const rolesVacios = crearContextoRoles({
+      rolesRequeridos: [],
+      user: {
+        userId: 'e1000000-0000-4000-8000-000000000001',
+        roles: [ROL.ADMINISTRADOR],
+        permissions: [],
+      },
+    });
 
-    expect(guard.canActivate(context)).toBe(true);
+    expect(() => new RolesGuard(sinRoles.reflector).canActivate(sinRoles.context)).toThrow(
+      DomainException,
+    );
+    expect(() => new RolesGuard(rolesVacios.reflector).canActivate(rolesVacios.context)).toThrow(
+      DomainException,
+    );
+    try {
+      new RolesGuard(sinRoles.reflector).canActivate(sinRoles.context);
+    } catch (error) {
+      const domainError = error as DomainException;
+      expect(domainError.getStatus()).toBe(403);
+      expect(domainError.getResponse()).toMatchObject({
+        statusCode: 403,
+        code: CODIGO_ERROR.NO_AUTORIZADO,
+      });
+    }
   });
 
   it('autoriza cuando request.user contiene al menos uno de los roles requeridos', () => {

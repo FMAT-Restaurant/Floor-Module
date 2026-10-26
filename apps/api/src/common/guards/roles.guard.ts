@@ -49,7 +49,12 @@ export class RolesGuard implements CanActivate {
       context.getClass(),
     ]);
     if (!rolesRequeridos || rolesRequeridos.length === 0) {
-      return true;
+      throw new DomainException(
+        HttpStatus.FORBIDDEN,
+        CODIGO_ERROR.NO_AUTORIZADO,
+        'El rol no cuenta con permisos suficientes para la acción',
+        { rolesRequeridos: [] },
+      );
     }
 
     const request = context.switchToHttp().getRequest<RequestConIdentidad>();

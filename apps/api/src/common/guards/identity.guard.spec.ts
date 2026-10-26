@@ -86,23 +86,41 @@ describe('IdentityGuard (BE-011, SPEC §1, ARCHITECTURE §8, ADR-007)', () => {
       });
     });
 
-    it('ignora X-Password-Temporary (lo filtra Kong perimetralmente)', () => {
+    it('rechaza con 403 PASSWORD_CHANGE_REQUIRED cuando X-Password-Temporary es true', () => {
       const guard = new IdentityGuard();
-      const { context, request } = crearContexto({
+      const { context } = crearContexto({
         'x-user-id': USER_ID,
         'x-user-roles': 'MESERO',
-        'x-password-temporary': 'true',
+        'x-password-temporary': ' true ',
       });
 
-      expect(guard.canActivate(context)).toBe(true);
-      expect(request.user?.userId).toBe(USER_ID);
+      expect(() => guard.canActivate(context)).toThrow(DomainException);
+      try {
+        guard.canActivate(context);
+      } catch (error) {
+        const domainError = error as DomainException;
+        expect(domainError.getStatus()).toBe(403);
+        expect(domainError.getResponse()).toMatchObject({
+          statusCode: 403,
+          code: CODIGO_ERROR.PASSWORD_CHANGE_REQUIRED,
+        });
+      }
     });
 
     it.each([
       ['falta X-User-Id', { 'x-user-roles': 'MESERO' }],
       ['X-User-Id vacío', { 'x-user-id': '   ', 'x-user-roles': 'MESERO' }],
+      ['X-User-Id no es UUID v4', { 'x-user-id': 'no-es-uuid', 'x-user-roles': 'MESERO' }],
+      [
+        'X-User-Id es UUID v1 (no v4)',
+        { 'x-user-id': '11111111-1111-1111-8111-111111111111', 'x-user-roles': 'MESERO' },
+      ],
       ['falta X-User-Roles', { 'x-user-id': USER_ID }],
       ['X-User-Roles sin roles válidos', { 'x-user-id': USER_ID, 'x-user-roles': ' , ' }],
+      [
+        'X-User-Roles con roles fuera del enum canónico',
+        { 'x-user-id': USER_ID, 'x-user-roles': 'CAJERO, INVITADO' },
+      ],
     ])('rechaza con 401 NO_AUTENTICADO cuando %s y no hay JWT', (_caso, headers) => {
       const guard = new IdentityGuard();
       const { context } = crearContexto(headers);
@@ -170,6 +188,29 @@ describe('IdentityGuard (BE-011, SPEC §1, ARCHITECTURE §8, ADR-007)', () => {
         roles: ['HOST', 'MESERO'],
         permissions: ['reservas:read', 'reservas:write'],
       });
+    });
+
+    it('rechaza con 403 PASSWORD_CHANGE_REQUIRED si el JWT contiene mustChangePassword: true', () => {
+      const guard = new IdentityGuard();
+      const token = firmarJwtHs256({
+        sub: USER_ID,
+        roles: ['MESERO'],
+        iss: JWT_ISSUER,
+        mustChangePassword: true,
+      });
+      const { context } = crearContexto({ authorization: `Bearer ${token}` });
+
+      expect(() => guard.canActivate(context)).toThrow(DomainException);
+      try {
+        guard.canActivate(context);
+      } catch (error) {
+        const domainError = error as DomainException;
+        expect(domainError.getStatus()).toBe(403);
+        expect(domainError.getResponse()).toMatchObject({
+          statusCode: 403,
+          code: CODIGO_ERROR.PASSWORD_CHANGE_REQUIRED,
+        });
+      }
     });
 
     it('rechaza con 401 si el claim iss no es estrictamente urn:fmat:restaurant:auth', () => {

@@ -89,13 +89,62 @@ describe('BE-011 · Integración Seguridad, Correlación y Health Check', () => 
     await app.close();
   });
 
-  it('GET /health responde 200 fuera del prefijo global con estado de Prisma y RabbitMQ', async () => {
-    const res = await fetch(`${baseUrl}/health`);
-    expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toEqual({
+  it('GET /health y GET /api/v1/floor/health responden 200 con estado de Prisma y RabbitMQ y 503 cuando caen', async () => {
+    const resDirecto = await fetch(`${baseUrl}/health`);
+    expect(resDirecto.status).toBe(200);
+    await expect(resDirecto.json()).resolves.toEqual({
       status: 'ok',
       db: 'up',
       broker: 'up',
+    });
+
+    const resPerimetral = await fetch(`${baseUrl}/api/v1/floor/health`);
+    expect(resPerimetral.status).toBe(200);
+    await expect(resPerimetral.json()).resolves.toEqual({
+      status: 'ok',
+      db: 'up',
+      broker: 'up',
+    });
+
+    publisherMock.isConnected.mockReturnValueOnce(false);
+    const resDegraded = await fetch(`${baseUrl}/api/v1/floor/health`);
+    expect(resDegraded.status).toBe(503);
+    await expect(resDegraded.json()).resolves.toEqual({
+      status: 'degraded',
+      db: 'up',
+      broker: 'down',
+    });
+  });
+
+  it('rechaza con 403 PASSWORD_CHANGE_REQUIRED cuando x-password-temporary es true o mustChangePassword es true', async () => {
+    const resHeader = await fetch(`${baseUrl}/${PREFIJO_GLOBAL}/mesas`, {
+      headers: {
+        'x-user-id': MESERO_ID,
+        'x-user-roles': 'MESERO',
+        'x-password-temporary': 'true',
+      },
+    });
+    expect(resHeader.status).toBe(403);
+    await expect(resHeader.json()).resolves.toMatchObject({
+      statusCode: 403,
+      code: 'PASSWORD_CHANGE_REQUIRED',
+    });
+
+    const tokenTemp = firmarJwtHs256({
+      sub: MESERO_ID,
+      roles: ['MESERO'],
+      iss: JWT_ISSUER,
+      mustChangePassword: true,
+    });
+    const resJwt = await fetch(`${baseUrl}/${PREFIJO_GLOBAL}/mesas`, {
+      headers: {
+        Authorization: `Bearer ${tokenTemp}`,
+      },
+    });
+    expect(resJwt.status).toBe(403);
+    await expect(resJwt.json()).resolves.toMatchObject({
+      statusCode: 403,
+      code: 'PASSWORD_CHANGE_REQUIRED',
     });
   });
 
