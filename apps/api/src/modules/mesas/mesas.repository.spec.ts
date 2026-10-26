@@ -4,6 +4,9 @@ import type { PrismaService } from '../../prisma/prisma.service';
 import { MesasRepository } from './mesas.repository';
 
 const MESA_ID = 'a1000000-0000-4000-8000-000000000001';
+const RESERVA_ID = 'b1000000-0000-4000-8000-000000000002';
+const ESPERA_ID = 'c1000000-0000-4000-8000-000000000003';
+const MESERO_ID = 'd1000000-0000-4000-8000-000000000009';
 
 function repositorioConCount(count: number) {
   const updateMany = jest.fn().mockResolvedValue({ count });
@@ -66,36 +69,47 @@ describe('MesasRepository.transicionarEstado y ocuparMesa (RN-01, RN-04, RN-06, 
     });
   });
 
-  it('tieneReservaProxima consulta reservas Confirmada en la ventana indicada', async () => {
-    const $queryRaw = jest.fn().mockResolvedValue([{ total: 1 }]);
+  it('tieneReservaProxima y buscarReservaProxima consultan reservas Confirmada en la ventana indicada', async () => {
+    const $queryRaw = jest
+      .fn()
+      .mockResolvedValueOnce([
+        {
+          reservaId: RESERVA_ID,
+          nombreContacto: 'Ana López',
+          horaInicio: '12:15',
+          cantidadPersonas: 4,
+        },
+      ])
+      .mockResolvedValueOnce([{ total: 1 }]);
     const repositorio = new MesasRepository({ $queryRaw } as unknown as PrismaService);
     const desde = new Date('2030-01-15T12:00:00.000Z');
     const hasta = new Date('2030-01-15T12:30:00.000Z');
 
-    const resultado = await repositorio.tieneReservaProxima(MESA_ID, desde, hasta);
+    const conflicto = await repositorio.buscarReservaProxima(MESA_ID, desde, hasta, RESERVA_ID);
+    expect(conflicto).toEqual({
+      reservaId: RESERVA_ID,
+      nombreContacto: 'Ana López',
+      horaInicio: '12:15',
+      cantidadPersonas: 4,
+    });
 
+    const resultado = await repositorio.tieneReservaProxima(MESA_ID, desde, hasta);
     expect(resultado).toBe(true);
-    expect($queryRaw).toHaveBeenCalledTimes(1);
+    expect($queryRaw).toHaveBeenCalledTimes(2);
   });
 
-  it('registrarEventoOutbox inserta el EventEnvelope en outbox_evento', async () => {
+  it('registrarEventoOutbox inserta el payload de dominio en outbox_evento', async () => {
     const create = jest.fn().mockResolvedValue(undefined);
     const repositorio = new MesasRepository({
       outboxEvento: { create },
     } as unknown as PrismaService);
 
     const payload = {
-      eventId: 'e1000000-0000-4000-8000-000000000001',
-      eventType: EVENT_TOPICS.DINING_SESSION_INICIADA,
+      sessionId: '550e8400-e29b-41d4-a716-446655440099',
+      meseroId: MESERO_ID,
+      comensales: 4,
+      numComensales: 4,
       timestamp: '2030-01-15T12:00:00.000Z',
-      correlationId: 'corr-1',
-      data: {
-        sessionId: '550e8400-e29b-41d4-a716-446655440099',
-        meseroId: 'd1000000-0000-4000-8000-000000000001',
-        comensales: 4,
-        numComensales: 4,
-        timestamp: '2030-01-15T12:00:00.000Z',
-      },
     };
 
     await repositorio.registrarEventoOutbox({
@@ -151,26 +165,42 @@ describe('MesasRepository.transicionarEstado y ocuparMesa (RN-01, RN-04, RN-06, 
     expect(await repoVacio.ocuparMesa(MESA_ID, ahora)).toBe(true);
   });
 
-  it('tieneReservaProxima cubre resultado vacío en $queryRaw y fallbacks a reserva.count, reserva.findFirst y false', async () => {
+  it('tieneReservaProxima cubre resultado vacío en $queryRaw y fallbacks a reserva.findFirst, reserva.count y false', async () => {
     const desde = new Date('2030-01-15T12:00:00.000Z');
     const hasta = new Date('2030-01-15T12:30:00.000Z');
 
     const repoQueryRawVacio = new MesasRepository({
-      $queryRaw: jest.fn().mockResolvedValue([]),
+      $queryRaw: jest
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ total: 0 }]),
     } as unknown as PrismaService);
+    expect(await repoQueryRawVacio.tieneReservaProxima(MESA_ID, desde, hasta)).toBe(false);
     expect(await repoQueryRawVacio.tieneReservaProxima(MESA_ID, desde, hasta)).toBe(false);
 
     const count = jest.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(0);
     const repoConCount = new MesasRepository({
       reserva: { count },
     } as unknown as PrismaService);
-    expect(await repoConCount.tieneReservaProxima(MESA_ID, desde, hasta)).toBe(true);
+    expect(await repoConCount.tieneReservaProxima(MESA_ID, desde, hasta, RESERVA_ID)).toBe(true);
     expect(await repoConCount.tieneReservaProxima(MESA_ID, desde, hasta)).toBe(false);
 
-    const findFirst = jest.fn().mockResolvedValueOnce({ id: 'r1' }).mockResolvedValueOnce(null);
+    const findFirst = jest
+      .fn()
+      .mockResolvedValueOnce({
+        id: 'r1',
+        nombreContacto: 'Cliente',
+        horaInicio: new Date('1970-01-01T14:30:00.000Z'),
+        cantidadPersonas: 2,
+      })
+      .mockResolvedValueOnce({ id: 'r2' })
+      .mockResolvedValueOnce(null);
     const repoConFindFirst = new MesasRepository({
       reserva: { findFirst },
     } as unknown as PrismaService);
+    expect(await repoConFindFirst.tieneReservaProxima(MESA_ID, desde, hasta, RESERVA_ID)).toBe(
+      true,
+    );
     expect(await repoConFindFirst.tieneReservaProxima(MESA_ID, desde, hasta)).toBe(true);
     expect(await repoConFindFirst.tieneReservaProxima(MESA_ID, desde, hasta)).toBe(false);
 
@@ -181,15 +211,80 @@ describe('MesasRepository.transicionarEstado y ocuparMesa (RN-01, RN-04, RN-06, 
     await expect(
       repoSinMetodos.registrarEventoOutbox({
         routingKey: EVENT_TOPICS.DINING_SESSION_INICIADA,
-        payload: {
-          eventId: 'e1',
-          eventType: EVENT_TOPICS.DINING_SESSION_INICIADA,
-          timestamp: desde.toISOString(),
-          correlationId: 'c1',
-          data: {},
-        },
+        payload: {},
         correlationId: 'c1',
       }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('completarReservaEnOcupacion, sentarEsperaEnOcupacion y registrarAsignacionEnOcupacion cubren todos sus caminos', async () => {
+    const ahora = new Date('2030-01-15T12:00:00.000Z');
+    const reservaUpdateMany = jest
+      .fn()
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 0 })
+      .mockResolvedValueOnce({ count: 0 });
+    const reservaFindUnique = jest
+      .fn()
+      .mockResolvedValueOnce({ id: RESERVA_ID })
+      .mockResolvedValueOnce(null);
+
+    const esperaUpdateMany = jest
+      .fn()
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 0 })
+      .mockResolvedValueOnce({ count: 0 });
+    const esperaFindUnique = jest
+      .fn()
+      .mockResolvedValueOnce({ id: ESPERA_ID })
+      .mockResolvedValueOnce(null);
+
+    const asignacionUpdateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const asignacionCreate = jest.fn().mockResolvedValue({});
+
+    const repo = new MesasRepository({
+      reserva: { updateMany: reservaUpdateMany, findUnique: reservaFindUnique },
+      listaEspera: { updateMany: esperaUpdateMany, findUnique: esperaFindUnique },
+      asignacionMesero: { updateMany: asignacionUpdateMany, create: asignacionCreate },
+    } as unknown as PrismaService);
+
+    expect(await repo.completarReservaEnOcupacion(RESERVA_ID, MESA_ID)).toBe('OK');
+    expect(await repo.completarReservaEnOcupacion(RESERVA_ID, MESA_ID)).toBe('INVALIDA');
+    expect(await repo.completarReservaEnOcupacion(RESERVA_ID, MESA_ID)).toBe('NO_EXISTE');
+
+    expect(await repo.sentarEsperaEnOcupacion(ESPERA_ID, MESA_ID)).toBe('OK');
+    expect(await repo.sentarEsperaEnOcupacion(ESPERA_ID, MESA_ID)).toBe('INVALIDA');
+    expect(await repo.sentarEsperaEnOcupacion(ESPERA_ID, MESA_ID)).toBe('NO_EXISTE');
+
+    await repo.registrarAsignacionEnOcupacion(MESA_ID, MESERO_ID, ahora);
+    expect(asignacionUpdateMany).toHaveBeenCalledWith({
+      where: { mesaId: MESA_ID, activo: true },
+      data: { activo: false, fechaHoraFin: ahora },
+    });
+    expect(asignacionCreate).toHaveBeenCalledWith({
+      data: {
+        mesaId: MESA_ID,
+        meseroId: MESERO_ID,
+        fechaHoraInicio: ahora,
+        activo: true,
+      },
+    });
+
+    // Fallbacks sin findUnique o sin modelos en prisma
+    const repoSinFindUnique = new MesasRepository({
+      reserva: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      listaEspera: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+    } as unknown as PrismaService);
+    expect(await repoSinFindUnique.completarReservaEnOcupacion(RESERVA_ID, MESA_ID)).toBe(
+      'INVALIDA',
+    );
+    expect(await repoSinFindUnique.sentarEsperaEnOcupacion(ESPERA_ID, MESA_ID)).toBe('INVALIDA');
+
+    const repoVacio = new MesasRepository({} as unknown as PrismaService);
+    expect(await repoVacio.completarReservaEnOcupacion(RESERVA_ID, MESA_ID)).toBe('OK');
+    expect(await repoVacio.sentarEsperaEnOcupacion(ESPERA_ID, MESA_ID)).toBe('OK');
+    await expect(
+      repoVacio.registrarAsignacionEnOcupacion(MESA_ID, MESERO_ID, ahora),
     ).resolves.toBeUndefined();
   });
 

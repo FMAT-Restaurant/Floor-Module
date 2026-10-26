@@ -217,44 +217,4 @@ describe('RabbitMqPublisher (BE-004 · SPEC §6.1, ADR-003, ADR-006)', () => {
     expect(connection.close).toHaveBeenCalledTimes(1);
     expect(publisher.isConnected()).toBe(false);
   });
-
-  it('preserva EventEnvelope pre-construido en payload (con y sin correlationId interno)', async () => {
-    const { connectFn, channel } = crearAmqpMocks();
-    const publisher = new RabbitMqPublisher({ connectFn });
-
-    const envelopeConCorr = {
-      eventId: EVENT_ID,
-      eventType: EVENT_TOPICS.DINING_SESSION_INICIADA,
-      timestamp: '2030-01-15T12:00:00.000Z',
-      correlationId: CORRELATION_ID,
-      data: fixtureDiningSessionIniciadaPayload,
-    };
-
-    await publisher.publish({
-      id: EVENT_ID,
-      routingKey: EVENT_TOPICS.DINING_SESSION_INICIADA,
-      payload: envelopeConCorr,
-      correlationId: CORRELATION_ID,
-    });
-
-    const buffer1 = channel.publish.mock.calls[0]?.[2] as Buffer;
-    expect(JSON.parse(buffer1.toString('utf-8'))).toEqual(envelopeConCorr);
-
-    const envelopeSinCorr = {
-      eventId: EVENT_ID,
-      eventType: EVENT_TOPICS.DINING_SESSION_INICIADA,
-      timestamp: '2030-01-15T12:00:00.000Z',
-      data: fixtureDiningSessionIniciadaPayload,
-    };
-
-    await publisher.publish({
-      id: EVENT_ID,
-      routingKey: EVENT_TOPICS.DINING_SESSION_INICIADA,
-      payload: envelopeSinCorr as unknown as typeof envelopeConCorr,
-      correlationId: CORRELATION_ID,
-    });
-
-    const buffer2 = channel.publish.mock.calls[1]?.[2] as Buffer;
-    expect(JSON.parse(buffer2.toString('utf-8')).correlationId).toBe(CORRELATION_ID);
-  });
 });

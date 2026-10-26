@@ -73,3 +73,59 @@ export function reservaProximaPresente(
     { mesaId, ...detalles },
   );
 }
+
+/** SPEC §5.2: reservaId y esperaId son mutuamente excluyentes al ocupar una mesa. */
+export function camposOcupacionMutuamenteExcluyentes(
+  reservaId: string,
+  esperaId: string,
+): DomainException {
+  return new DomainException(
+    HttpStatus.BAD_REQUEST,
+    CODIGO_ERROR.VALIDACION,
+    'Los campos reservaId y esperaId son mutuamente excluyentes',
+    { reservaId, esperaId },
+  );
+}
+
+export function reservaNoEncontradaEnOcupacion(reservaId: string): DomainException {
+  return new DomainException(
+    HttpStatus.NOT_FOUND,
+    CODIGO_ERROR.RESERVA_NO_ENCONTRADA,
+    'La reserva indicada para ocupar la mesa no existe',
+    { reservaId },
+  );
+}
+
+export function transicionReservaInvalidaEnOcupacion(
+  reservaId: string,
+  mesaId: string,
+  detalles: Record<string, unknown> = {},
+): DomainException {
+  return new DomainException(
+    HttpStatus.CONFLICT,
+    CODIGO_ERROR.TRANSICION_INVALIDA,
+    'La reserva no pertenece a esta mesa o no se encuentra en estado Confirmada',
+    { reservaId, mesaId, ...detalles },
+  );
+}
+
+export function esperaNoEncontradaEnOcupacion(esperaId: string): DomainException {
+  return new DomainException(
+    HttpStatus.NOT_FOUND,
+    CODIGO_ERROR.ESPERA_NO_ENCONTRADA,
+    'El registro de lista de espera indicado no existe',
+    { esperaId },
+  );
+}
+
+export function transicionEsperaInvalidaEnOcupacion(
+  esperaId: string,
+  detalles: Record<string, unknown> = {},
+): DomainException {
+  return new DomainException(
+    HttpStatus.CONFLICT,
+    CODIGO_ERROR.TRANSICION_INVALIDA,
+    'El registro de lista de espera ya fue sentado o cancelado',
+    { esperaId, ...detalles },
+  );
+}

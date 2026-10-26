@@ -22,3 +22,10 @@ export interface ReservaProximaRegistro {
   mesaId: string;
   inicio: Date;
 }
+
+export interface ReservaProximaConflicto {
+  reservaId: string;
+  nombreContacto: string;
+  horaInicio: string;
+  cantidadPersonas: number;
+}

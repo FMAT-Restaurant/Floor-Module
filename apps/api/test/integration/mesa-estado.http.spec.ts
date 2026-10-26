@@ -1,15 +1,19 @@
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
-import { EstadoMesa, Prisma, PrismaClient } from '@prisma/client';
+import { EstadoEspera, EstadoMesa, EstadoReserva, Prisma, PrismaClient } from '@prisma/client';
 import { AppModule } from '../../src/app.module';
 import { configurarApp, PREFIJO_GLOBAL } from '../../src/app.setup';
+import { Reloj } from '../../src/common/reloj/reloj';
 
 /**
- * BE-002 · PATCH /sala/mesas/{mesaId}/estado contra PostgreSQL real
- * (RF-006, RF-007, RN-06, RN-07, RN-15) y códigos de error 409 (SPEC §5.2).
+ * BE-002 & BE-006 · PATCH /mesas/{mesaId}/estado y POST /mesas/{mesaId}/ocupar contra PostgreSQL real
+ * (RF-005..RF-008, RF-017, RN-01..RN-07, RN-15, RN-16) y contratos SPEC §5.2.
  */
 const RUTA = `/${PREFIJO_GLOBAL}/mesas`;
 const MESA_INEXISTENTE = 'a9999999-9999-4999-8999-999999999999';
+const MESERO_AUTENTICADO = 'e1000000-0000-4000-8000-000000000001';
+const MESERO_ASIGNADO = 'e2000000-0000-4000-8000-000000000002';
+const AHORA_FIJO = new Date('2030-01-15T12:00:00.000Z');
 const OCUPADA_DESDE = new Date('2030-01-15T11:15:00.000Z');
 
 const prisma = new PrismaClient();
@@ -27,10 +31,17 @@ async function peticion<T = Json>(
   metodo: string,
   ruta: string,
   cuerpo?: unknown,
+  cabecerasExtra: Record<string, string> = {},
 ): Promise<Respuesta<T>> {
   const respuesta = await fetch(`${baseUrl}${ruta}`, {
     method: metodo,
-    headers: { 'content-type': 'application/json' },
+    headers: {
+      'content-type': 'application/json',
+      'x-user-id': MESERO_AUTENTICADO,
+      'x-staff-id': 'HOST-01',
+      'x-user-roles': 'HOST',
+      ...cabecerasExtra,
+    },
     body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo),
   });
   const texto = await respuesta.text();
@@ -41,8 +52,12 @@ function cambiarEstado(mesaId: string, cuerpo: unknown) {
   return peticion('PATCH', `${RUTA}/${mesaId}/estado`, cuerpo);
 }
 
-function ocuparMesaHttp(mesaId: string, cuerpo: unknown) {
-  return peticion('POST', `${RUTA}/${mesaId}/ocupar`, cuerpo);
+function ocuparMesaHttp(
+  mesaId: string,
+  cuerpo: unknown,
+  cabecerasExtra: Record<string, string> = {},
+) {
+  return peticion('POST', `${RUTA}/${mesaId}/ocupar`, cuerpo, cabecerasExtra);
 }
 
 function crearMesaDb(datos: Partial<Prisma.MesaUncheckedCreateInput> = {}) {
@@ -55,9 +70,12 @@ function crearMesaOcupadaDb() {
   return crearMesaDb({ estadoFisico: EstadoMesa.Ocupada, ocupadaDesde: OCUPADA_DESDE });
 }
 
-describe('PATCH /sala/mesas/{mesaId}/estado (BE-002)', () => {
+describe('PATCH /mesas/{mesaId}/estado y POST /mesas/{mesaId}/ocupar (BE-002 / BE-006)', () => {
   beforeAll(async () => {
-    const modulo = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    const modulo = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(Reloj)
+      .useValue({ ahora: () => AHORA_FIJO })
+      .compile();
     app = modulo.createNestApplication<NestExpressApplication>({ bodyParser: false });
     configurarApp(app);
     await app.listen(0);
@@ -234,13 +252,16 @@ describe('PATCH /sala/mesas/{mesaId}/estado (BE-002)', () => {
   });
 
   describe('POST /api/v1/floor/mesas/{mesaId}/ocupar (BE-006)', () => {
-    it('ocupa una mesa Libre, genera sessionId UUID v4 y registra sala.dining_session.iniciada en outbox con EventEnvelope', async () => {
+    it('BLOQ-01, BLOQ-04 e IMP-01: ocupa una mesa Libre, registra AsignacionMesero reflejada en estado-en-vivo y encola ambos eventos con payload de dominio puro', async () => {
       const mesa = await crearMesaDb({ capacidad: 4 });
 
-      const { status, cuerpo } = await ocuparMesaHttp(mesa.id, { comensales: 3 });
+      const { status, cuerpo } = await ocuparMesaHttp(mesa.id, {
+        comensales: 3,
+        meseroId: MESERO_ASIGNADO,
+      });
 
       expect(status).toBe(200);
-      expect(cuerpo).toMatchObject({
+      expect(cuerpo).toEqual({
         mesaId: mesa.id,
         estado: 'Ocupada',
         sessionId: expect.any(String),
@@ -248,22 +269,41 @@ describe('PATCH /sala/mesas/{mesaId}/estado (BE-002)', () => {
 
       const fila = await prisma.mesa.findUniqueOrThrow({ where: { id: mesa.id } });
       expect(fila.estadoFisico).toBe(EstadoMesa.Ocupada);
-      expect(fila.ocupadaDesde).not.toBeNull();
+      expect(fila.ocupadaDesde).toEqual(AHORA_FIJO);
 
-      const eventos = await prisma.outboxEvento.findMany();
-      expect(eventos).toHaveLength(1);
-      expect(eventos[0].routingKey).toBe('sala.dining_session.iniciada');
-      expect(eventos[0].payload).toMatchObject({
-        eventId: expect.any(String),
-        eventType: 'sala.dining_session.iniciada',
-        timestamp: expect.any(String),
-        correlationId: expect.any(String),
-        data: {
-          sessionId: cuerpo.sessionId,
-          mesaId: mesa.id,
-          comensales: 3,
-          numComensales: 3,
-        },
+      // IMP-01: Verificar registro en AsignacionMesero reflejado en GET /mesas/estado-en-vivo
+      const enVivo = await peticion<Json[]>('GET', `${RUTA}/estado-en-vivo`);
+      expect(enVivo.status).toBe(200);
+      expect(enVivo.cuerpo[0]).toMatchObject({
+        mesaId: mesa.id,
+        estadoFisico: 'Ocupada',
+        meseroId: MESERO_ASIGNADO,
+      });
+
+      // BLOQ-01 & BLOQ-04: Ambos eventos en outbox_evento con payload de dominio puro
+      const eventos = await prisma.outboxEvento.findMany({ orderBy: { creadoEn: 'asc' } });
+      expect(eventos).toHaveLength(2);
+
+      const evDining = eventos.find((e) => e.routingKey === 'sala.dining_session.iniciada');
+      const evEstado = eventos.find((e) => e.routingKey === 'sala.mesa.estado_actualizado');
+      expect(evDining).toBeDefined();
+      expect(evEstado).toBeDefined();
+
+      expect(evDining?.payload).toEqual({
+        sessionId: cuerpo.sessionId,
+        mesaId: mesa.id,
+        unionId: null,
+        meseroId: MESERO_ASIGNADO,
+        comensales: 3,
+        numComensales: 3,
+        timestamp: AHORA_FIJO.toISOString(),
+      });
+
+      expect(evEstado?.payload).toEqual({
+        mesaId: mesa.id,
+        estado: 'Ocupada',
+        unionId: null,
+        timestamp: AHORA_FIJO.toISOString(),
       });
     });
 
@@ -279,6 +319,124 @@ describe('PATCH /sala/mesas/{mesaId}/estado (BE-002)', () => {
       });
       const totalEventos = await prisma.outboxEvento.count();
       expect(totalEventos).toBe(0);
+    });
+
+    it('IMP-02 y BLOQ-03: responde 409 RESERVA_PROXIMA_PRESENTE con details de la reserva y devuelve advertencias al forzar ocupación y sobrecupo', async () => {
+      const mesa = await crearMesaDb({ capacidad: 4 });
+      const reservaProxima = await prisma.reserva.create({
+        data: {
+          mesaId: mesa.id,
+          nombreContacto: 'Laura Gómez',
+          telefonoContacto: '9991112233',
+          cantidadPersonas: 4,
+          fechaReserva: new Date('2030-01-15T00:00:00.000Z'),
+          horaInicio: new Date('1970-01-01T12:20:00.000Z'),
+          horaFin: new Date('1970-01-01T14:20:00.000Z'),
+          estado: EstadoReserva.Confirmada,
+        },
+      });
+
+      // Sin forzarOcupacion -> 409 con details de la reserva (IMP-02)
+      const rechazo = await ocuparMesaHttp(mesa.id, { comensales: 4 });
+      expect(rechazo.status).toBe(409);
+      expect(rechazo.cuerpo).toMatchObject({
+        statusCode: 409,
+        code: 'RESERVA_PROXIMA_PRESENTE',
+        details: {
+          mesaId: mesa.id,
+          reservaId: reservaProxima.id,
+          nombreContacto: 'Laura Gómez',
+          horaInicio: '12:20',
+          cantidadPersonas: 4,
+        },
+      });
+
+      // Con forzarOcupacion y forzarSobrecupo -> 200 OK con advertencias (BLOQ-03)
+      const forzada = await ocuparMesaHttp(mesa.id, {
+        comensales: 6,
+        forzarOcupacion: true,
+        forzarSobrecupo: true,
+      });
+      expect(forzada.status).toBe(200);
+      expect(forzada.cuerpo).toEqual({
+        mesaId: mesa.id,
+        estado: 'Ocupada',
+        sessionId: expect.any(String),
+        advertencias: [
+          expect.stringMatching(/Sobrecupo forzado/i),
+          expect.stringMatching(/Ocupación forzada con reserva próxima/i),
+        ],
+      });
+    });
+
+    it('BLOQ-02 e IMP-02: al ocupar pasando reservaId exime esa reserva del bloqueo RN-05 y la transiciona a Completada', async () => {
+      const mesa = await crearMesaDb({ capacidad: 4 });
+      const reserva = await prisma.reserva.create({
+        data: {
+          mesaId: mesa.id,
+          nombreContacto: 'Pedro Infante',
+          telefonoContacto: '9994445566',
+          cantidadPersonas: 4,
+          fechaReserva: new Date('2030-01-15T00:00:00.000Z'),
+          horaInicio: new Date('1970-01-01T12:15:00.000Z'),
+          horaFin: new Date('1970-01-01T14:15:00.000Z'),
+          estado: EstadoReserva.Confirmada,
+        },
+      });
+
+      const { status, cuerpo } = await ocuparMesaHttp(mesa.id, {
+        comensales: 4,
+        reservaId: reserva.id,
+      });
+
+      expect(status).toBe(200);
+      expect(cuerpo).toEqual({
+        mesaId: mesa.id,
+        estado: 'Ocupada',
+        sessionId: expect.any(String),
+      });
+
+      const reservaActualizada = await prisma.reserva.findUniqueOrThrow({
+        where: { id: reserva.id },
+      });
+      expect(reservaActualizada.estado).toBe(EstadoReserva.Completada);
+    });
+
+    it('BLOQ-02: al ocupar pasando esperaId transiciona ListaEspera a Sentado y rechaza si reservaId y esperaId se envían juntos', async () => {
+      const mesa = await crearMesaDb({ capacidad: 4 });
+      const espera = await prisma.listaEspera.create({
+        data: {
+          nombreCliente: 'Familia Domínguez',
+          telefonoContacto: '9997778899',
+          cantidadPersonas: 3,
+          estado: EstadoEspera.Notificado,
+        },
+      });
+
+      // Exclusión mutua reservaId + esperaId -> 400 VALIDACION
+      const mutuo = await ocuparMesaHttp(mesa.id, {
+        comensales: 3,
+        reservaId: 'b1000000-0000-4000-8000-000000000002',
+        esperaId: espera.id,
+      });
+      expect(mutuo.status).toBe(400);
+      expect(mutuo.cuerpo).toMatchObject({
+        statusCode: 400,
+        code: 'VALIDACION',
+      });
+
+      // Ocupar con esperaId -> 200 OK y ListaEspera pasa a Sentado con mesaAsignadaId
+      const ok = await ocuparMesaHttp(mesa.id, {
+        comensales: 3,
+        esperaId: espera.id,
+      });
+      expect(ok.status).toBe(200);
+
+      const esperaActualizada = await prisma.listaEspera.findUniqueOrThrow({
+        where: { id: espera.id },
+      });
+      expect(esperaActualizada.estado).toBe(EstadoEspera.Sentado);
+      expect(esperaActualizada.mesaAsignadaId).toBe(mesa.id);
     });
   });
 });

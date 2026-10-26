@@ -16,46 +16,37 @@ import {
   type MesaParamDto,
   type OcuparMesaResponseDto,
 } from '@floor/shared';
-import {
-  resolverMeseroId,
-  UsuarioActual,
-  type UsuarioAutenticado,
-} from '../../common/decorators/usuario-actual.decorator';
+import { Roles, ROLES_OPERACION_SALA } from '../../common/auth/auth.decorators';
+import { resolverMeseroId, UsuarioActual } from '../../common/decorators/usuario-actual.decorator';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
-import { ocuparMesaDtoSchema, type OcuparMesaDto } from './dto/ocupar-mesa.dto';
+import { OcuparMesaDto, ocuparMesaDtoSchema } from './dto/ocupar-mesa.dto';
 import { MesaEstadoService } from './mesa-estado.service';
 
-const validarParams = new ZodValidationPipe(mesaParamSchema);
-const validarOcupacion = new ZodValidationPipe(ocuparMesaDtoSchema);
-const validarEstado = new ZodValidationPipe(actualizarEstadoMesaSchema);
-
-function resolverMesaId(param: MesaParamDto | string): string {
-  return typeof param === 'string' ? param : param.mesaId;
-}
-
-/** SPEC §5.2 · base path `/api/v1/floor` aplicado globalmente en app.setup.ts. */
 @Controller('mesas')
 export class MesaEstadoController {
   constructor(private readonly servicio: MesaEstadoService) {}
 
-  @Post(':mesaId/ocupar')
+  @Patch(':mesaId/estado')
+  @Roles(...ROLES_OPERACION_SALA)
   @HttpCode(HttpStatus.OK)
-  ocupar(
-    @Param(validarParams) param: MesaParamDto | string,
-    @Body(validarOcupacion) cuerpo: OcuparMesaDto,
-    @UsuarioActual() usuario?: UsuarioAutenticado | string,
-    @Headers('x-correlation-id') correlationId?: string,
-  ): Promise<OcuparMesaResponseDto> {
-    const mesaId = resolverMesaId(param);
-    const meseroId = resolverMeseroId(usuario, cuerpo.meseroId);
-    return this.servicio.ocupar(mesaId, cuerpo, meseroId, correlationId);
+  actualizarEstado(
+    @Param(new ZodValidationPipe(mesaParamSchema)) params: MesaParamDto,
+    @Body(new ZodValidationPipe(actualizarEstadoMesaSchema)) cuerpo: ActualizarEstadoMesaRequestDto,
+  ): Promise<ActualizarEstadoMesaResponseDto> {
+    return this.servicio.actualizarEstado(params.mesaId, cuerpo);
   }
 
-  @Patch(':mesaId/estado')
-  actualizarEstado(
-    @Param(validarParams) { mesaId }: MesaParamDto,
-    @Body(validarEstado) cuerpo: ActualizarEstadoMesaRequestDto,
-  ): Promise<ActualizarEstadoMesaResponseDto> {
-    return this.servicio.actualizarEstado(mesaId, cuerpo);
+  @Post(':mesaId/ocupar')
+  @Roles(...ROLES_OPERACION_SALA)
+  @HttpCode(HttpStatus.OK)
+  ocupar(
+    @Param(new ZodValidationPipe(mesaParamSchema)) params: MesaParamDto | string,
+    @Body(new ZodValidationPipe(ocuparMesaDtoSchema)) cuerpo: OcuparMesaDto,
+    @UsuarioActual() usuarioActual?: unknown,
+    @Headers('x-correlation-id') correlationId?: string,
+  ): Promise<OcuparMesaResponseDto> {
+    const mesaId = typeof params === 'string' ? params : params.mesaId;
+    const meseroId = resolverMeseroId(usuarioActual, cuerpo.meseroId);
+    return this.servicio.ocupar(mesaId, cuerpo, meseroId, correlationId);
   }
 }

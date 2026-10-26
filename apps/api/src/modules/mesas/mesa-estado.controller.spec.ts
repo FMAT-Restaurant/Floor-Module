@@ -3,15 +3,16 @@ import { ROUTE_ARGS_METADATA } from '@nestjs/common/constants';
 import { EstadoMesa } from '@floor/shared';
 import {
   CurrentUser,
-  DEFAULT_MESERO_ID,
   extraerMeseroDeRequest,
   MeseroActual,
   resolverMeseroId,
   UsuarioActual,
 } from '../../common/decorators/usuario-actual.decorator';
+import { CODIGO_ERROR } from '../../common/errors/codigos-error';
+import type { DomainException } from '../../common/errors/domain.exception';
+import { OcuparMesaDto, ocuparMesaDtoSchema } from './dto/ocupar-mesa.dto';
 import { MesaEstadoController } from './mesa-estado.controller';
 import type { MesaEstadoService } from './mesa-estado.service';
-import { OcuparMesaDto, ocuparMesaDtoSchema } from './ocupar-mesa.dto';
 
 const MESA_ID = 'a1000000-0000-4000-8000-000000000001';
 const MESERO_ID = 'd1000000-0000-4000-8000-000000000009';
@@ -36,7 +37,7 @@ describe('MesaEstadoController', () => {
     expect(servicio.actualizarEstado).toHaveBeenCalledWith(MESA_ID, { estado: EstadoMesa.LIBRE });
   });
 
-  it('POST :mesaId/ocupar delega en el servicio inyectando el meseroId del decorador de usuario/auth (objeto o string param)', async () => {
+  it('POST :mesaId/ocupar delega en el servicio inyectando el meseroId verificado de request.user', async () => {
     const respuesta = { mesaId: MESA_ID, estado: EstadoMesa.OCUPADA, sessionId: SESSION_ID };
     const servicio = {
       ocupar: jest.fn().mockResolvedValue(respuesta),
@@ -47,7 +48,7 @@ describe('MesaEstadoController', () => {
     const resultado = await controlador.ocupar(
       { mesaId: MESA_ID },
       cuerpo,
-      { id: MESERO_ID },
+      { userId: MESERO_ID },
       'corr-001',
     );
 
@@ -59,7 +60,7 @@ describe('MesaEstadoController', () => {
     expect(servicio.ocupar).toHaveBeenCalledWith(MESA_ID, cuerpo, MESERO_ID, 'corr-002');
   });
 
-  it('ocuparMesaDtoSchema valida comensales obligatorio, banderas forzar opcionales y campos UUID', () => {
+  it('ocuparMesaDtoSchema reutiliza ocuparMesaSchema de @floor/shared validando comensales, banderas y UUIDs', () => {
     const dtoInstancia = new OcuparMesaDto();
     dtoInstancia.comensales = 4;
     expect(dtoInstancia.comensales).toBe(4);
@@ -105,70 +106,31 @@ describe('MesaEstadoController', () => {
     expect(ocuparMesaDtoSchema.safeParse({ comensales: 2, desconocida: true }).success).toBe(false);
   });
 
-  it('extraerMeseroDeRequest, resolverMeseroId y UsuarioActual cubren todas las fuentes de identidad', () => {
+  it('extraerMeseroDeRequest, resolverMeseroId y UsuarioActual leen exclusivamente identidad verificada', () => {
     expect(extraerMeseroDeRequest(null)).toBeUndefined();
     expect(extraerMeseroDeRequest('invalido')).toBeUndefined();
     expect(extraerMeseroDeRequest({})).toBeUndefined();
 
     expect(extraerMeseroDeRequest({ user: MESERO_ID })).toBe(MESERO_ID);
     expect(extraerMeseroDeRequest({ user: '   ' })).toBeUndefined();
-    expect(extraerMeseroDeRequest({ user: { meseroId: MESERO_ID } })).toBe(MESERO_ID);
+    expect(extraerMeseroDeRequest({ user: { userId: MESERO_ID } })).toBe(MESERO_ID);
     expect(extraerMeseroDeRequest({ user: { id: MESERO_ID } })).toBe(MESERO_ID);
     expect(extraerMeseroDeRequest({ user: { sub: MESERO_ID } })).toBe(MESERO_ID);
-    expect(extraerMeseroDeRequest({ user: { userId: MESERO_ID } })).toBe(MESERO_ID);
-
-    expect(extraerMeseroDeRequest({ headers: { 'x-user-id': MESERO_ID } })).toBe(MESERO_ID);
-    expect(extraerMeseroDeRequest({ headers: { 'x-mesero-id': MESERO_ID } })).toBe(MESERO_ID);
-
-    const payloadSub = Buffer.from(JSON.stringify({ sub: MESERO_ID })).toString('base64url');
-    expect(
-      extraerMeseroDeRequest({
-        headers: { authorization: `Bearer header.${payloadSub}.sig` },
-      }),
-    ).toBe(MESERO_ID);
-
-    const payloadUserId = Buffer.from(JSON.stringify({ userId: MESERO_ID })).toString('base64url');
-    expect(
-      extraerMeseroDeRequest({
-        headers: { authorization: `Bearer header.${payloadUserId}.sig` },
-      }),
-    ).toBe(MESERO_ID);
-
-    const payloadId = Buffer.from(JSON.stringify({ id: MESERO_ID })).toString('base64url');
-    expect(
-      extraerMeseroDeRequest({
-        headers: { authorization: `Bearer header.${payloadId}.sig` },
-      }),
-    ).toBe(MESERO_ID);
-
-    const payloadVacio = Buffer.from(JSON.stringify({})).toString('base64url');
-    expect(
-      extraerMeseroDeRequest({
-        headers: { authorization: `Bearer header.${payloadVacio}.sig` },
-      }),
-    ).toBeUndefined();
-
-    expect(
-      extraerMeseroDeRequest({
-        headers: { authorization: 'Basic dXNlcjpwYXNz' },
-      }),
-    ).toBeUndefined();
-
-    expect(
-      extraerMeseroDeRequest({
-        headers: { authorization: 'Bearer tokenSinPuntos' },
-      }),
-    ).toBeUndefined();
-
-    expect(
-      extraerMeseroDeRequest({
-        headers: { authorization: 'Bearer header.%%%invalido%%%.sig', 'x-user-id': '   ' },
-        body: { meseroId: MESERO_ID },
-      }),
-    ).toBe(MESERO_ID);
+    expect(extraerMeseroDeRequest({ user: { meseroId: MESERO_ID } })).toBe(MESERO_ID);
 
     expect(resolverMeseroId(undefined, MESERO_ID)).toBe(MESERO_ID);
-    expect(resolverMeseroId(null, undefined)).toBe(DEFAULT_MESERO_ID);
+    expect(resolverMeseroId({ userId: MESERO_ID }, undefined)).toBe(MESERO_ID);
+    expect(resolverMeseroId(MESERO_ID, undefined)).toBe(MESERO_ID);
+
+    expect(() => resolverMeseroId(null, undefined)).toThrow();
+    try {
+      resolverMeseroId({ userId: '   ' }, '');
+    } catch (err) {
+      const domainErr = err as DomainException;
+      expect(domainErr.getStatus()).toBe(401);
+      expect(domainErr.getResponse()).toMatchObject({ code: CODIGO_ERROR.NO_AUTENTICADO });
+    }
+
     expect(CurrentUser).toBe(UsuarioActual);
     expect(MeseroActual).toBe(UsuarioActual);
 
@@ -184,7 +146,7 @@ describe('MesaEstadoController', () => {
     const entrada = Object.values(metadata)[0];
     const ctxMock = {
       switchToHttp: () => ({
-        getRequest: () => ({ user: { id: MESERO_ID } }),
+        getRequest: () => ({ user: { userId: MESERO_ID } }),
       }),
     } as unknown as ExecutionContext;
     expect(entrada?.factory(undefined, ctxMock)).toBe(MESERO_ID);

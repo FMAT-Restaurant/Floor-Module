@@ -1,92 +1,69 @@
-import { createParamDecorator, type ExecutionContext } from '@nestjs/common';
+import { createParamDecorator, ExecutionContext, HttpStatus } from '@nestjs/common';
+import { CODIGO_ERROR } from '../errors/codigos-error';
+import { DomainException } from '../errors/domain.exception';
 
-export const DEFAULT_MESERO_ID = 'd1000000-0000-4000-8000-000000000001';
-
-export interface UsuarioAutenticado {
-  id?: string;
-  sub?: string;
-  userId?: string;
-  meseroId?: string;
-  staffId?: string;
-  roles?: string[];
-}
-
-function normalizarCadena(valor: unknown): string | undefined {
-  if (typeof valor !== 'string') return undefined;
-  const limpio = valor.trim();
-  return limpio.length > 0 ? limpio : undefined;
-}
-
-function extraerDesdeObjetoUsuario(usuario: unknown): string | undefined {
-  const directo = normalizarCadena(usuario);
-  if (directo) return directo;
-
-  if (typeof usuario !== 'object' || usuario === null) {
-    return undefined;
-  }
-
-  const candidato = usuario as Record<string, unknown>;
-  return (
-    normalizarCadena(candidato.meseroId) ??
-    normalizarCadena(candidato.id) ??
-    normalizarCadena(candidato.sub) ??
-    normalizarCadena(candidato.userId)
-  );
-}
-
-function extraerSubDeJwt(authorizationHeader: unknown): string | undefined {
-  const header = normalizarCadena(authorizationHeader);
-  if (!header?.toLowerCase().startsWith('bearer ')) return undefined;
-  const token = header.slice(7).trim();
-  const partes = token.split('.');
-  if (partes.length < 2) return undefined;
-
-  try {
-    const json = Buffer.from(partes[1], 'base64url').toString('utf-8');
-    const payload = JSON.parse(json) as Record<string, unknown>;
-    return (
-      normalizarCadena(payload.sub) ??
-      normalizarCadena(payload.userId) ??
-      normalizarCadena(payload.id)
-    );
-  } catch {
-    return undefined;
-  }
-}
-
+/**
+ * Extrae el identificador verificado del usuario (`userId` UUID v4) desde `request.user`,
+ * el cual es poblado exclusivamente por `IdentityGuard` (BE-011) tras validar las cabeceras
+ * perimetrales del API Gateway o la firma HMAC-SHA256 del JWT Bearer.
+ */
 export function extraerMeseroDeRequest(request: unknown): string | undefined {
-  if (typeof request !== 'object' || request === null) return undefined;
+  if (!request || typeof request !== 'object') {
+    return undefined;
+  }
+
   const req = request as {
     user?: unknown;
-    headers?: Record<string, unknown>;
-    body?: Record<string, unknown>;
   };
 
-  const desdeUser = extraerDesdeObjetoUsuario(req.user);
-  if (desdeUser) return desdeUser;
+  if (typeof req.user === 'string' && req.user.trim().length > 0) {
+    return req.user.trim();
+  }
 
-  const headers = req.headers ?? {};
-  const desdeHeader =
-    normalizarCadena(headers['x-user-id']) ??
-    normalizarCadena(headers['x-mesero-id']) ??
-    extraerSubDeJwt(headers.authorization);
-  if (desdeHeader) return desdeHeader;
+  if (req.user && typeof req.user === 'object') {
+    const userObj = req.user as Record<string, unknown>;
+    for (const clave of ['userId', 'id', 'sub', 'meseroId']) {
+      const valor = userObj[clave];
+      if (typeof valor === 'string' && valor.trim().length > 0) {
+        return valor.trim();
+      }
+    }
+  }
 
-  return normalizarCadena(req.body?.meseroId);
-}
-
-export function resolverMeseroId(
-  usuario?: UsuarioAutenticado | string | null,
-  meseroIdDto?: string,
-): string {
-  return extraerDesdeObjetoUsuario(usuario) ?? normalizarCadena(meseroIdDto) ?? DEFAULT_MESERO_ID;
+  return undefined;
 }
 
 /**
- * Decorador de parámetro de autenticación/usuario (SPEC §1, ARCHITECTURE §8).
- * Obtiene el identificador del mesero/usuario autenticado desde `req.user`,
- * la cabecera `X-User-Id` inyectada por el Gateway o el token Bearer.
+ * Normaliza el `meseroId` resuelto desde el cuerpo validado o desde el usuario autenticado
+ * en `request.user` (inyectado por `IdentityGuard`).
+ * Rechaza con 401 NO_AUTENTICADO si no existe identidad verificada ni `meseroId` explícito.
  */
+export function resolverMeseroId(usuarioActual: unknown, meseroIdCuerpo?: string): string {
+  if (typeof meseroIdCuerpo === 'string' && meseroIdCuerpo.trim().length > 0) {
+    return meseroIdCuerpo.trim();
+  }
+
+  if (typeof usuarioActual === 'string' && usuarioActual.trim().length > 0) {
+    return usuarioActual.trim();
+  }
+
+  if (usuarioActual && typeof usuarioActual === 'object') {
+    const obj = usuarioActual as Record<string, unknown>;
+    for (const clave of ['userId', 'id', 'sub', 'meseroId']) {
+      const valor = obj[clave];
+      if (typeof valor === 'string' && valor.trim().length > 0) {
+        return valor.trim();
+      }
+    }
+  }
+
+  throw new DomainException(
+    HttpStatus.UNAUTHORIZED,
+    CODIGO_ERROR.NO_AUTENTICADO,
+    'No se encontró identidad verificada del usuario para ejecutar la operación',
+  );
+}
+
 export const UsuarioActual = createParamDecorator(
   (_data: unknown, ctx: ExecutionContext): string | undefined => {
     const request = ctx.switchToHttp().getRequest<unknown>();

@@ -1,4 +1,8 @@
 // Configuración separada para pruebas de integración (necesitan PostgreSQL real).
+process.env.DATABASE_URL =
+  process.env.DATABASE_URL ||
+  'postgresql://postgres:postgrespassword@localhost:5432/floor_module_db?schema=public';
+
 module.exports = {
   rootDir: '.',
   testEnvironment: 'node',

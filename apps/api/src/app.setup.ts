@@ -14,6 +14,6 @@ export const LIMITE_CUERPO_JSON = '64kb';
  */
 export function configurarApp(app: NestExpressApplication): void {
   app.useBodyParser('json', { limit: LIMITE_CUERPO_JSON });
-  app.setGlobalPrefix(PREFIJO_GLOBAL, { exclude: ['health'] });
+  app.setGlobalPrefix(PREFIJO_GLOBAL, { exclude: ['health', 'api/v1/floor/health'] });
   app.useGlobalFilters(new AllExceptionsFilter());
 }

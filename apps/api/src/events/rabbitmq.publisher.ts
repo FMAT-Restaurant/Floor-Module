@@ -142,25 +142,13 @@ export class RabbitMqPublisher implements OnModuleInit, OnModuleDestroy {
         ? event.correlationId.trim()
         : randomUUID();
 
-    const envelope: EventEnvelope<unknown> =
-      typeof event.payload === 'object' &&
-      event.payload !== null &&
-      'eventId' in event.payload &&
-      'eventType' in event.payload &&
-      'timestamp' in event.payload &&
-      'data' in event.payload
-        ? {
-            ...(event.payload as unknown as EventEnvelope<unknown>),
-            correlationId:
-              (event.payload as { correlationId?: string }).correlationId ?? correlationId,
-          }
-        : {
-            eventId: event.id,
-            eventType: event.routingKey,
-            timestamp: new Date().toISOString(),
-            correlationId,
-            data: event.payload,
-          };
+    const envelope: EventEnvelope<unknown> = {
+      eventId: event.id,
+      eventType: event.routingKey,
+      timestamp: new Date().toISOString(),
+      correlationId,
+      data: event.payload,
+    };
     const buffer = Buffer.from(JSON.stringify(envelope), 'utf-8');
 
     const accepted = channel.publish(this.exchange, event.routingKey, buffer, {
