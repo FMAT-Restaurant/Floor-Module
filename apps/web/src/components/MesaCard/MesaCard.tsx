@@ -13,6 +13,10 @@ export interface MesaCardProps {
   readonly mesasUnidas?: readonly number[];
   readonly meseroNombre?: string;
   readonly acciones?: React.ReactNode;
+  /** Deshabilita la selección de la card (p. ej. mesas no unibles en modo unión). */
+  readonly disabled?: boolean;
+  /** Oculta el pie de acciones (p. ej. durante la selección múltiple). */
+  readonly hideActions?: boolean;
 }
 
 interface EstadoVisualInfo {
@@ -59,6 +63,8 @@ export function MesaCard({
   mesasUnidas,
   meseroNombre,
   acciones,
+  disabled = false,
+  hideActions = false,
 }: MesaCardProps): React.JSX.Element {
   const isOcupada = mesa.estadoFisico === EstadoMesa.OCUPADA;
   const tiempoOcupada = isOcupada ? formatTiempoOcupada(mesa.ocupadaDesde, now) : null;
@@ -89,15 +95,17 @@ export function MesaCard({
         isSelected
           ? 'bg-primary-soft border-primary shadow-subtle'
           : 'bg-surface border-border hover:border-gray-300 shadow-subtle',
+        disabled && 'opacity-50',
       )}
     >
       <button
         type="button"
         aria-label={`Mesa ${mesa.numeroMesa}`}
         aria-pressed={isSelected}
+        disabled={disabled}
         onClick={handleCardClick}
         onKeyDown={handleKeyDown}
-        className="w-full text-left space-y-3 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 rounded-lg p-0.5"
+        className="w-full text-left space-y-3 cursor-pointer disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 rounded-lg p-0.5"
       >
         {/* Cabecera de estado: Dot semántico + texto + tags */}
         <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -154,16 +162,18 @@ export function MesaCard({
       </button>
 
       {/* Acción secundaria de 40px en la base */}
-      <div className="pt-2 border-t border-border/60 space-y-2">
-        {acciones}
-        <button
-          type="button"
-          onClick={handleAccionClick}
-          className="h-control w-full px-4 bg-surface border border-primary/40 hover:border-primary text-primary hover:bg-primary-soft text-sm font-medium rounded-control transition-colors inline-flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-primary/20"
-        >
-          Ver mesa
-        </button>
-      </div>
+      {!hideActions && (
+        <div className="pt-2 border-t border-border/60 space-y-2">
+          {acciones}
+          <button
+            type="button"
+            onClick={handleAccionClick}
+            className="h-control w-full px-4 bg-surface border border-primary/40 hover:border-primary text-primary hover:bg-primary-soft text-sm font-medium rounded-control transition-colors inline-flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-primary/20"
+          >
+            Ver mesa
+          </button>
+        </div>
+      )}
     </div>
   );
 }
