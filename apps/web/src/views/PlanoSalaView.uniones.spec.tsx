@@ -160,6 +160,8 @@ describe('PlanoSalaView · FE-009 uniones de mesas', () => {
       target: { value: FIXTURE_MESERO_IDS.ANA },
     });
     fireEvent.change(within(panel).getByLabelText('Comensales'), { target: { value: '9' } });
+    // Validación previa del aforo conjunto: aviso inmediato, antes de enviar
+    expect(within(panel).getByRole('status')).toHaveTextContent(/Supera el aforo total \(6\)/);
     fireEvent.click(within(panel).getByRole('button', { name: 'Unir mesas' }));
 
     expect(await within(panel).findByRole('alert')).toHaveTextContent(/supera el aforo/);

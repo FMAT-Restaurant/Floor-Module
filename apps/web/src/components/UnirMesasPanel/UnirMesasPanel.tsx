@@ -188,6 +188,11 @@ export function UnirMesasPanel({
           {!comensalesValidos && (
             <p className="text-xs text-red-700 mt-1">Ingresa un número de comensales válido.</p>
           )}
+          {comensalesValidos && aforoTotal > 0 && comensales > aforoTotal && (
+            <p role="status" className="text-xs text-amber-800 mt-1">
+              Supera el aforo total ({aforoTotal}). Se te pedirá confirmar el sobrecupo.
+            </p>
+          )}
         </div>
       </div>
 
