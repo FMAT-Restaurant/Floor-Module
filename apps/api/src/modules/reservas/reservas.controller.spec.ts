@@ -31,11 +31,15 @@ describe('ReservasController', () => {
         reservaId: RESERVA_ID,
         estado: EstadoReserva.CANCELADA,
       }),
+      marcarComoNoShow: jest.fn().mockResolvedValue({
+        reservaId: RESERVA_ID,
+        estado: EstadoReserva.NO_SHOW,
+      }),
     } as unknown as jest.Mocked<ReservasService>;
     controller = new ReservasController(servicio);
   });
 
-  it('delega listar, consultarDisponibilidad, obtener, crear, actualizar, cancelar y eliminar al servicio', async () => {
+  it('delega listar, consultarDisponibilidad, obtener, crear, actualizar, cancelar, eliminar y marcarNoShow al servicio', async () => {
     await controller.listar({ fecha: '2030-01-15' });
     expect(servicio.listar).toHaveBeenCalledWith({ fecha: '2030-01-15' });
 
@@ -74,6 +78,10 @@ describe('ReservasController', () => {
 
     await controller.eliminar({ reservaId: RESERVA_ID });
     expect(servicio.cancelar).toHaveBeenCalledTimes(2);
+
+    const noShow = await controller.marcarNoShow({ reservaId: RESERVA_ID });
+    expect(servicio.marcarComoNoShow).toHaveBeenCalledWith(RESERVA_ID);
+    expect(noShow.estado).toBe(EstadoReserva.NO_SHOW);
   });
 
   describe('esquemaDisponibilidad y esquemaActualizar', () => {

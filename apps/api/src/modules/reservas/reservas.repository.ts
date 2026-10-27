@@ -33,6 +33,19 @@ interface FilaMesaCruda {
   ocupadaDesde: Date | null;
 }
 
+interface FilaReservaCruda {
+  id: string;
+  mesaId: string;
+  nombreContacto: string;
+  telefonoContacto: string;
+  cantidadPersonas: number;
+  fechaReserva: Date | string;
+  horaInicio: Date | string;
+  horaFin: Date | string;
+  estado: EstadoReservaPrisma;
+  alertaEmitida: boolean;
+}
+
 export function fechaAPrisma(fecha: string): Date {
   return new Date(`${fecha}T00:00:00.000Z`);
 }
@@ -41,26 +54,32 @@ export function horaAPrisma(hora: string): Date {
   return new Date(`1970-01-01T${hora}:00.000Z`);
 }
 
-export function fechaDesdePrisma(fecha: Date): string {
+export function fechaDesdePrisma(fecha: Date | string): string {
+  if (typeof fecha === 'string') {
+    return fecha.slice(0, 10);
+  }
   return fecha.toISOString().slice(0, 10);
 }
 
-export function horaDesdePrisma(hora: Date): string {
+export function horaDesdePrisma(hora: Date | string): string {
+  if (typeof hora === 'string') {
+    return hora.slice(0, 5);
+  }
   return hora.toISOString().slice(11, 16);
 }
 
-function aReservaRegistro(fila: FilaReserva): ReservaRegistro {
+function aReservaRegistro(fila: FilaReserva | FilaReservaCruda): ReservaRegistro {
   return {
     id: fila.id,
     mesaId: fila.mesaId,
     nombreContacto: fila.nombreContacto,
     telefonoContacto: fila.telefonoContacto,
-    cantidadPersonas: fila.cantidadPersonas,
+    cantidadPersonas: Number(fila.cantidadPersonas),
     fecha: fechaDesdePrisma(fila.fechaReserva),
     horaInicio: horaDesdePrisma(fila.horaInicio),
     horaFin: horaDesdePrisma(fila.horaFin),
     estado: estadoReservaDesdePrisma(fila.estado),
-    alertaEmitida: fila.alertaEmitida,
+    alertaEmitida: Boolean(fila.alertaEmitida),
   };
 }
 
@@ -235,5 +254,67 @@ export class ReservasRepository {
         )
       ORDER BY m."numero_mesa" ASC`;
     return filas.map(aMesaRegistro);
+  }
+
+  /**
+   * BE-008 · RF-016 · RN-08 · RN-20: retorna las reservas `Confirmada` con `alertaEmitida = false`
+   * cuyo instante de inicio (`lower("rango")`) se encuentra dentro del intervalo `[desde, hasta]`.
+   */
+  async listarParaAlertas(desde: Date, hasta: Date): Promise<ReservaRegistro[]> {
+    if (typeof this.prisma.$queryRaw === 'function') {
+      const filas = await this.prisma.$queryRaw<FilaReservaCruda[]>`
+        SELECT
+          "id_reserva" AS "id",
+          "id_mesa" AS "mesaId",
+          "nombre_contacto" AS "nombreContacto",
+          "telefono_contacto" AS "telefonoContacto",
+          "cantidad_personas"::int AS "cantidadPersonas",
+          "fecha_reserva" AS "fechaReserva",
+          TO_CHAR("hora_inicio", 'HH24:MI') AS "horaInicio",
+          TO_CHAR("hora_fin", 'HH24:MI') AS "horaFin",
+          "estado",
+          "alerta_emitida" AS "alertaEmitida"
+        FROM "Reserva"
+        WHERE "estado" = 'Confirmada'::"EstadoReserva"
+          AND "alerta_emitida" = false
+          AND lower("rango") >= ${desde.toISOString()}::timestamptz
+          AND lower("rango") <= ${hasta.toISOString()}::timestamptz
+        ORDER BY lower("rango") ASC`;
+      return filas.map(aReservaRegistro);
+    }
+
+    const filas = await this.prisma.reserva.findMany({
+      where: {
+        estado: EstadoReservaPrisma.Confirmada,
+        alertaEmitida: false,
+      },
+      orderBy: [{ fechaReserva: 'asc' }, { horaInicio: 'asc' }],
+    });
+    return filas.map(aReservaRegistro).filter((reserva) => {
+      const inicio = new Date(`${reserva.fecha}T${reserva.horaInicio}:00.000Z`);
+      return inicio.getTime() >= desde.getTime() && inicio.getTime() <= hasta.getTime();
+    });
+  }
+
+  /**
+   * BE-008 · RN-20: marca `alertaEmitida = true` de forma atómica únicamente si la reserva
+   * permanece en estado `Confirmada` y aún tiene `alertaEmitida = false`.
+   * Devuelve `true` si la fila fue actualizada en esta transacción o `false` si ya había sido
+   * procesada o cambió de estado concurrentemente.
+   */
+  async marcarAlertaEmitida(reservaId: string): Promise<boolean> {
+    try {
+      const { count } = await this.prisma.reserva.updateMany({
+        where: {
+          id: reservaId,
+          estado: EstadoReservaPrisma.Confirmada,
+          alertaEmitida: false,
+        },
+        data: { alertaEmitida: true },
+      });
+      return count === 1;
+    } catch (error) {
+      relanzarTraducido(error, reservaId);
+    }
   }
 }

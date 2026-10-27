@@ -1,5 +1,6 @@
-import { HttpStatus, Injectable, Optional } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger, Optional } from '@nestjs/common';
 import {
+  EVENT_TOPICS,
   EstadoReserva,
   type ActualizarReservaRequestDto,
   type ConsultarDisponibilidadQueryDto,
@@ -8,11 +9,14 @@ import {
   type ListarReservasQueryDto,
   type MesaDto,
   type ReservaDto,
+  type ReservaProximaAlertaPayload,
 } from '@floor/shared';
 import { CODIGO_ERROR } from '../../common/errors/codigos-error';
 import { DomainException } from '../../common/errors/domain.exception';
 import { traducirErrorPrisma } from '../../common/errors/prisma-error.translator';
 import { Reloj } from '../../common/reloj/reloj';
+import { OutboxService } from '../../events/outbox.service';
+import { resolverVentanaMinutos } from '../mesas/domain/reserva-proxima';
 import { aMesaDto } from '../mesas/mesa.dto.mapper';
 import {
   calcularDuracionMinutos,
@@ -29,6 +33,8 @@ import {
   reservaNoModificable,
 } from './reservas.errores';
 import { ReservasRepository } from './reservas.repository';
+
+const MS_POR_MINUTO = 60_000;
 
 export type ConsultarDisponibilidadEntrada = Partial<ConsultarDisponibilidadQueryDto> & {
   fecha: string;
@@ -56,10 +62,16 @@ function traducirORelanzar(error: unknown): never {
 
 @Injectable()
 export class ReservasService {
+  private readonly logger = new Logger(ReservasService.name);
+  private readonly outbox: OutboxService;
+
   constructor(
     private readonly repositorio: ReservasRepository,
     @Optional() private readonly reloj: Reloj = new Reloj(),
-  ) {}
+    @Optional() outboxService?: OutboxService,
+  ) {
+    this.outbox = outboxService ?? new OutboxService();
+  }
 
   /**
    * RF-012 · RN-09 · RN-10 · RNF-003: registra una nueva reserva en estado `Confirmada`.
@@ -245,6 +257,98 @@ export class ReservasService {
 
         const cancelada = await repo.actualizarEstado(reserva.id, EstadoReserva.CANCELADA);
         return aReservaDto(cancelada);
+      });
+    } catch (error) {
+      traducirORelanzar(error);
+    }
+  }
+
+  /**
+   * BE-008 · RF-016 · RN-08 · RN-20: evalúa las reservas `Confirmada` con `alertaEmitida = false`
+   * que inician dentro de la ventana de anticipación (`RESERVA_PROXIMA_VENTANA_MINUTOS`, default 30 min).
+   * En una única transacción por reserva marca `alertaEmitida = true` y encola en Outbox el evento
+   * `EVENT_TOPICS.RESERVA_PROXIMA_ALERTA` (`sala.reserva.proxima_alerta`) garantizando idempotencia.
+   */
+  async procesarAlertasProximas(): Promise<number> {
+    const ahora = this.reloj.ahora();
+    const ventanaMinutos = resolverVentanaMinutos(process.env.RESERVA_PROXIMA_VENTANA_MINUTOS);
+    const limite = new Date(ahora.getTime() + ventanaMinutos * MS_POR_MINUTO);
+
+    const candidatas = await this.repositorio.listarParaAlertas(ahora, limite);
+    const reservasProximas = candidatas.filter((reserva) => {
+      if (reserva.estado !== EstadoReserva.CONFIRMADA || reserva.alertaEmitida) {
+        return false;
+      }
+      const inicio = new Date(`${reserva.fecha}T${reserva.horaInicio}:00.000Z`);
+      return inicio.getTime() >= ahora.getTime() && inicio.getTime() <= limite.getTime();
+    });
+
+    let emitidas = 0;
+
+    for (const reserva of reservasProximas) {
+      try {
+        const inicio = new Date(`${reserva.fecha}T${reserva.horaInicio}:00.000Z`);
+        const minutosRestantes = Math.max(
+          0,
+          Math.round((inicio.getTime() - ahora.getTime()) / MS_POR_MINUTO),
+        );
+        const payload: ReservaProximaAlertaPayload = {
+          reservaId: reserva.id,
+          mesaId: reserva.mesaId,
+          nombreContacto: reserva.nombreContacto,
+          horaInicio: reserva.horaInicio,
+          minutosRestantes,
+          timestamp: ahora.toISOString(),
+        };
+
+        const seEmitio = await this.repositorio.enTransaccion(async (repo, tx) => {
+          const marcada = await repo.marcarAlertaEmitida(reserva.id);
+          if (!marcada) {
+            return false;
+          }
+
+          await this.outbox.enqueueEvent(tx, {
+            routingKey: EVENT_TOPICS.RESERVA_PROXIMA_ALERTA,
+            payload,
+          });
+          return true;
+        });
+
+        if (seEmitio) {
+          emitidas += 1;
+        }
+      } catch (error) {
+        const mensaje = error instanceof Error ? error.message : String(error);
+        this.logger.error(
+          JSON.stringify({
+            msg: 'Error al procesar alerta de reserva próxima',
+            reservaId: reserva.id,
+            error: mensaje,
+          }),
+        );
+      }
+    }
+
+    return emitidas;
+  }
+
+  /**
+   * BE-008 · RF-017b · RN-11 · SPEC §5.4: marca una reserva `Confirmada` como `No-show`
+   * liberando la franja horaria gracias a la restricción parcial `WHERE (estado = 'Confirmada')`.
+   */
+  async marcarComoNoShow(reservaId: string): Promise<ReservaDto> {
+    try {
+      return await this.repositorio.enTransaccion(async (repo) => {
+        const reserva = await repo.buscarPorId(reservaId);
+        if (!reserva) {
+          throw reservaNoEncontrada(reservaId);
+        }
+        if (!esEstadoModificable(reserva.estado)) {
+          throw reservaNoModificable(reserva.id, reserva.estado);
+        }
+
+        const noShow = await repo.actualizarEstado(reserva.id, EstadoReserva.NO_SHOW);
+        return aReservaDto(noShow);
       });
     } catch (error) {
       traducirORelanzar(error);

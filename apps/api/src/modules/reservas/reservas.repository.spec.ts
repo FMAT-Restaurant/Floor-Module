@@ -307,4 +307,77 @@ describe('ReservasRepository', () => {
     ]);
     expect(queryRaw).toHaveBeenCalledTimes(1);
   });
+
+  it('BE-008 · listarParaAlertas consulta por lower("rango") con $queryRaw o filtra con findMany como fallback', async () => {
+    const desde = new Date('2030-01-15T18:30:00.000Z');
+    const hasta = new Date('2030-01-15T19:00:00.000Z');
+
+    const queryRaw = jest.fn().mockResolvedValue([
+      {
+        id: RESERVA_ID,
+        mesaId: MESA_ID,
+        nombreContacto: 'Laura Pérez',
+        telefonoContacto: '+52 999 123 4567',
+        cantidadPersonas: 4,
+        fechaReserva: '2030-01-15',
+        horaInicio: '18:45',
+        horaFin: '20:15',
+        estado: EstadoReservaPrisma.Confirmada,
+        alertaEmitida: false,
+      },
+    ]);
+    const repoConRaw = new ReservasRepository({ $queryRaw: queryRaw } as unknown as PrismaService);
+    const porRaw = await repoConRaw.listarParaAlertas(desde, hasta);
+    expect(porRaw).toEqual([
+      {
+        id: RESERVA_ID,
+        mesaId: MESA_ID,
+        nombreContacto: 'Laura Pérez',
+        telefonoContacto: '+52 999 123 4567',
+        cantidadPersonas: 4,
+        fecha: '2030-01-15',
+        horaInicio: '18:45',
+        horaFin: '20:15',
+        estado: EstadoReserva.CONFIRMADA,
+        alertaEmitida: false,
+      },
+    ]);
+
+    const findMany = jest
+      .fn()
+      .mockResolvedValue([
+        filaReservaMock({ horaInicio: horaAPrisma('18:45'), horaFin: horaAPrisma('20:15') }),
+        filaReservaMock({ id: 'fuera-ventana', horaInicio: horaAPrisma('21:00') }),
+      ]);
+    const repoFallback = new ReservasRepository({
+      reserva: { findMany },
+    } as unknown as PrismaService);
+    const porFallback = await repoFallback.listarParaAlertas(desde, hasta);
+    expect(porFallback).toHaveLength(1);
+    expect(porFallback[0]?.id).toBe(RESERVA_ID);
+  });
+
+  it('BE-008 · marcarAlertaEmitida actualiza con updateMany exigiendo Confirmada y alertaEmitida: false', async () => {
+    const updateMany = jest
+      .fn()
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 0 })
+      .mockRejectedValueOnce(new Error('DB write error'));
+    const repo = new ReservasRepository({
+      reserva: { updateMany },
+    } as unknown as PrismaService);
+
+    expect(await repo.marcarAlertaEmitida(RESERVA_ID)).toBe(true);
+    expect(updateMany).toHaveBeenCalledWith({
+      where: {
+        id: RESERVA_ID,
+        estado: EstadoReservaPrisma.Confirmada,
+        alertaEmitida: false,
+      },
+      data: { alertaEmitida: true },
+    });
+
+    expect(await repo.marcarAlertaEmitida(RESERVA_ID)).toBe(false);
+    await expect(repo.marcarAlertaEmitida(RESERVA_ID)).rejects.toThrow('DB write error');
+  });
 });
