@@ -1,11 +1,12 @@
 import { useId, useRef, useState } from 'react';
 import { useSalaSocket } from './hooks';
-import { AdministracionMesasView, PlanoSalaView, ReservasView } from './views';
+import { AdministracionMesasView, ListaEsperaView, PlanoSalaView, ReservasView } from './views';
 
 const views = [
   { key: 'plano', label: 'Plano de sala' },
   { key: 'reservas', label: 'Reservas' },
   { key: 'mesas', label: 'Configuración de mesas' },
+  { key: 'espera', label: 'Lista de espera' },
 ] as const;
 
 type ViewKey = (typeof views)[number]['key'];
@@ -87,6 +88,8 @@ export function App() {
               <PlanoSalaView />
             ) : view === 'reservas' ? (
               <ReservasView />
+            ) : view === 'espera' ? (
+              <ListaEsperaView />
             ) : (
               <AdministracionMesasView />
             )}
