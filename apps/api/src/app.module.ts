@@ -8,10 +8,21 @@ import { GatewaysModule } from './gateways/gateways.module';
 import { HealthModule } from './modules/health/health.module';
 import { MesasModule } from './modules/mesas/mesas.module';
 import { ReservasModule } from './modules/reservas/reservas.module';
+import { UnionesModule } from './modules/uniones/uniones.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
-  imports: [PrismaModule, EventsModule, GatewaysModule, MesasModule, ReservasModule, HealthModule],
+  // UnionesModule va antes que MesasModule: sus rutas `/mesas/uniones` deben registrarse
+  // antes que `/mesas/:mesaId`.
+  imports: [
+    PrismaModule,
+    EventsModule,
+    GatewaysModule,
+    UnionesModule,
+    MesasModule,
+    ReservasModule,
+    HealthModule,
+  ],
   controllers: [],
   providers: [
     {
