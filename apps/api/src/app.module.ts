@@ -9,9 +9,10 @@ import { HealthModule } from './modules/health/health.module';
 import { MesasModule } from './modules/mesas/mesas.module';
 import { ReservasModule } from './modules/reservas/reservas.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
-  imports: [PrismaModule, EventsModule, GatewaysModule, MesasModule, ReservasModule, HealthModule],
+  imports: [PrismaModule, EventsModule, GatewaysModule, MesasModule, ReservasModule, HealthModule, ScheduleModule.forRoot()],
   controllers: [],
   providers: [
     {

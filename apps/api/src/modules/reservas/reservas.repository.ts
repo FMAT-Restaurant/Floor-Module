@@ -236,4 +236,38 @@ export class ReservasRepository {
       ORDER BY m."numero_mesa" ASC`;
     return filas.map(aMesaRegistro);
   }
+
+
+  /**
+   * BE-008 · RN-20: retorna las reservas `Confirmada` de la fecha indicada que aún tienen
+   * `alertaEmitida = false`. El servicio determina cuáles entran en la ventana de anticipación
+   * de 30 minutos para generar el evento `sala.reserva.proxima_alerta`.
+   */
+  async listarParaAlertas(fecha: string): Promise<ReservaRegistro[]> {
+    const filas = await this.prisma.reserva.findMany({
+      where: {
+        fechaReserva: fechaAPrisma(fecha),
+        estado: EstadoReservaPrisma.Confirmada,
+        alertaEmitida: false,
+      },
+    });
+    return filas.map(aReservaRegistro);
+  }
+
+  /**
+ * BE-008 · RN-20: marca la alerta como emitida para una reserva que continúa en estado
+ * `Confirmada`, evitando procesar reservas cuyo estado haya cambiado durante la ejecución
+ * del cron. La actualización debe compartir transacción con la inserción del evento en outbox
+ * para mantener la consistencia entre ambos cambios.
+ */
+  async marcarAlertaEmitida(reservaId: string): Promise<void> {
+    try {
+      await this.prisma.reserva.update({
+        where: { id: reservaId, estado: EstadoReservaPrisma.Confirmada },
+        data: { alertaEmitida: true },
+      });
+    } catch (error) {
+      relanzarTraducido(error, reservaId);
+    }
+  }
 }

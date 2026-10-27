@@ -29,6 +29,7 @@ import {
   reservaNoModificable,
 } from './reservas.errores';
 import { ReservasRepository } from './reservas.repository';
+import { OutboxService } from '../../events/outbox.service';
 
 export type ConsultarDisponibilidadEntrada = Partial<ConsultarDisponibilidadQueryDto> & {
   fecha: string;
@@ -58,6 +59,7 @@ function traducirORelanzar(error: unknown): never {
 export class ReservasService {
   constructor(
     private readonly repositorio: ReservasRepository,
+    private readonly outboxService: OutboxService, // <-- Inyectar OutboxService
     @Optional() private readonly reloj: Reloj = new Reloj(),
   ) {}
 
@@ -245,6 +247,64 @@ export class ReservasService {
 
         const cancelada = await repo.actualizarEstado(reserva.id, EstadoReserva.CANCELADA);
         return aReservaDto(cancelada);
+      });
+    } catch (error) {
+      traducirORelanzar(error);
+    }
+  }
+
+    /**
+ * RF-016 · RN-20: procesa las reservas próximas dentro de la ventana de anticipación de 30 minutos.
+ * Publica el evento `sala.reserva.proxima_alerta` mediante outbox y marca la alerta como emitida
+ * dentro de una transacción para evitar duplicados por reserva.
+ */
+  async procesarAlertasProximas(): Promise<void> {
+    const ahora = this.reloj.ahora();
+    const en30Minutos = new Date(ahora.getTime() + 30 * 60000);
+    const fechaHoy = ahora.toISOString().slice(0, 10); 
+
+    const reservasDelDia = await this.repositorio.listarParaAlertas(fechaHoy);
+
+    const reservasProximas = reservasDelDia.filter((reserva) => {
+      // Reconstruye el objeto Date usando la convención UTC de tu repositorio
+      const fechaHoraReserva = new Date(`${reserva.fecha}T${reserva.horaInicio}:00.000Z`);
+      return fechaHoraReserva >= ahora && fechaHoraReserva <= en30Minutos;
+    });
+
+    for (const reserva of reservasProximas) {
+      try {
+        // Pasamos (repo, tx) capturando la transacción generada
+        await this.repositorio.enTransaccion(async (repo, tx) => {
+          await repo.marcarAlertaEmitida(reserva.id);
+          
+          await this.outboxService.enqueueEvent(tx, {
+            routingKey: 'sala.reserva.proxima_alerta' as any,
+            payload: { reservaId: reserva.id, fecha: reserva.fecha, horaInicio: reserva.horaInicio },
+          });
+        });
+      } catch (error) {
+        console.error(`Error al procesar alerta para reserva ${reserva.id}:`, error);
+      }
+    }
+  }
+
+  /**
+   * RF-017b · RN-11: marca una reserva como `No-show`.
+   * Valida que la reserva exista y que su estado permita la transición antes de actualizarla.
+   */
+  async marcarComoNoShow(reservaId: string): Promise<ReservaDto> {
+    try {
+      return await this.repositorio.enTransaccion(async (repo) => {
+        const reserva = await repo.buscarPorId(reservaId);
+        if (!reserva) {
+          throw reservaNoEncontrada(reservaId);
+        }
+        if (!esEstadoModificable(reserva.estado)) {
+          throw reservaNoModificable(reserva.id, reserva.estado);
+        }
+        
+        const noShow = await repo.actualizarEstado(reserva.id, EstadoReserva.NO_SHOW);
+        return aReservaDto(noShow);
       });
     } catch (error) {
       traducirORelanzar(error);

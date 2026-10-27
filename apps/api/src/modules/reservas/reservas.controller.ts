@@ -117,4 +117,11 @@ export class ReservasController {
   eliminar(@Param(validarParams) { reservaId }: ReservaParamDto): Promise<ReservaDto> {
     return this.servicio.cancelar(reservaId);
   }
+
+  @Post(':reservaId/no-show')
+  @Roles(...ROLES_GESTION_SALA)
+  @HttpCode(HttpStatus.OK)
+  marcarNoShow(@Param(validarParams) { reservaId }: ReservaParamDto): Promise<ReservaDto> {
+    return this.servicio.marcarComoNoShow(reservaId);
+  }
 }
