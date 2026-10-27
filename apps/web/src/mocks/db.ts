@@ -856,7 +856,11 @@ export class MockDatabase {
       );
     }
 
-    if (item.estado === EstadoEspera.SENTADO || item.estado === EstadoEspera.CANCELADO) {
+    if (
+      item.estado === EstadoEspera.SENTADO ||
+      item.estado === EstadoEspera.CANCELADO ||
+      (item.estado === EstadoEspera.EN_ESPERA && nuevoEstado === EstadoEspera.EN_ESPERA)
+    ) {
       throw new MockApiError(
         409,
         'TRANSICION_INVALIDA',
@@ -865,6 +869,9 @@ export class MockDatabase {
     }
 
     item.estado = nuevoEstado;
+    if (nuevoEstado === EstadoEspera.EN_ESPERA || nuevoEstado === EstadoEspera.CANCELADO) {
+      item.idMesaAsignada = null;
+    }
     return clone(item);
   }
 }

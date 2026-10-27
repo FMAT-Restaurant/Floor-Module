@@ -90,4 +90,21 @@ describe('App Component', () => {
     expect(await screen.findByRole('heading', { name: 'Agenda de reservas' })).toBeInTheDocument();
     expect(screen.getByTestId('buscador-disponibilidad')).toBeInTheDocument();
   });
+
+  it('switches to ListaEsperaView when the "Lista de espera" navigation tab is selected', async () => {
+    render(
+      <QueryClientProvider client={createTestQueryClient()}>
+        <App />
+      </QueryClientProvider>,
+    );
+
+    const esperaTab = screen.getByRole('tab', { name: 'Lista de espera' });
+    fireEvent.click(esperaTab);
+
+    expect(esperaTab).toHaveAttribute('aria-selected', 'true');
+    expect(
+      await screen.findByRole('heading', { name: 'Lista de espera presencial' }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('formulario-registro-espera')).toBeInTheDocument();
+  });
 });
