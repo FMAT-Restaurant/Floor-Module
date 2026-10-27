@@ -130,6 +130,21 @@ describe('MesaEstadoService · cambio manual de estado (SPEC §5.2)', () => {
         correlationId: 'corr-123',
       });
     });
+
+    it('RN-17 · RF-020: al pasar a Libre evalúa la lista de espera con la capacidad de la mesa', async () => {
+      repositorio.buscarPorId.mockResolvedValue(
+        mesa({ estadoFisico: LIMPIEZA_PENDIENTE, capacidad: 6, ocupadaDesde: null }),
+      );
+      repositorio.transicionarEstado.mockResolvedValue(true);
+
+      const notificarSiguienteCompatible = jest.fn().mockResolvedValue(null);
+      const conEspera = new MesaEstadoService(repositorio, undefined, undefined, 30, {
+        notificarSiguienteCompatible,
+      } as unknown as ConstructorParameters<typeof MesaEstadoService>[4]);
+
+      await conEspera.actualizarEstado(MESA_ID, { estado: LIBRE });
+      expect(notificarSiguienteCompatible).toHaveBeenCalledWith(MESA_ID, 6);
+    });
   });
 
   describe('RN-07 · transiciones rechazadas → 409 TRANSICION_INVALIDA', () => {

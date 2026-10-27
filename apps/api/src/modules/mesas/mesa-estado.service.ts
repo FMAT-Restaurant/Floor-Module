@@ -15,6 +15,7 @@ import { resolverMeseroId } from '../../common/decorators/usuario-actual.decorat
 import { Reloj } from '../../common/reloj/reloj';
 import { OutboxService } from '../../events/outbox.service';
 import type { OutboxEventPayloadMap, OutboxRoutingKey } from '../../events/outbox.types';
+import { EsperaService } from '../espera/espera.service';
 import {
   tieneReservaProxima,
   VENTANA_RESERVA_PROXIMA_POR_DEFECTO_MIN,
@@ -54,6 +55,7 @@ export class MesaEstadoService {
     @Optional()
     @Inject(VENTANA_RESERVA_PROXIMA_MINUTOS)
     private readonly ventanaMinutos: number = VENTANA_RESERVA_PROXIMA_POR_DEFECTO_MIN,
+    @Optional() private readonly esperaService?: EsperaService,
   ) {}
 
   /**
@@ -202,7 +204,7 @@ export class MesaEstadoService {
     { estado }: ActualizarEstadoMesaRequestDto,
     correlationId?: string,
   ): Promise<ActualizarEstadoMesaResponseDto> {
-    return this.repositorio.enTransaccion(async (repo, tx) => {
+    const resultado = await this.repositorio.enTransaccion(async (repo, tx) => {
       const mesa = await repo.buscarPorId(mesaId);
       if (!mesa?.activo) throw mesaNoEncontrada(mesaId);
       if (mesa.unionMesaId) throw mesaEnUnion(mesa.id);
@@ -227,8 +229,14 @@ export class MesaEstadoService {
         });
       }
 
-      return { mesaId: mesa.id, estado };
+      return { mesaId: mesa.id, estado, capacidad: mesa.capacidad };
     });
+
+    if (estado === EstadoMesa.LIBRE && this.esperaService) {
+      await this.esperaService.notificarSiguienteCompatible(resultado.mesaId, resultado.capacidad);
+    }
+
+    return { mesaId: resultado.mesaId, estado: resultado.estado };
   }
 
   private async evaluarReservaProxima(
