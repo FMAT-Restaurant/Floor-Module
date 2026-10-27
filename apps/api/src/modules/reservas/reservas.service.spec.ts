@@ -1,7 +1,9 @@
+import { Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { EstadoMesa, EstadoReserva } from '@floor/shared';
+import { EVENT_TOPICS, EstadoMesa, EstadoReserva } from '@floor/shared';
 import { CODIGO_ERROR } from '../../common/errors/codigos-error';
 import { DomainException } from '../../common/errors/domain.exception';
+import type { OutboxService } from '../../events/outbox.service';
 import type { MesaRegistro } from '../mesas/mesa.registro';
 import type { ReservaRegistro } from './reserva.registro';
 import type { ReservasRepository } from './reservas.repository';
@@ -42,9 +44,15 @@ function reservaMock(parcial: Partial<ReservaRegistro> = {}): ReservaRegistro {
 }
 
 function crearRepositorioMock(): jest.Mocked<ReservasRepository> {
+  const txMock = {
+    outboxEvento: {
+      create: jest.fn().mockResolvedValue({ id: 'outbox-1' }),
+    },
+  } as unknown as Prisma.TransactionClient;
   const repo = {
-    enTransaccion: jest.fn((operacion: (r: ReservasRepository) => Promise<unknown>) =>
-      operacion(repo),
+    enTransaccion: jest.fn(
+      (operacion: (r: ReservasRepository, tx: Prisma.TransactionClient) => Promise<unknown>) =>
+        operacion(repo, txMock),
     ),
     buscarMesaActiva: jest.fn(),
     buscarPorId: jest.fn(),
@@ -53,6 +61,8 @@ function crearRepositorioMock(): jest.Mocked<ReservasRepository> {
     actualizar: jest.fn(),
     actualizarEstado: jest.fn(),
     listarMesasDisponibles: jest.fn(),
+    listarParaAlertas: jest.fn(),
+    marcarAlertaEmitida: jest.fn(),
   } as unknown as jest.Mocked<ReservasRepository>;
   return repo;
 }
@@ -374,6 +384,139 @@ describe('ReservasService (BE-007)', () => {
           cliente: { nombre: 'Ana', tel: '5512345678' },
         }),
       ).rejects.toThrow('Fallo inesperado');
+    });
+  });
+
+  describe('POST · marcarComoNoShow (BE-008, RF-017b, RN-11, SPEC §5.4)', () => {
+    it('marca una reserva Confirmada como No-show y devuelve ReservaDto (200)', async () => {
+      repositorio.buscarPorId.mockResolvedValue(reservaMock());
+      repositorio.actualizarEstado.mockResolvedValue(
+        reservaMock({ estado: EstadoReserva.NO_SHOW }),
+      );
+
+      const resultado = await servicio.marcarComoNoShow(RESERVA_ID);
+
+      expect(resultado.estado).toBe(EstadoReserva.NO_SHOW);
+      expect(repositorio.actualizarEstado).toHaveBeenCalledWith(RESERVA_ID, EstadoReserva.NO_SHOW);
+    });
+
+    it('responde 404 RESERVA_NO_ENCONTRADA si la reserva no existe', async () => {
+      repositorio.buscarPorId.mockResolvedValue(null);
+
+      const error = await capturar(servicio.marcarComoNoShow(RESERVA_ID));
+
+      expect(error.getStatus()).toBe(404);
+      expect(error.getResponse()).toMatchObject({
+        code: CODIGO_ERROR.RESERVA_NO_ENCONTRADA,
+      });
+      expect(repositorio.actualizarEstado).not.toHaveBeenCalled();
+    });
+
+    it.each([EstadoReserva.COMPLETADA, EstadoReserva.CANCELADA, EstadoReserva.NO_SHOW])(
+      'rechaza marcar como No-show una reserva en estado %s con 409 TRANSICION_INVALIDA',
+      async (estadoActual) => {
+        repositorio.buscarPorId.mockResolvedValue(reservaMock({ estado: estadoActual }));
+
+        const error = await capturar(servicio.marcarComoNoShow(RESERVA_ID));
+
+        expect(error.getStatus()).toBe(409);
+        expect(error.getResponse()).toMatchObject({
+          code: CODIGO_ERROR.TRANSICION_INVALIDA,
+          details: { reservaId: RESERVA_ID, estadoActual },
+        });
+        expect(repositorio.actualizarEstado).not.toHaveBeenCalled();
+      },
+    );
+  });
+
+  describe('BE-008 · procesarAlertasProximas (RF-016, RN-08, RN-20, SPEC §6.1)', () => {
+    it('detecta reservas en ventana de 30 minutos con alertaEmitida = false, marca alertaEmitida = true y encola ReservaProximaAlertaPayload en Outbox', async () => {
+      const enqueueEvent = jest.fn().mockResolvedValue({ id: 'evt-1' });
+      const outboxMock = { enqueueEvent } as unknown as OutboxService;
+      const servicioConOutbox = new ReservasService(
+        repositorio,
+        { ahora: () => new Date('2030-01-15T18:40:00.000Z') },
+        outboxMock,
+      );
+
+      repositorio.listarParaAlertas.mockResolvedValue([
+        reservaMock({
+          id: RESERVA_ID,
+          mesaId: MESA_ID,
+          nombreContacto: 'Laura Pérez',
+          fecha: '2030-01-15',
+          horaInicio: '19:00',
+          horaFin: '20:30',
+          estado: EstadoReserva.CONFIRMADA,
+          alertaEmitida: false,
+        }),
+        // Fuera de ventana (> 30 min)
+        reservaMock({
+          id: 'b1000000-0000-4000-8000-000000000002',
+          fecha: '2030-01-15',
+          horaInicio: '19:30',
+          horaFin: '21:00',
+          alertaEmitida: false,
+        }),
+        // Ya emitida
+        reservaMock({
+          id: 'b1000000-0000-4000-8000-000000000003',
+          fecha: '2030-01-15',
+          horaInicio: '18:50',
+          horaFin: '20:20',
+          alertaEmitida: true,
+        }),
+      ]);
+      repositorio.marcarAlertaEmitida.mockResolvedValue(true);
+
+      const emitidas = await servicioConOutbox.procesarAlertasProximas();
+
+      expect(emitidas).toBe(1);
+      expect(repositorio.listarParaAlertas).toHaveBeenCalledWith(
+        new Date('2030-01-15T18:40:00.000Z'),
+        new Date('2030-01-15T19:10:00.000Z'),
+      );
+      expect(repositorio.marcarAlertaEmitida).toHaveBeenCalledTimes(1);
+      expect(repositorio.marcarAlertaEmitida).toHaveBeenCalledWith(RESERVA_ID);
+      expect(enqueueEvent).toHaveBeenCalledTimes(1);
+      expect(enqueueEvent).toHaveBeenCalledWith(expect.anything(), {
+        routingKey: EVENT_TOPICS.RESERVA_PROXIMA_ALERTA,
+        payload: {
+          reservaId: RESERVA_ID,
+          mesaId: MESA_ID,
+          nombreContacto: 'Laura Pérez',
+          horaInicio: '19:00',
+          minutosRestantes: 20,
+          timestamp: '2030-01-15T18:40:00.000Z',
+        },
+      });
+    });
+
+    it('RN-20: no genera alerta duplicada si marcarAlertaEmitida retorna false y continúa ante fallos individuales registrando en Logger', async () => {
+      const loggerSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+      const enqueueEvent = jest.fn().mockResolvedValue({ id: 'evt-1' });
+      const outboxMock = { enqueueEvent } as unknown as OutboxService;
+      const servicioConOutbox = new ReservasService(
+        repositorio,
+        { ahora: () => new Date('2030-01-15T18:45:00.000Z') },
+        outboxMock,
+      );
+
+      repositorio.listarParaAlertas.mockResolvedValue([
+        reservaMock({ id: 'res-ya-emitida', horaInicio: '19:00', alertaEmitida: false }),
+        reservaMock({ id: 'res-error', horaInicio: '19:05', alertaEmitida: false }),
+      ]);
+      repositorio.marcarAlertaEmitida
+        .mockResolvedValueOnce(false)
+        .mockRejectedValueOnce(new Error('Fallo transaccional'));
+
+      const emitidas = await servicioConOutbox.procesarAlertasProximas();
+
+      expect(emitidas).toBe(0);
+      expect(enqueueEvent).not.toHaveBeenCalled();
+      expect(loggerSpy).toHaveBeenCalledTimes(1);
+      expect(loggerSpy.mock.calls[0]?.[0]).toContain('Fallo transaccional');
+      loggerSpy.mockRestore();
     });
   });
 });

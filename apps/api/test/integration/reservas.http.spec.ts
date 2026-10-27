@@ -1,21 +1,24 @@
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import { EstadoReserva as EstadoReservaPrisma, Prisma, PrismaClient } from '@prisma/client';
+import { EVENT_TOPICS } from '@floor/shared';
 import { AppModule } from '../../src/app.module';
 import { configurarApp } from '../../src/app.setup';
 import { Reloj } from '../../src/common/reloj/reloj';
+import { ReservasCron } from '../../src/modules/reservas/reservas.cron';
 
 /**
- * BE-007 · Pruebas de integración HTTP de /api/v1/floor/reservas contra PostgreSQL 16 real
- * (RF-012, RF-013, RF-014, RF-015, RNF-003, SPEC §5.4, §7 F2, RN-09, RN-10, RN-11).
+ * BE-007 · BE-008 · Pruebas de integración HTTP y proceso programado de /api/v1/floor/reservas
+ * contra PostgreSQL 16 real (RF-012..RF-017b, RNF-003, SPEC §5.4, §6.1, §7 F2, RN-08..RN-11, RN-20).
  */
-const AHORA_ISO = '2030-01-15T12:00:00.000Z';
+let ahoraIsoActual = '2030-01-15T12:00:00.000Z';
 const RUTA = '/api/v1/floor/reservas';
 const MESA_INEXISTENTE = 'a9999999-9999-4999-8999-999999999999';
 const RESERVA_INEXISTENTE = 'b9999999-9999-4999-8999-999999999999';
 
 const prisma = new PrismaClient();
 let app: NestExpressApplication;
+let reservasCron: ReservasCron;
 let baseUrl: string;
 
 interface Respuesta<T> {
@@ -52,21 +55,23 @@ function crearMesaDb(datos: Partial<Prisma.MesaUncheckedCreateInput> & { numeroM
   return prisma.mesa.create({ data: { capacidad: 4, zona: 'Principal', ...datos } });
 }
 
-describe('API /api/v1/floor/reservas (BE-007)', () => {
+describe('API /api/v1/floor/reservas (BE-007 · BE-008)', () => {
   beforeAll(async () => {
     delete process.env.GLOBAL_PREFIX;
     const modulo = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(Reloj)
-      .useValue({ ahora: () => new Date(AHORA_ISO) })
+      .useValue({ ahora: () => new Date(ahoraIsoActual) })
       .compile();
     app = modulo.createNestApplication<NestExpressApplication>({ bodyParser: false });
     configurarApp(app);
     await app.listen(0);
+    reservasCron = app.get(ReservasCron);
     baseUrl = await app.getUrl();
     await prisma.$connect();
   });
 
   beforeEach(async () => {
+    ahoraIsoActual = '2030-01-15T12:00:00.000Z';
     await prisma.$executeRawUnsafe(
       'TRUNCATE "Reserva","AsignacionMesero","ListaEspera","Mesa","UnionMesa","outbox_evento" CASCADE',
     );
@@ -520,6 +525,123 @@ describe('API /api/v1/floor/reservas (BE-007)', () => {
         statusCode: 403,
         code: 'NO_AUTORIZADO',
       });
+    });
+  });
+
+  describe('BE-008 · POST /api/v1/floor/reservas/:reservaId/no-show y alertas cron (RF-016, RF-017b, RN-08, RN-11, RN-20)', () => {
+    it('T2.4 · RF-017b · RN-11: marca una reserva Confirmada como No-show (200), libera la franja horaria y rechaza transiciones inválidas (404 / 409 / 403)', async () => {
+      const mesa = await crearMesaDb({ numeroMesa: 1, capacidad: 4 });
+      const { cuerpo: creada } = await peticion('POST', RUTA, {
+        mesaId: mesa.id,
+        fecha: '2030-01-15',
+        horaInicio: '19:00',
+        duracion: 90,
+        cantidadPersonas: 4,
+        cliente: { nombre: 'Cliente No-show', tel: '5512345678' },
+      });
+
+      // MESERO no tiene permiso para marcar No-show (SPEC §1.1)
+      const intentoMesero = await peticion(
+        'POST',
+        `${RUTA}/${creada.reservaId as string}/no-show`,
+        undefined,
+        {
+          'x-user-id': MESERO_USER_ID,
+          'x-user-roles': 'MESERO',
+        },
+      );
+      expect(intentoMesero.status).toBe(403);
+      expect(intentoMesero.cuerpo).toMatchObject({ code: 'NO_AUTORIZADO' });
+
+      // HOST marca No-show exitosamente (200 OK)
+      const marcadaNoShow = await peticion('POST', `${RUTA}/${creada.reservaId as string}/no-show`);
+      expect(marcadaNoShow.status).toBe(200);
+      expect(marcadaNoShow.cuerpo).toMatchObject({
+        reservaId: creada.reservaId,
+        mesaId: mesa.id,
+        estado: 'No-show',
+      });
+
+      // Segundo intento sobre reserva ya en No-show retorna 409 TRANSICION_INVALIDA
+      const segundoIntento = await peticion(
+        'POST',
+        `${RUTA}/${creada.reservaId as string}/no-show`,
+      );
+      expect(segundoIntento.status).toBe(409);
+      expect(segundoIntento.cuerpo).toMatchObject({ code: 'TRANSICION_INVALIDA' });
+
+      // Reserva inexistente retorna 404 RESERVA_NO_ENCONTRADA
+      const noExiste = await peticion('POST', `${RUTA}/${RESERVA_INEXISTENTE}/no-show`);
+      expect(noExiste.status).toBe(404);
+      expect(noExiste.cuerpo).toMatchObject({ code: 'RESERVA_NO_ENCONTRADA' });
+
+      // La franja horaria [19:00, 20:30) quedó liberada y permite una nueva reserva Confirmada
+      const nuevaEnMismaFranja = await peticion('POST', RUTA, {
+        mesaId: mesa.id,
+        fecha: '2030-01-15',
+        horaInicio: '19:00',
+        duracion: 90,
+        cantidadPersonas: 2,
+        cliente: { nombre: 'Cliente Reemplazo', tel: '5599998888' },
+      });
+      expect(nuevaEnMismaFranja.status).toBe(201);
+    });
+
+    it('RF-016 · RN-08 · RN-20: el cron detecta reservas en ventana de 30 minutos con alerta_emitida = false, publica sala.reserva.proxima_alerta en outbox y no genera duplicados', async () => {
+      const mesa = await crearMesaDb({ numeroMesa: 7, capacidad: 4 });
+
+      // Reserva 1: inicia a las 19:00 (entrará en ventana de 30 min cuando el reloj avance a 18:40)
+      const { cuerpo: resEnVentana } = await peticion('POST', RUTA, {
+        mesaId: mesa.id,
+        fecha: '2030-01-15',
+        horaInicio: '19:00',
+        duracion: 60,
+        cantidadPersonas: 3,
+        cliente: { nombre: 'Sofía Alerta', tel: '5511223344' },
+      });
+
+      // Reserva 2: inicia a las 21:00 (fuera de ventana a las 18:40)
+      await peticion('POST', RUTA, {
+        mesaId: mesa.id,
+        fecha: '2030-01-15',
+        horaInicio: '21:00',
+        duracion: 60,
+        cantidadPersonas: 2,
+        cliente: { nombre: 'Pedro Lejano', tel: '5566778899' },
+      });
+
+      // Avanzamos el reloj a las 18:40 UTC (faltan 20 minutos para las 19:00)
+      ahoraIsoActual = '2030-01-15T18:40:00.000Z';
+
+      const emitidasPrimeraVez = await reservasCron.checkReservasProximas();
+      expect(emitidasPrimeraVez).toBe(1);
+
+      const enBd = await prisma.reserva.findUnique({
+        where: { id: resEnVentana.reservaId as string },
+      });
+      expect(enBd?.alertaEmitida).toBe(true);
+
+      const eventosOutbox = await prisma.outboxEvento.findMany({
+        where: { routingKey: EVENT_TOPICS.RESERVA_PROXIMA_ALERTA },
+      });
+      expect(eventosOutbox).toHaveLength(1);
+      expect(eventosOutbox[0]?.payload).toEqual({
+        reservaId: resEnVentana.reservaId,
+        mesaId: mesa.id,
+        nombreContacto: 'Sofía Alerta',
+        horaInicio: '19:00',
+        minutosRestantes: 20,
+        timestamp: '2030-01-15T18:40:00.000Z',
+      });
+
+      // Segunda ejecución en la misma ventana: idempotente, no duplica alertas
+      const emitidasSegundaVez = await reservasCron.checkReservasProximas();
+      expect(emitidasSegundaVez).toBe(0);
+
+      const totalEventosOutbox = await prisma.outboxEvento.count({
+        where: { routingKey: EVENT_TOPICS.RESERVA_PROXIMA_ALERTA },
+      });
+      expect(totalEventosOutbox).toBe(1);
     });
   });
 });
