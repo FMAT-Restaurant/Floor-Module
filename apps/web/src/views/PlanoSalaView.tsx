@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertCircle, LayoutGrid, RotateCcw, CheckCircle2, X } from 'lucide-react';
+import { AlertCircle, LayoutGrid, Link2, RotateCcw, CheckCircle2, X } from 'lucide-react';
 import {
   EstadoMesa,
   fixtureMeserosCatalogo,
@@ -13,7 +13,10 @@ import { queryKeys } from '../api/queryKeys';
 import { MesaCard } from '../components/MesaCard';
 import { OcuparMesaModal } from '../components/OcuparMesaModal';
 import { AccionesMesa } from '../components/AccionesMesa';
+import { UnirMesasPanel } from '../components/UnirMesasPanel';
+import { LiberarUnionModal } from '../components/LiberarUnionModal';
 import { cn } from '../lib/utils';
+import { esMesaUnible, formatListaMesas } from '../lib/uniones';
 
 export interface PlanoSalaViewProps {
   readonly onSelectMesa?: (mesa: MesaEnVivoDto) => void;
@@ -40,6 +43,13 @@ export function PlanoSalaView({
   const [localSelectedMesaId, setLocalSelectedMesaId] = useState<string | null>(null);
   const [mesaParaOcupar, setMesaParaOcupar] = useState<MesaEnVivoDto | null>(null);
   const [toastExito, setToastExito] = useState<string | null>(null);
+  // FE-009: modo de unión (selección múltiple) y liberación de uniones
+  const [modoUnion, setModoUnion] = useState(false);
+  const [seleccionUnionIds, setSeleccionUnionIds] = useState<readonly string[]>([]);
+  const [unionALiberar, setUnionALiberar] = useState<{
+    unionId: string;
+    numerosMesa: readonly number[];
+  } | null>(null);
 
   const currentSelectedMesaId = selectedMesaId !== undefined ? selectedMesaId : localSelectedMesaId;
 
@@ -128,6 +138,18 @@ export function PlanoSalaView({
     return map;
   }, [mesas]);
 
+  // Selección derivada: descarta mesas que dejaron de ser unibles (p. ej. por un evento en vivo)
+  const mesasSeleccionadas = useMemo(
+    () =>
+      seleccionUnionIds
+        .map((id) => mesas.find((m) => m.mesaId === id))
+        .filter(
+          (m): m is MesaEnVivoDto =>
+            m !== undefined && m.activo && m.estadoFisico === EstadoMesa.LIBRE && !m.unionId,
+        ),
+    [mesas, seleccionUnionIds],
+  );
+
   const mesasFiltradas = useMemo(() => {
     if (selectedZona === 'Todas') {
       return mesas;
@@ -143,7 +165,40 @@ export function PlanoSalaView({
     return () => clearTimeout(timer);
   }, [toastExito]);
 
+  const salirModoUnion = () => {
+    setModoUnion(false);
+    setSeleccionUnionIds([]);
+  };
+
+  const toggleSeleccionUnion = (mesa: MesaEnVivoDto) => {
+    const yaSeleccionada = mesasSeleccionadas.some((m) => m.mesaId === mesa.mesaId);
+    if (yaSeleccionada) {
+      setSeleccionUnionIds(
+        mesasSeleccionadas.filter((m) => m.mesaId !== mesa.mesaId).map((m) => m.mesaId),
+      );
+      return;
+    }
+    if (!esMesaUnible(mesa, mesasSeleccionadas)) return;
+    setSeleccionUnionIds([...mesasSeleccionadas.map((m) => m.mesaId), mesa.mesaId]);
+  };
+
+  const handleUnionSuccess = (_response: unknown, unidas: readonly MesaEnVivoDto[]) => {
+    setToastExito(
+      `Mesas ${formatListaMesas(unidas.map((m) => m.numeroMesa))} unidas exitosamente.`,
+    );
+    salirModoUnion();
+  };
+
+  const handleLiberarSuccess = () => {
+    setToastExito('Unión liberada: las mesas pasaron a Limpieza pendiente.');
+    setUnionALiberar(null);
+  };
+
   const handleSelectMesa = (mesa: MesaEnVivoDto) => {
+    if (modoUnion) {
+      toggleSeleccionUnion(mesa);
+      return;
+    }
     setLocalSelectedMesaId(mesa.mesaId);
     if (mesa.estadoFisico === EstadoMesa.LIBRE) {
       setMesaParaOcupar(mesa);
@@ -187,6 +242,27 @@ export function PlanoSalaView({
           </div>
         ))}
       </section>
+
+      {/* FE-009: activar / cancelar el modo de unión de mesas */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        {modoUnion ? (
+          <p className="text-sm text-muted">
+            Modo unión: selecciona mesas libres de una misma zona.
+          </p>
+        ) : (
+          <span />
+        )}
+        <button
+          type="button"
+          aria-pressed={modoUnion}
+          disabled={isLoading || isError}
+          onClick={() => (modoUnion ? salirModoUnion() : setModoUnion(true))}
+          className="h-control px-4 border border-border bg-surface text-text text-sm font-medium rounded-control hover:bg-canvas inline-flex items-center justify-center gap-2 whitespace-nowrap focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Link2 className="w-4 h-4" aria-hidden="true" />
+          {modoUnion ? 'Cancelar unión' : 'Unir mesas'}
+        </button>
+      </div>
 
       {/* Pestañas de zona */}
       <nav
@@ -292,21 +368,66 @@ export function PlanoSalaView({
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {mesasFiltradas.map((mesa) => {
             const mesasUnidas = mesa.unionId ? unionesMap.get(mesa.unionId) : undefined;
+            const seleccionadaParaUnir = mesasSeleccionadas.some((m) => m.mesaId === mesa.mesaId);
 
             return (
               <MesaCard
                 key={mesa.mesaId}
                 mesa={mesa}
-                isSelected={currentSelectedMesaId === mesa.mesaId}
+                isSelected={
+                  modoUnion ? seleccionadaParaUnir : currentSelectedMesaId === mesa.mesaId
+                }
+                disabled={
+                  modoUnion && !seleccionadaParaUnir && !esMesaUnible(mesa, mesasSeleccionadas)
+                }
+                hideActions={modoUnion}
                 onSelect={handleSelectMesa}
                 onAccion={handleAccionMesa}
                 mesasUnidas={mesasUnidas}
                 meseroNombre={meserosCatalogo.find((m) => m.meseroId === mesa.meseroId)?.nombre}
-                acciones={<AccionesMesa mesa={mesa} meserosCatalogo={meserosCatalogo} />}
+                acciones={
+                  <>
+                    <AccionesMesa mesa={mesa} meserosCatalogo={meserosCatalogo} />
+                    {mesa.unionId && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setUnionALiberar({
+                            unionId: mesa.unionId as string,
+                            numerosMesa: mesasUnidas ?? [mesa.numeroMesa],
+                          })
+                        }
+                        className="h-control w-full px-4 border border-border bg-surface text-text text-sm font-medium rounded-control hover:bg-canvas inline-flex items-center justify-center gap-2 whitespace-nowrap focus-visible:ring-2 focus-visible:ring-primary"
+                      >
+                        Liberar unión
+                      </button>
+                    )}
+                  </>
+                }
               />
             );
           })}
         </div>
+      )}
+
+      {/* FE-009: panel inferior de unión con aforo consolidado y mesero responsable */}
+      {modoUnion && (
+        <UnirMesasPanel
+          mesas={mesasSeleccionadas}
+          meserosCatalogo={meserosCatalogo}
+          onCancel={salirModoUnion}
+          onSuccess={handleUnionSuccess}
+        />
+      )}
+
+      {/* FE-009: confirmación para disolver una unión activa */}
+      {unionALiberar && (
+        <LiberarUnionModal
+          unionId={unionALiberar.unionId}
+          numerosMesa={unionALiberar.numerosMesa}
+          onClose={() => setUnionALiberar(null)}
+          onSuccess={handleLiberarSuccess}
+        />
       )}
 
       {/* Modal de Ocupación de Mesa */}
