@@ -205,7 +205,7 @@ salaModule/
 |---|---|---|
 | Local | `docker compose up -d` (Postgres + RabbitMQ) + `pnpm dev` (web :3000, api :3001). | Implementado |
 | CI | GitHub Actions en push/PR a `main` y `develop`, `workflow_dispatch` y cron semanal. | Implementado |
-| Staging / Producción | Imagen Docker por app (`apps/api/Dockerfile`, `apps/web/Dockerfile`) con builds cacheados por Turborepo. | Planificado |
+| Staging / Producción | Imagen Docker por app (`apps/api/Dockerfile`, `apps/web/Dockerfile`) con builds cacheados por Turborepo. | Implementado |
 
 ## 11. Estrategia de pruebas
 
@@ -291,7 +291,7 @@ salaModule/
 | DT-06 | `apps/web/tailwind.config.js` y `App.tsx` no tienen los tokens oficiales de la guía visual (usan colores temporales como `indigo`). | Incumple guía visual v2.0 (RNF-010). |
 | DT-07 | Interfaces históricas de shared usan `snake_case` y la API está definida en `camelCase`. | Mapear o migrar interfaces hacia convención unificada. |
 | DT-08 | Payloads de eventos sin campos explícitos de correlación/evento en AMQP. | Incorporar `x-event-id` y `x-correlation-id` en cabeceras de RabbitMQ. |
-| DT-09 | Faltan Dockerfiles para producción y plantilla `.env.example`. | Despliegue de contenedores incompleto. |
-| DT-10 | `docker-compose.yml` usa credenciales por defecto en texto plano. | Configuración de secretos local no aislada. |
+| DT-09 | *(Resuelta)* Dockerfiles multi-etapa para producción (`apps/api/Dockerfile`, `apps/web/Dockerfile`), `.dockerignore` y plantilla `.env.example`. | Resuelto. |
+| DT-10 | *(Resuelta)* `docker-compose.yml` parametrizado mediante variables de entorno con valores por defecto seguros para desarrollo local. | Resuelto. |
 | DT-11 | *(Resuelta / Descartada)* Referencia a `mockups_sala.html` eliminada; la única fuente de diseño es `guia-visual-componentes.md`. | — |
 | DT-12 | `turbo.json` incluye `.next/**` no utilizado. | Tarea de limpieza menor en caché de Turborepo. |

@@ -1,18 +1,21 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:16-alpine
     container_name: floor_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgrespassword
-      POSTGRES_DB: floor_module_db
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgrespassword}
+      POSTGRES_DB: ${POSTGRES_DB:-floor_module_db}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-floor_module_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - default
       - restaurant-network
@@ -22,13 +25,72 @@ services:
     container_name: floor_rabbitmq
     restart: unless-stopped
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-guest}
     ports:
-      - "5672:5672"   # AMQP protocol
-      - "15672:15672" # RabbitMQ Management Web UI
+      - "${RABBITMQ_PORT:-5672}:5672"     # AMQP protocol
+      - "${RABBITMQ_UI_PORT:-15672}:15672" # RabbitMQ Management Web UI
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - default
+      - restaurant-network
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    image: floor-module-api:latest
+    container_name: floor_api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 8085
+      GLOBAL_PREFIX: ${GLOBAL_PREFIX:-api/v1/floor}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/${POSTGRES_DB:-floor_module_db}?schema=public
+      RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:-guest}:${RABBITMQ_DEFAULT_PASS:-guest}@rabbitmq:5672
+      RABBITMQ_EXCHANGE: ${RABBITMQ_EXCHANGE:-sala.events}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000,http://localhost:3001,http://localhost:5173}
+      JWT_SECRET: ${JWT_SECRET:-fmat-restaurant-auth-secret-key-2026}
+      RESERVA_PROXIMA_VENTANA_MINUTOS: ${RESERVA_PROXIMA_VENTANA_MINUTOS:-15}
+      RESERVA_NO_SHOW_TOLERANCIA_MINUTOS: ${RESERVA_NO_SHOW_TOLERANCIA_MINUTOS:-15}
+    ports:
+      - "${PORT:-8085}:8085"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - default
+      - restaurant-network
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api/v1/floor}
+        VITE_USE_MOCKS: ${VITE_USE_MOCKS:-false}
+        VITE_RESTAURANT_TIME_ZONE: ${VITE_RESTAURANT_TIME_ZONE:-America/Merida}
+        VITE_RESERVA_NO_SHOW_TOLERANCIA_MINUTOS: ${VITE_RESERVA_NO_SHOW_TOLERANCIA_MINUTOS:-15}
+        VITE_WS_URL: ${VITE_WS_URL:-}
+        VITE_DEV_AUTH_TOKEN: ${VITE_DEV_AUTH_TOKEN:-}
+    image: floor-module-web:latest
+    container_name: floor_web
+    restart: unless-stopped
+    environment:
+      API_UPSTREAM: http://api:8085
+    ports:
+      - "${WEB_PORT:-3000}:80"
+    depends_on:
+      api:
+        condition: service_healthy
     networks:
       - default
       - restaurant-network
@@ -41,4 +103,3 @@ networks:
   restaurant-network:
     name: restaurant-network
     external: true
-

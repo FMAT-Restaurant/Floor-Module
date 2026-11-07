@@ -1,0 +1,38 @@
+# Dependencias locales
+node_modules
+**/node_modules
+.pnpm-store
+
+# Salidas de compilación y caché
+dist
+**/dist
+build
+**/build
+.turbo
+**/.turbo
+coverage
+**/coverage
+.nyc_output
+
+# Variables de entorno y secretos
+.env
+**/.env
+.env.*
+**/.env.*
+!.env.example
+!**/.env.example
+
+# Git, CI y documentación no requerida en build
+.git
+.gitignore
+.github
+docs
+agents
+*.md
+
+# Sistema operativo e IDE
+.DS_Store
+**/.DS_Store
+.idea
+.vscode
+*.log
