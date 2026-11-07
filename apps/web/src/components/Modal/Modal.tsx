@@ -79,26 +79,28 @@ export function Modal({ title, description, pending, onClose, children }: ModalP
         aria-describedby={`${id}-description`}
         aria-busy={pending}
         tabIndex={-1}
-        className="bg-surface rounded-card border border-border shadow-lg max-w-md w-full p-6 max-h-[90vh] overflow-y-auto focus:outline-none"
+        className="bg-surface rounded-card border border-border shadow-lg max-w-md w-full max-h-[90vh] flex flex-col overflow-hidden focus:outline-none"
       >
-        <div className="flex items-start justify-between gap-4">
-          <h2 id={`${id}-title`} className="text-lg font-semibold text-ink">
-            {title}
-          </h2>
-          <button
-            type="button"
-            aria-label="Cerrar modal"
-            onClick={onClose}
-            disabled={pending}
-            className="h-control w-10 shrink-0 inline-flex items-center justify-center rounded-control text-muted hover:bg-canvas focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
-          >
-            <X className="w-5 h-5" aria-hidden="true" />
-          </button>
+        <div className="p-6 overflow-y-auto flex-1">
+          <div className="flex items-start justify-between gap-4">
+            <h2 id={`${id}-title`} className="text-lg font-semibold text-ink">
+              {title}
+            </h2>
+            <button
+              type="button"
+              aria-label="Cerrar modal"
+              onClick={onClose}
+              disabled={pending}
+              className="h-control w-10 shrink-0 inline-flex items-center justify-center rounded-control text-muted hover:bg-canvas focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
+            >
+              <X className="w-5 h-5" aria-hidden="true" />
+            </button>
+          </div>
+          <p id={`${id}-description`} className="text-sm text-muted mt-2">
+            {description}
+          </p>
+          {children}
         </div>
-        <p id={`${id}-description`} className="text-sm text-muted mt-2">
-          {description}
-        </p>
-        {children}
       </div>
     </div>,
     document.body,

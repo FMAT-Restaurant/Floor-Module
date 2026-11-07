@@ -14,7 +14,7 @@ import {
 import { CODIGO_ERROR } from '../../common/errors/codigos-error';
 import { DomainException } from '../../common/errors/domain.exception';
 import { traducirErrorPrisma } from '../../common/errors/prisma-error.translator';
-import { Reloj } from '../../common/reloj/reloj';
+import { Reloj, obtenerAhoraRestaurante } from '../../common/reloj/reloj';
 import { OutboxService } from '../../events/outbox.service';
 import { resolverVentanaMinutos } from '../mesas/domain/reserva-proxima';
 import { aMesaDto } from '../mesas/mesa.dto.mapper';
@@ -88,7 +88,7 @@ export class ReservasService {
     const horaFin = calcularHoraFin(datos.horaInicio, datos.duracion);
     const rango = construirTstzRange(datos.fecha, datos.horaInicio, horaFin);
 
-    if (rango.inicio.getTime() <= this.reloj.ahora().getTime()) {
+    if (rango.inicio.getTime() <= obtenerAhoraRestaurante(this.reloj).getTime()) {
       throw new DomainException(
         HttpStatus.BAD_REQUEST,
         CODIGO_ERROR.VALIDACION,
@@ -215,7 +215,10 @@ export class ReservasService {
 
         const reprogramaFechaOHora =
           datos.fecha !== undefined || datos.horaInicio !== undefined || datos.hora !== undefined;
-        if (reprogramaFechaOHora && rango.inicio.getTime() <= this.reloj.ahora().getTime()) {
+        if (
+          reprogramaFechaOHora &&
+          rango.inicio.getTime() <= obtenerAhoraRestaurante(this.reloj).getTime()
+        ) {
           throw new DomainException(
             HttpStatus.BAD_REQUEST,
             CODIGO_ERROR.VALIDACION,
@@ -270,7 +273,7 @@ export class ReservasService {
    * `EVENT_TOPICS.RESERVA_PROXIMA_ALERTA` (`sala.reserva.proxima_alerta`) garantizando idempotencia.
    */
   async procesarAlertasProximas(): Promise<number> {
-    const ahora = this.reloj.ahora();
+    const ahora = obtenerAhoraRestaurante(this.reloj);
     const ventanaMinutos = resolverVentanaMinutos(process.env.RESERVA_PROXIMA_VENTANA_MINUTOS);
     const limite = new Date(ahora.getTime() + ventanaMinutos * MS_POR_MINUTO);
 

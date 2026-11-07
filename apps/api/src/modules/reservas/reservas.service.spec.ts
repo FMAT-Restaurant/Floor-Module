@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { EVENT_TOPICS, EstadoMesa, EstadoReserva } from '@floor/shared';
 import { CODIGO_ERROR } from '../../common/errors/codigos-error';
 import { DomainException } from '../../common/errors/domain.exception';
+import { Reloj } from '../../common/reloj/reloj';
 import type { OutboxService } from '../../events/outbox.service';
 import type { MesaRegistro } from '../mesas/mesa.registro';
 import type { ReservaRegistro } from './reserva.registro';
@@ -131,6 +132,26 @@ describe('ReservasService (BE-007)', () => {
         details: { fecha: '2030-01-15', horaInicio: '12:00' },
       });
       expect(repositorio.actualizar).not.toHaveBeenCalled();
+    });
+
+    it('RN-10: acepta una reserva para las 19:00 del mismo día cuando son las 13:27 en America/Merida (19:27 UTC)', async () => {
+      const relojReal = new Reloj();
+      jest.spyOn(relojReal, 'ahora').mockReturnValue(new Date('2026-11-07T19:27:00.000Z'));
+      const servicioConZona = new ReservasService(repositorio, relojReal);
+
+      repositorio.buscarMesaActiva.mockResolvedValue(mesaMock({ capacidad: 4 }));
+      repositorio.crear.mockResolvedValue(
+        reservaMock({ fecha: '2026-11-07', horaInicio: '19:00', horaFin: '20:30' }),
+      );
+
+      const resultado = await servicioConZona.crear({
+        ...payloadBase,
+        fecha: '2026-11-07',
+        horaInicio: '19:00',
+      });
+
+      expect(resultado.estado).toBe(EstadoReserva.CONFIRMADA);
+      expect(repositorio.crear).toHaveBeenCalledTimes(1);
     });
 
     it('crea la reserva si cantidadPersonas > 0 y <= capacidad de la mesa', async () => {

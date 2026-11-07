@@ -54,7 +54,11 @@ export interface JoinSalaAck {
   salas: SalaTematica[];
 }
 
-const DEFAULT_CORS_ORIGINS = ['http://localhost:3000', 'http://localhost:5173'];
+const DEFAULT_CORS_ORIGINS = [
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://localhost:5173',
+];
 
 /**
  * Resuelve los orígenes permitidos para CORS a partir de `CORS_ORIGIN`.

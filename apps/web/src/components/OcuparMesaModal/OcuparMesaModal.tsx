@@ -1,12 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, AlertTriangle, Clock, Loader2, AlertCircle } from 'lucide-react';
 import {
   EstadoReserva,
   EstadoEspera,
   fixtureMeserosCatalogo,
-  fixtureReservas,
-  fixtureListaEspera,
   type MesaEnVivoDto,
   type MeseroCatalogoItem,
   type ReservaDto,
@@ -15,6 +13,8 @@ import {
   type OcuparMesaResponseDto,
 } from '@floor/shared';
 import { ocuparMesa } from '../../api/services/mesas.service';
+import { getReservas } from '../../api/services/reservas.service';
+import { getListaEspera } from '../../api/services/espera.service';
 import { queryKeys } from '../../api/queryKeys';
 import { isApiError } from '../../api/error';
 import { Modal } from '../Modal';
@@ -36,8 +36,8 @@ export function OcuparMesaModal({
   onClose,
   onSuccess,
   meserosCatalogo = fixtureMeserosCatalogo,
-  reservasCatalogo = fixtureReservas,
-  esperaCatalogo = fixtureListaEspera,
+  reservasCatalogo,
+  esperaCatalogo,
 }: OcuparMesaModalProps): React.JSX.Element | null {
   const queryClient = useQueryClient();
 
@@ -54,17 +54,41 @@ export function OcuparMesaModal({
   const [mostrarReservaProximaBackend, setMostrarReservaProximaBackend] = useState(false);
   const [errorApi, setErrorApi] = useState<string | null>(null);
 
-  // Catálogo filtrado de reservas confirmadas activas
+  const reservasFilters = React.useMemo(
+    () =>
+      mesa
+        ? { mesaId: mesa.mesaId, estado: EstadoReserva.CONFIRMADA }
+        : { estado: EstadoReserva.CONFIRMADA },
+    [mesa],
+  );
+
+  const reservasQuery = useQuery({
+    queryKey: queryKeys.reservas.list(reservasFilters),
+    queryFn: () => getReservas(reservasFilters),
+    enabled: isOpen && Boolean(mesa) && reservasCatalogo === undefined,
+  });
+
+  const esperaQuery = useQuery({
+    queryKey: queryKeys.espera.list(undefined),
+    queryFn: () => getListaEspera(),
+    enabled: isOpen && Boolean(mesa) && esperaCatalogo === undefined,
+  });
+
+  // Catálogo filtrado de reservas confirmadas activas de la mesa seleccionada
   const reservasDisponibles = React.useMemo(() => {
-    return reservasCatalogo.filter((r) => r.estado === EstadoReserva.CONFIRMADA);
-  }, [reservasCatalogo]);
+    const origen = reservasCatalogo ?? reservasQuery.data ?? [];
+    return origen.filter(
+      (r) => r.estado === EstadoReserva.CONFIRMADA && (!mesa || r.mesaId === mesa.mesaId),
+    );
+  }, [reservasCatalogo, reservasQuery.data, mesa]);
 
   // Catálogo filtrado de lista de espera activa (en espera o notificado)
   const esperaDisponible = React.useMemo(() => {
-    return esperaCatalogo.filter(
+    const origen = esperaCatalogo ?? esperaQuery.data ?? [];
+    return origen.filter(
       (e) => e.estado === EstadoEspera.EN_ESPERA || e.estado === EstadoEspera.NOTIFICADO,
     );
-  }, [esperaCatalogo]);
+  }, [esperaCatalogo, esperaQuery.data]);
 
   const ocuparMutation = useMutation({
     mutationFn: (dto: OcuparMesaRequestDto) => {
@@ -73,6 +97,8 @@ export function OcuparMesaModal({
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.mesas.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.reservas.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.espera.all });
       onClose();
       onSuccess?.(data);
     },
@@ -121,7 +147,7 @@ export function OcuparMesaModal({
   const debeMostrarSobrecupo = haySobrecupo || mostrarSobrecupoBackend;
 
   // Detección reactiva de reserva próxima (RN-05)
-  const hayReservaProxima = Boolean(mesa.tieneReservaProxima);
+  const hayReservaProxima = Boolean(mesa.tieneReservaProxima) && !reservaId;
   const debeMostrarReservaProxima = hayReservaProxima || mostrarReservaProximaBackend;
 
   // Si hay sobrecupo o reserva próxima, se requiere confirmación explícita

@@ -12,7 +12,7 @@ import {
   type OcuparMesaResponseDto,
 } from '@floor/shared';
 import { resolverMeseroId } from '../../common/decorators/usuario-actual.decorator';
-import { Reloj } from '../../common/reloj/reloj';
+import { Reloj, obtenerAhoraRestaurante } from '../../common/reloj/reloj';
 import { OutboxService } from '../../events/outbox.service';
 import type { OutboxEventPayloadMap, OutboxRoutingKey } from '../../events/outbox.types';
 import { EsperaService } from '../espera/espera.service';
@@ -102,10 +102,11 @@ export class MesaEstadoService {
       }
 
       const ahora = this.reloj?.ahora() ?? new Date();
+      const ahoraRestaurante = obtenerAhoraRestaurante(this.reloj);
       const conflictoReserva = await this.evaluarReservaProxima(
         repo,
         mesa,
-        ahora,
+        ahoraRestaurante,
         cuerpo.reservaId,
       );
       if (conflictoReserva !== null) {
