@@ -25,18 +25,19 @@ export function getSessionToken(): string | null {
   }
   if (typeof window !== 'undefined') {
     try {
-      return (
+      const storedToken =
         window.sessionStorage?.getItem('auth_token') ||
         window.sessionStorage?.getItem('token') ||
         window.localStorage?.getItem('auth_token') ||
-        window.localStorage?.getItem('token') ||
-        null
-      );
+        window.localStorage?.getItem('token');
+      if (storedToken) {
+        return storedToken;
+      }
     } catch {
-      return null;
+      return import.meta.env.MODE !== 'test' ? import.meta.env.VITE_DEV_AUTH_TOKEN || null : null;
     }
   }
-  return null;
+  return import.meta.env.MODE !== 'test' ? import.meta.env.VITE_DEV_AUTH_TOKEN || null : null;
 }
 
 export function setSessionToken(token: string | null): void {

@@ -10,7 +10,7 @@ import {
 } from '@floor/shared';
 import { CODIGO_ERROR } from '../../common/errors/codigos-error';
 import { DomainException } from '../../common/errors/domain.exception';
-import { Reloj } from '../../common/reloj/reloj';
+import { Reloj, obtenerAhoraRestaurante } from '../../common/reloj/reloj';
 import { tieneReservaProxima, type ReservaAgendada } from './domain/reserva-proxima';
 import { aMesaDto } from './mesa.dto.mapper';
 import type { MesaRegistro, ReservaProximaRegistro } from './mesa.registro';
@@ -46,7 +46,7 @@ export class MesasService {
 
   /** RF-023 · RN-08: todas las mesas activas con su estado en vivo. */
   async listarEnVivo(): Promise<MesaEnVivoDto[]> {
-    const ahora = this.reloj.ahora();
+    const ahora = obtenerAhoraRestaurante(this.reloj);
     const hasta = new Date(ahora.getTime() + this.ventanaMinutos * MS_POR_MINUTO);
     const [mesas, reservas] = await Promise.all([
       this.repositorio.listarEnVivo(),
@@ -107,7 +107,10 @@ export class MesasService {
           motivo: 'MESA_NO_LIBRE',
         });
       }
-      const reservas = await repo.contarReservasConfirmadasFuturas(mesa.id, this.reloj.ahora());
+      const reservas = await repo.contarReservasConfirmadasFuturas(
+        mesa.id,
+        obtenerAhoraRestaurante(this.reloj),
+      );
       if (reservas > 0) {
         throw this.bajaRechazada('La mesa tiene reservas confirmadas pendientes', {
           mesaId: mesa.id,

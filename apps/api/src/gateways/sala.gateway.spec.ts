@@ -166,11 +166,17 @@ describe('SalaWebSocketGateway y utilidades JWT (BE-005)', () => {
     it('resuelve CORS_ORIGIN con valores por defecto, un solo origen o múltiples orígenes', () => {
       expect(resolverCorsOrigin(undefined)).toEqual([
         'http://localhost:3000',
+        'http://localhost:3001',
         'http://localhost:5173',
       ]);
-      expect(resolverCorsOrigin('   ')).toEqual(['http://localhost:3000', 'http://localhost:5173']);
+      expect(resolverCorsOrigin('   ')).toEqual([
+        'http://localhost:3000',
+        'http://localhost:3001',
+        'http://localhost:5173',
+      ]);
       expect(resolverCorsOrigin(' , , ')).toEqual([
         'http://localhost:3000',
+        'http://localhost:3001',
         'http://localhost:5173',
       ]);
       expect(resolverCorsOrigin('https://pos.fmat.mx')).toBe('https://pos.fmat.mx');

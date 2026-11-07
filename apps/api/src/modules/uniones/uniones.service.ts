@@ -10,7 +10,7 @@ import {
   type LiberarUnionResponseDto,
   type UnionDto,
 } from '@floor/shared';
-import { Reloj } from '../../common/reloj/reloj';
+import { Reloj, obtenerAhoraRestaurante } from '../../common/reloj/reloj';
 import { OutboxService } from '../../events/outbox.service';
 import { VENTANA_RESERVA_PROXIMA_MINUTOS } from '../mesas/mesas.tokens';
 import { validarMesasParaUnion, validarSeleccionUnion } from './domain/validar-union';
@@ -81,8 +81,9 @@ export class UnionesService {
       }
 
       const ahora = this.reloj.ahora();
-      const hasta = new Date(ahora.getTime() + this.ventanaMinutos * MS_POR_MINUTO);
-      const reservaProxima = await repo.buscarReservaProxima(mesasIds, ahora, hasta);
+      const ahoraRestaurante = obtenerAhoraRestaurante(this.reloj);
+      const hasta = new Date(ahoraRestaurante.getTime() + this.ventanaMinutos * MS_POR_MINUTO);
+      const reservaProxima = await repo.buscarReservaProxima(mesasIds, ahoraRestaurante, hasta);
       if (reservaProxima && !cuerpo.forzarOcupacion) {
         throw reservaProximaEnUnion(reservaProxima, this.ventanaMinutos);
       }

@@ -332,12 +332,16 @@ describe('OcuparMesaModal Component', () => {
     // Opciones legibles para el host (sin UUIDs crudos)
     expect(screen.getByRole('option', { name: 'Sin reserva vinculada' })).toBeInTheDocument();
     expect(
-      screen.getByRole('option', { name: /Mauricio Díaz · 2 pers\. \(20:00\)/i }),
+      await screen.findByRole('option', { name: /Mauricio Díaz · 2 pers\. \(20:00\)/i }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole('option', { name: 'Sin turno en lista de espera' }),
     ).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /Gabriel Torres · 2 pers\./i })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('option', { name: /Gabriel Torres · 2 pers\./i }),
+    ).toBeInTheDocument();
+    // No muestra reservas de otras mesas (Laura Pérez pertenece a Mesa 2)
+    expect(screen.queryByRole('option', { name: /Laura Pérez/i })).not.toBeInTheDocument();
 
     // 1. Seleccionamos la reserva de Mauricio Díaz (2 personas)
     fireEvent.change(selectReserva, {
@@ -367,6 +371,28 @@ describe('OcuparMesaModal Component', () => {
       esperaId: 'e1000000-0000-4000-8000-000000000001',
     });
     expect(capturedBody).not.toHaveProperty('reservaId');
+  });
+
+  it('no muestra placeholders cuando la mesa no tiene reservas y la lista de espera está vacía', async () => {
+    server.use(
+      http.get('*/sala/reservas', () => HttpResponse.json([])),
+      http.get('*/sala/espera', () => HttpResponse.json([])),
+    );
+
+    renderModal();
+
+    fireEvent.click(screen.getByRole('button', { name: /opciones avanzadas/i }));
+
+    const selectReserva = screen.getByLabelText(/reserva asociada/i);
+    const selectEspera = screen.getByLabelText(/turno en lista de espera/i);
+
+    await waitFor(() => {
+      expect(selectReserva.querySelectorAll('option')).toHaveLength(1);
+      expect(selectEspera.querySelectorAll('option')).toHaveLength(1);
+    });
+
+    expect(screen.queryByRole('option', { name: /Gabriel Torres/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Mauricio Díaz/i })).not.toBeInTheDocument();
   });
 
   it('cierra el modal al presionar Cancelar, el botón X o la tecla Escape', () => {
