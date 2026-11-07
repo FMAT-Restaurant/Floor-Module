@@ -6,9 +6,10 @@ const backendTarget = process.env.VITE_BACKEND_TARGET || 'http://localhost:8085'
 export default defineConfig({
   plugins: [react()],
   server: {
+    host: true,
     port: 3000,
     proxy: {
-      '/sala': {
+      '/sala/': {
         target: backendTarget,
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/sala/, '/api/v1/floor'),
