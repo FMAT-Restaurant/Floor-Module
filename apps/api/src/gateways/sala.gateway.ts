@@ -407,9 +407,7 @@ export class SalaWebSocketGateway
       return false;
     }
 
-    const listaSalas = Array.isArray(salasDestino)
-      ? salasDestino
-      : [salasDestino as SalaTematica];
+    const listaSalas = Array.isArray(salasDestino) ? salasDestino : [salasDestino as SalaTematica];
     return !listaSalas.some((sala) => (rooms.get(sala)?.size ?? 0) > 0);
   }
 }
