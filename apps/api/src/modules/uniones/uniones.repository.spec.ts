@@ -126,6 +126,27 @@ describe('UnionesRepository (BE-009 · RN-12..RN-14)', () => {
         { mesaId: MESA_2, meseroId: MESERO_ID, fechaHoraInicio: AHORA, activo: true },
       ],
     });
+
+    const updateManyEspera = jest.fn().mockResolvedValue({ count: 1 });
+    const findFirstAsignacion = jest.fn().mockResolvedValue({ fechaHoraInicio: AHORA });
+    const repoConEsperaYColision = new UnionesRepository({
+      mesa: { updateMany: updateManyMesa },
+      listaEspera: { updateMany: updateManyEspera },
+      asignacionMesero: {
+        findFirst: findFirstAsignacion,
+        updateMany: updateManyAsignacion,
+        createMany: createManyAsignacion,
+      },
+    } as unknown as PrismaService);
+
+    await repoConEsperaYColision.ocuparMesasEnUnion([MESA_1, MESA_2], UNION_ID, AHORA);
+    expect(updateManyEspera).toHaveBeenCalledTimes(1);
+
+    await repoConEsperaYColision.asignarMesero([MESA_1, MESA_2], MESERO_ID, AHORA);
+    expect(updateManyAsignacion).toHaveBeenLastCalledWith({
+      where: { mesaId: { in: [MESA_1, MESA_2] }, activo: true },
+      data: { activo: false, fechaHoraFin: new Date(AHORA.getTime() + 1) },
+    });
   });
 
   it('bloquearUnion, bloquearMesasDeUnion, liberarMesasDeUnion y disolverUnion operan sobre la unión', async () => {

@@ -186,6 +186,19 @@ describe('MesasService', () => {
 
       expect(repositorio.existeMesaActivaConNumero).not.toHaveBeenCalled();
     });
+
+    it('RN-10: rechaza reducir capacidad por debajo de reservas confirmadas futuras', async () => {
+      repositorio.buscarPorId.mockResolvedValue(mesa({ capacidad: 6 }));
+      repositorio.maxPersonasReservaConfirmadaFutura = jest.fn().mockResolvedValue(5);
+
+      const error = await capturar(servicio.actualizar(MESA_ID, { capacidad: 4 }));
+
+      expect(error.getStatus()).toBe(409);
+      expect(error.getResponse()).toMatchObject({
+        code: CODIGO_ERROR.TRANSICION_INVALIDA,
+      });
+      expect(repositorio.actualizar).not.toHaveBeenCalled();
+    });
   });
 
   describe('RN-18 · darDeBaja', () => {
