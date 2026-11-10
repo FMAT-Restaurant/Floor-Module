@@ -555,6 +555,7 @@ export function ListaEsperaView({
                   name="cantidadPersonas"
                   type="number"
                   min={1}
+                  step={1}
                   value={cantidadPersonas}
                   disabled={crearMutation.isPending}
                   aria-invalid={Boolean(formErrors.cantidadPersonas)}

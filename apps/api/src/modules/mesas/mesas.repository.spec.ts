@@ -355,4 +355,50 @@ describe('MesasRepository.transicionarEstado y ocuparMesa (RN-01, RN-04, RN-06, 
       await repo.reservasConfirmadasEntre(ahora, new Date('2030-01-15T12:30:00.000Z')),
     ).toHaveLength(1);
   });
+
+  it('cubre maxPersonasReservaConfirmadaFutura, reversión de listaEspera en ocuparMesa/darDeBaja y colisión de milisegundos en registrarAsignacionEnOcupacion', async () => {
+    const ahora = new Date('2030-01-15T12:00:00.000Z');
+    const listaEsperaUpdateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const mesaUpdateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const mesaUpdate = jest.fn().mockResolvedValue({});
+    const asignacionFindFirst = jest.fn().mockResolvedValue({
+      id: 'asig-1',
+      fechaHoraInicio: ahora,
+    });
+    const asignacionUpdateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const asignacionCreate = jest.fn().mockResolvedValue({});
+    const $queryRaw = jest
+      .fn()
+      .mockResolvedValueOnce([{ maxPersonas: 6 }])
+      .mockResolvedValueOnce([]);
+
+    const repo = new MesasRepository({
+      mesa: { updateMany: mesaUpdateMany, update: mesaUpdate },
+      listaEspera: { updateMany: listaEsperaUpdateMany },
+      asignacionMesero: {
+        findFirst: asignacionFindFirst,
+        updateMany: asignacionUpdateMany,
+        create: asignacionCreate,
+      },
+      $queryRaw,
+    } as unknown as PrismaService);
+
+    expect(await repo.ocuparMesa(MESA_ID, ahora)).toBe(true);
+    expect(listaEsperaUpdateMany).toHaveBeenCalledTimes(1);
+
+    await repo.darDeBaja(MESA_ID);
+    expect(listaEsperaUpdateMany).toHaveBeenCalledTimes(2);
+
+    await repo.registrarAsignacionEnOcupacion(MESA_ID, MESERO_ID, ahora);
+    expect(asignacionUpdateMany).toHaveBeenCalledWith({
+      where: { mesaId: MESA_ID, activo: true },
+      data: { activo: false, fechaHoraFin: new Date(ahora.getTime() + 1) },
+    });
+
+    expect(await repo.maxPersonasReservaConfirmadaFutura(MESA_ID, ahora)).toBe(6);
+    expect(await repo.maxPersonasReservaConfirmadaFutura(MESA_ID, ahora)).toBe(0);
+
+    const repoSinQueryRaw = new MesasRepository({} as unknown as PrismaService);
+    expect(await repoSinQueryRaw.maxPersonasReservaConfirmadaFutura(MESA_ID, ahora)).toBe(0);
+  });
 });

@@ -57,6 +57,13 @@ describe('traducirErrorPrisma (SPEC §9)', () => {
     expect(traducirErrorPrisma(error)).toBeNull();
   });
 
+  it('P2020 fuera de rango entero → 400 VALIDACION', () => {
+    const error = conocido('P2020', 'Value out of range for the type');
+    const resultado = traducirErrorPrisma(error);
+    expect(resultado?.getStatus()).toBe(400);
+    expect(resultado?.getResponse()).toMatchObject({ code: CODIGO_ERROR.VALIDACION });
+  });
+
   it('no traduce errores que no son de Prisma', () => {
     expect(traducirErrorPrisma(new Error('numero_mesa'))).toBeNull();
     expect(traducirErrorPrisma('texto')).toBeNull();

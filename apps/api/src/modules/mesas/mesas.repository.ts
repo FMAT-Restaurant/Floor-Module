@@ -141,6 +141,18 @@ export class MesasRepository {
           ocupadaDesde,
         },
       });
+      if (count === 1 && typeof this.prisma.listaEspera?.updateMany === 'function') {
+        await this.prisma.listaEspera.updateMany({
+          where: {
+            mesaAsignadaId: mesaId,
+            estado: EstadoEsperaPrisma.Notificado,
+          },
+          data: {
+            estado: EstadoEsperaPrisma.En_espera,
+            mesaAsignadaId: null,
+          },
+        });
+      }
       return count === 1;
     }
 
@@ -336,10 +348,19 @@ export class MesasRepository {
     meseroId: string,
     fechaHoraInicio: Date,
   ): Promise<void> {
+    let instante = fechaHoraInicio;
+    if (typeof this.prisma.asignacionMesero?.findFirst === 'function') {
+      const previa = await this.prisma.asignacionMesero.findFirst({
+        where: { mesaId, activo: true },
+      });
+      if (previa?.fechaHoraInicio && instante.getTime() <= previa.fechaHoraInicio.getTime()) {
+        instante = new Date(previa.fechaHoraInicio.getTime() + 1);
+      }
+    }
     if (typeof this.prisma.asignacionMesero?.updateMany === 'function') {
       await this.prisma.asignacionMesero.updateMany({
         where: { mesaId, activo: true },
-        data: { activo: false, fechaHoraFin: fechaHoraInicio },
+        data: { activo: false, fechaHoraFin: instante },
       });
     }
     if (typeof this.prisma.asignacionMesero?.create === 'function') {
@@ -347,7 +368,7 @@ export class MesasRepository {
         data: {
           mesaId,
           meseroId,
-          fechaHoraInicio,
+          fechaHoraInicio: instante,
           activo: true,
         },
       });
@@ -375,7 +396,33 @@ export class MesasRepository {
   }
 
   async darDeBaja(mesaId: string): Promise<void> {
+    if (typeof this.prisma.listaEspera?.updateMany === 'function') {
+      await this.prisma.listaEspera.updateMany({
+        where: {
+          mesaAsignadaId: mesaId,
+          estado: EstadoEsperaPrisma.Notificado,
+        },
+        data: {
+          estado: EstadoEsperaPrisma.En_espera,
+          mesaAsignadaId: null,
+        },
+      });
+    }
     await this.prisma.mesa.update({ where: { id: mesaId }, data: { activo: false } });
+  }
+
+  /** RN-10: máximo número de personas en reservas Confirmada futuras de una mesa. */
+  async maxPersonasReservaConfirmadaFutura(mesaId: string, ahora: Date): Promise<number> {
+    if (typeof this.prisma.$queryRaw !== 'function') {
+      return 0;
+    }
+    const filas = await this.prisma.$queryRaw<{ maxPersonas: number | null }[]>`
+      SELECT MAX("cantidad_personas")::int AS "maxPersonas"
+      FROM "Reserva"
+      WHERE "id_mesa" = ${mesaId}::uuid
+        AND "estado" = 'Confirmada'::"EstadoReserva"
+        AND upper("rango") > ${ahora.toISOString()}::timestamptz`;
+    return filas[0]?.maxPersonas ?? 0;
   }
 
   /** RN-18: reservas Confirmada que aún no terminan. `rango` es Unsupported, de ahí el SQL. */

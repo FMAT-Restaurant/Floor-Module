@@ -92,6 +92,26 @@ export class MesasService {
       if (datos.numeroMesa !== undefined && datos.numeroMesa !== mesa.numeroMesa) {
         await this.exigirNumeroDisponible(datos.numeroMesa, mesa.id, repo);
       }
+      if (datos.capacidad !== undefined && datos.capacidad < mesa.capacidad) {
+        if (typeof repo.maxPersonasReservaConfirmadaFutura === 'function') {
+          const maxReservado = await repo.maxPersonasReservaConfirmadaFutura(
+            mesa.id,
+            obtenerAhoraRestaurante(this.reloj),
+          );
+          if (datos.capacidad < maxReservado) {
+            throw new DomainException(
+              HttpStatus.CONFLICT,
+              CODIGO_ERROR.TRANSICION_INVALIDA,
+              `No se puede reducir la capacidad a ${datos.capacidad} porque existe una reserva confirmada para ${maxReservado} personas`,
+              {
+                mesaId: mesa.id,
+                capacidadSolicitada: datos.capacidad,
+                maxPersonasReservadas: maxReservado,
+              },
+            );
+          }
+        }
+      }
       return aMesaDto(await repo.actualizar(mesa.id, datos));
     });
   }

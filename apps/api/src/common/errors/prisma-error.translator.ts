@@ -25,6 +25,12 @@ const REGLAS: readonly ReglaTraduccion[] = [
     codigo: CODIGO_ERROR.RESERVA_SOLAPADA,
     mensaje: 'La mesa ya tiene una reserva confirmada que se cruza con ese horario',
   },
+  {
+    restriccion: 'asignacion_mesa_activa_uidx',
+    campoUnico: 'id_mesa',
+    codigo: CODIGO_ERROR.TRANSICION_INVALIDA,
+    mensaje: 'La asignación de mesero de la mesa fue modificada concurrentemente',
+  },
 ];
 
 function esErrorPrisma(
@@ -43,9 +49,16 @@ function coincide(regla: ReglaTraduccion, error: Error): boolean {
   return JSON.stringify(error.meta?.target ?? '').includes(regla.campoUnico);
 }
 
-/** Devuelve el 409 de dominio equivalente, o null si el error no es una restricción conocida. */
+/** Devuelve el 409/400 de dominio equivalente, o null si el error no es una restricción conocida. */
 export function traducirErrorPrisma(error: unknown): DomainException | null {
   if (!esErrorPrisma(error)) return null;
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2020') {
+    return new DomainException(
+      HttpStatus.BAD_REQUEST,
+      CODIGO_ERROR.VALIDACION,
+      'El valor numérico excede el rango permitido',
+    );
+  }
   const regla = REGLAS.find((candidata) => coincide(candidata, error));
   if (!regla) return null;
   return new DomainException(HttpStatus.CONFLICT, regla.codigo, regla.mensaje);

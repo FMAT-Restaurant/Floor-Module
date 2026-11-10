@@ -6,11 +6,16 @@ import type { RequestConIdentidad } from '../guards/identity.guard';
 
 export const CORRELATION_ID_HEADER = 'x-correlation-id';
 
+const PATRON_CORRELATION_ID = /^[\x21-\x7E]{1,128}$/;
+
 export function resolverCorrelationId(headers?: Record<string, unknown>): string {
   const raw = headers?.[CORRELATION_ID_HEADER];
   const candidato = Array.isArray(raw) ? raw[0] : raw;
-  if (typeof candidato === 'string' && candidato.trim().length > 0) {
-    return candidato.trim();
+  if (typeof candidato === 'string') {
+    const limpio = candidato.trim();
+    if (PATRON_CORRELATION_ID.test(limpio)) {
+      return limpio;
+    }
   }
   return randomUUID();
 }

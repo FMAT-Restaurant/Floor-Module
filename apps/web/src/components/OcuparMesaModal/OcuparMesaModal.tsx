@@ -222,11 +222,13 @@ export function OcuparMesaModal({
             name="comensales"
             type="number"
             min={1}
+            step={1}
             value={comensales}
             disabled={ocuparMutation.isPending}
             onChange={(e) => {
               const val = e.target.value;
               setComensales(val === '' ? '' : parseInt(val, 10));
+              setMostrarSobrecupoBackend(false);
             }}
             className={cn(
               'h-10 px-3 rounded-control border border-border focus:ring-2 focus:ring-primary w-full outline-none transition-colors text-ink text-sm disabled:bg-gray-100 disabled:cursor-not-allowed',

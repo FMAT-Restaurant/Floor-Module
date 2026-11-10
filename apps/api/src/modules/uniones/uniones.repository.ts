@@ -114,6 +114,18 @@ export class UnionesRepository {
       },
       data: { estadoFisico: EstadoMesaPrisma.Ocupada, unionMesaId: unionId, ocupadaDesde },
     });
+    if (count === mesasIds.length && typeof this.prisma.listaEspera?.updateMany === 'function') {
+      await this.prisma.listaEspera.updateMany({
+        where: {
+          mesaAsignadaId: { in: [...mesasIds] },
+          estado: 'Notificado',
+        },
+        data: {
+          estado: 'En_espera',
+          mesaAsignadaId: null,
+        },
+      });
+    }
     return count;
   }
 
@@ -123,12 +135,27 @@ export class UnionesRepository {
     meseroId: string,
     fechaHoraInicio: Date,
   ): Promise<void> {
+    let instante = fechaHoraInicio;
+    if (typeof this.prisma.asignacionMesero?.findFirst === 'function') {
+      const previa = await this.prisma.asignacionMesero.findFirst({
+        where: { mesaId: { in: [...mesasIds] }, activo: true },
+        orderBy: { fechaHoraInicio: 'desc' },
+      });
+      if (previa?.fechaHoraInicio && instante.getTime() <= previa.fechaHoraInicio.getTime()) {
+        instante = new Date(previa.fechaHoraInicio.getTime() + 1);
+      }
+    }
     await this.prisma.asignacionMesero.updateMany({
       where: { mesaId: { in: [...mesasIds] }, activo: true },
-      data: { activo: false, fechaHoraFin: fechaHoraInicio },
+      data: { activo: false, fechaHoraFin: instante },
     });
     await this.prisma.asignacionMesero.createMany({
-      data: mesasIds.map((mesaId) => ({ mesaId, meseroId, fechaHoraInicio, activo: true })),
+      data: mesasIds.map((mesaId) => ({
+        mesaId,
+        meseroId,
+        fechaHoraInicio: instante,
+        activo: true,
+      })),
     });
   }
 

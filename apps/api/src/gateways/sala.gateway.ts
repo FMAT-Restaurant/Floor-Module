@@ -303,7 +303,7 @@ export class SalaWebSocketGateway
     const destino = Array.isArray(salas) ? [...salas] : (salas as SalaTematica);
     this.server.to(destino).emit(SALA_WS_EVENTS.MESA_ESTADO_ACTUALIZADO, payload);
 
-    if (this.debeEmitirFallbackGlobal()) {
+    if (this.debeEmitirFallbackGlobal(destino)) {
       this.server.emit(SALA_WS_EVENTS.MESA_ESTADO_ACTUALIZADO, payload);
     }
   }
@@ -322,7 +322,7 @@ export class SalaWebSocketGateway
     const destino = Array.isArray(salas) ? [...salas] : (salas as SalaTematica);
     this.server.to(destino).emit(SALA_WS_EVENTS.RESERVA_PROXIMA_ALERTA, payload);
 
-    if (this.debeEmitirFallbackGlobal()) {
+    if (this.debeEmitirFallbackGlobal(destino)) {
       this.server.emit(SALA_WS_EVENTS.RESERVA_PROXIMA_ALERTA, payload);
     }
   }
@@ -341,7 +341,7 @@ export class SalaWebSocketGateway
     const destino = Array.isArray(salas) ? [...salas] : (salas as SalaTematica);
     this.server.to(destino).emit(SALA_WS_EVENTS.ESPERA_MESA_DISPONIBLE, payload);
 
-    if (this.debeEmitirFallbackGlobal()) {
+    if (this.debeEmitirFallbackGlobal(destino)) {
       this.server.emit(SALA_WS_EVENTS.ESPERA_MESA_DISPONIBLE, payload);
     }
   }
@@ -398,13 +398,16 @@ export class SalaWebSocketGateway
    * permite que clientes suscritos sólo al namespace `/sala` (como `SalaSocketProvider`)
    * reciban la difusión sin romper el aislamiento cuando las salas temáticas están en uso.
    */
-  private debeEmitirFallbackGlobal(): boolean {
+  private debeEmitirFallbackGlobal(
+    salasDestino: SalaTematica | readonly SalaTematica[] = SALAS_TEMATICAS_PERMITIDAS,
+  ): boolean {
     const rooms = (this.server as { adapter?: { rooms?: Map<string, Set<string>> } })?.adapter
       ?.rooms;
     if (!(rooms instanceof Map)) {
       return false;
     }
 
-    return !SALAS_TEMATICAS_PERMITIDAS.some((sala) => (rooms.get(sala)?.size ?? 0) > 0);
+    const listaSalas = Array.isArray(salasDestino) ? salasDestino : [salasDestino as SalaTematica];
+    return !listaSalas.some((sala) => (rooms.get(sala)?.size ?? 0) > 0);
   }
 }
