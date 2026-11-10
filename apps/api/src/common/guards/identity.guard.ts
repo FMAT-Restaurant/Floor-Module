@@ -68,15 +68,23 @@ export class IdentityGuard implements CanActivate {
       lanzarErrorPasswordTemporal();
     }
 
+    const tieneHeaderAuth = leerCabecera(headers, 'authorization') !== undefined;
+    if (tieneHeaderAuth) {
+      const identidadJwt = this.extraerIdentidadDesdeJwt(headers);
+      if (identidadJwt !== null) {
+        request.user = identidadJwt;
+        return true;
+      }
+      throw new DomainException(
+        HttpStatus.UNAUTHORIZED,
+        CODIGO_ERROR.NO_AUTENTICADO,
+        'Credenciales de identidad faltantes o inválidas',
+      );
+    }
+
     const identidadKong = this.extraerIdentidadDesdeKong(headers);
     if (identidadKong !== null) {
       request.user = identidadKong;
-      return true;
-    }
-
-    const identidadJwt = this.extraerIdentidadDesdeJwt(headers);
-    if (identidadJwt !== null) {
-      request.user = identidadJwt;
       return true;
     }
 

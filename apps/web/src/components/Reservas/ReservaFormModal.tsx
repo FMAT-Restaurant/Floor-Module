@@ -113,7 +113,18 @@ export function ReservaFormModal({ reserva, inicial, mesas, onClose, onSuccess }
           if (!mesa) next.mesaId = 'Selecciona una mesa activa.';
           if (mesa && base.cantidadPersonas > mesa.capacidad)
             next.cantidadPersonas = `Esta mesa admite hasta ${mesa.capacidad} personas.`;
-          if (!esInicioReservaFuturo(base.fecha, base.horaInicio))
+          const [hStr, mStr] = (base.horaInicio || '').split(':');
+          const inicioMinutos = (Number(hStr) || 0) * 60 + (Number(mStr) || 0);
+          if (Number.isInteger(base.duracion) && inicioMinutos + base.duracion >= 24 * 60) {
+            next.duracion = 'El horario de fin no puede cruzar la medianoche (23:59).';
+          }
+          const debeValidarInicioFuturo =
+            !reserva || changes.fecha !== undefined || changes.horaInicio !== undefined;
+          if (
+            debeValidarInicioFuturo &&
+            !next.fecha &&
+            !esInicioReservaFuturo(base.fecha, base.horaInicio)
+          )
             next.horaInicio = 'La reserva debe iniciar en una fecha y hora futuras.';
           setErrors(next);
           if (parsed.success && Object.keys(next).length === 0) mutation.mutate(parsed.data);

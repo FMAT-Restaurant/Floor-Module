@@ -1,11 +1,20 @@
 import { z } from 'zod';
 
-export const uuidSchema = z.string().uuid({ message: 'Debe ser un identificador UUID v4 válido' });
+export const UUID_V4_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export const MAX_POSTGRES_INT4 = 2_147_483_647;
+
+export const uuidSchema = z
+  .string()
+  .trim()
+  .regex(UUID_V4_REGEX, { message: 'Debe ser un identificador UUID v4 válido' });
 
 export const positiveIntSchema = z
   .number({ message: 'Debe ser un número' })
   .int({ message: 'Debe ser un número entero' })
-  .min(1, { message: 'Debe ser mayor o igual a 1' });
+  .min(1, { message: 'Debe ser mayor o igual a 1' })
+  .max(MAX_POSTGRES_INT4, { message: `No debe exceder ${MAX_POSTGRES_INT4}` });
 
 export const positiveIntQuerySchema = z.preprocess((val) => {
   if (typeof val === 'string' && val.trim() !== '') {
@@ -43,12 +52,33 @@ export const telefonoSchema = z
   .regex(
     /^[0-9 +()-]{7,20}$/,
     'El teléfono debe tener entre 7 y 20 caracteres y contener solo dígitos y separadores válidos (+, -, (), espacios)',
+  )
+  .refine(
+    (val) => (val.match(/\d/g) ?? []).length >= 7,
+    'El teléfono debe contener al menos 7 dígitos numéricos',
   );
+
+export function esFechaCalendarioValida(valor: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(valor)) return false;
+  const [anioStr, mesStr, diaStr] = valor.split('-');
+  const anio = Number(anioStr);
+  const mes = Number(mesStr);
+  const dia = Number(diaStr);
+  if (anio < 1970 || mes < 1 || mes > 12 || dia < 1 || dia > 31) return false;
+  const fechaUtc = new Date(Date.UTC(anio, mes - 1, dia));
+  return (
+    !Number.isNaN(fechaUtc.getTime()) &&
+    fechaUtc.getUTCFullYear() === anio &&
+    fechaUtc.getUTCMonth() === mes - 1 &&
+    fechaUtc.getUTCDate() === dia
+  );
+}
 
 export const fechaSchema = z
   .string()
   .trim()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, 'La fecha debe tener formato YYYY-MM-DD');
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'La fecha debe tener formato YYYY-MM-DD')
+  .refine(esFechaCalendarioValida, 'La fecha no es una fecha de calendario válida');
 
 export const horaSchema = z
   .string()

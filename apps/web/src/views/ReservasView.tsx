@@ -162,8 +162,8 @@ export function ReservasView({
   });
 
   const reservasQuery = useQuery({
-    queryKey: queryKeys.reservas.list({ fecha: selectedFecha }),
-    queryFn: () => getReservas({ fecha: selectedFecha }),
+    queryKey: queryKeys.reservas.list({ fecha: selectedFecha || undefined }),
+    queryFn: () => getReservas({ fecha: selectedFecha || undefined }),
   });
 
   const mesasQuery = useQuery({
@@ -301,6 +301,13 @@ export function ReservasView({
         }
       }
       setDispErrores(nextErrors);
+      return;
+    }
+
+    if (getHoraEnMinutos(parsed.data.horaInicio) + parsed.data.duracion >= 24 * 60) {
+      setDispErrores({
+        duracion: 'El horario de fin no puede cruzar la medianoche (23:59).',
+      });
       return;
     }
 

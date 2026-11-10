@@ -24,6 +24,26 @@ export function validarFecha(fecha: string): void {
       { errores: [{ campo: 'fecha', mensaje: 'La fecha debe tener formato YYYY-MM-DD' }] },
     );
   }
+  const [anio, mes, dia] = fecha.split('-').map(Number);
+  const fechaUtc = new Date(Date.UTC(anio, mes - 1, dia));
+  if (
+    anio < 1970 ||
+    mes < 1 ||
+    mes > 12 ||
+    dia < 1 ||
+    dia > 31 ||
+    Number.isNaN(fechaUtc.getTime()) ||
+    fechaUtc.getUTCFullYear() !== anio ||
+    fechaUtc.getUTCMonth() !== mes - 1 ||
+    fechaUtc.getUTCDate() !== dia
+  ) {
+    throw new DomainException(
+      HttpStatus.BAD_REQUEST,
+      CODIGO_ERROR.VALIDACION,
+      'La solicitud contiene datos inválidos',
+      { errores: [{ campo: 'fecha', mensaje: 'La fecha no es una fecha de calendario válida' }] },
+    );
+  }
 }
 
 export function horaAMinutos(hora: string): number {

@@ -1,6 +1,7 @@
 import { CanActivate, ExecutionContext, HttpStatus, Injectable, Optional } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { IS_PUBLIC_KEY, ROLES_KEY } from '../auth/auth.decorators';
+import { extraerRolesValidos } from '../auth/jwt-hs256.util';
 import { CODIGO_ERROR } from '../errors/codigos-error';
 import { DomainException } from '../errors/domain.exception';
 import { HEADER_USER_ROLES, type RequestConIdentidad } from './identity.guard';
@@ -16,10 +17,7 @@ function extraerRolesDeRequest(request: RequestConIdentidad | undefined): string
   if (typeof valor !== 'string') {
     return [];
   }
-  return valor
-    .split(',')
-    .map((rol) => rol.trim())
-    .filter((rol) => rol.length > 0);
+  return extraerRolesValidos(valor);
 }
 
 /**

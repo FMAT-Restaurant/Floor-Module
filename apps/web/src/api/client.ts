@@ -109,7 +109,11 @@ function appendQueryParams(
     });
   } else {
     for (const [key, value] of Object.entries(params)) {
-      if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+      if (
+        (typeof value === 'string' && value.length > 0) ||
+        typeof value === 'number' ||
+        typeof value === 'boolean'
+      ) {
         searchParams.append(key, String(value));
       }
     }

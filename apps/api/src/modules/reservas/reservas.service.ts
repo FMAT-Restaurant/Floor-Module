@@ -124,6 +124,9 @@ export class ReservasService {
 
   /** SPEC §5.4: lista reservas con filtros opcionales por fecha, mesaId y estado. */
   async listar(filtro: ListarReservasQueryDto = {}): Promise<ReservaDto[]> {
+    if (filtro.fecha !== undefined) {
+      validarFecha(filtro.fecha);
+    }
     const reservas = await this.repositorio.listar(filtro);
     return reservas.map(aReservaDto);
   }

@@ -28,8 +28,12 @@ describe('rango-reserva (RN-09, RN-10, RN-11)', () => {
     expect(minutosAHora(5)).toBe('00:05');
   });
 
-  it('rechaza formato de fecha u hora inválido con 400 VALIDACION', () => {
+  it('rechaza formato de fecha u hora inválido o fechas de calendario inexistentes con 400 VALIDACION', () => {
     expect(capturar(() => validarFecha('15-01-2030')).getStatus()).toBe(400);
+    expect(capturar(() => validarFecha('2026-13-45')).getStatus()).toBe(400);
+    expect(capturar(() => validarFecha('2026-02-30')).getStatus()).toBe(400);
+    expect(capturar(() => validarFecha('2026-02-29')).getStatus()).toBe(400);
+    expect(capturar(() => validarFecha('2026-04-31')).getStatus()).toBe(400);
     expect(capturar(() => horaAMinutos('25:00')).getResponse()).toMatchObject({
       code: CODIGO_ERROR.VALIDACION,
     });

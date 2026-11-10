@@ -150,12 +150,14 @@ export function PlanoSalaView({
     [mesas, seleccionUnionIds],
   );
 
+  const activeZona = zonas.includes(selectedZona) ? selectedZona : 'Todas';
+
   const mesasFiltradas = useMemo(() => {
-    if (selectedZona === 'Todas') {
+    if (activeZona === 'Todas') {
       return mesas;
     }
-    return mesas.filter((m) => m.zona === selectedZona);
-  }, [mesas, selectedZona]);
+    return mesas.filter((m) => m.zona === activeZona);
+  }, [mesas, activeZona]);
 
   React.useEffect(() => {
     if (!toastExito) return;
