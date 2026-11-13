@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
+import { useSalaAuth } from '../../context/SalaAuthContext';
 
 interface ModalProps {
   readonly title: string;
@@ -11,6 +12,7 @@ interface ModalProps {
 }
 
 export function Modal({ title, description, pending, onClose, children }: ModalProps) {
+  const { theme } = useSalaAuth();
   const id = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
@@ -66,7 +68,8 @@ export function Modal({ title, description, pending, onClose, children }: ModalP
   return createPortal(
     <div
       role="presentation"
-      className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      data-theme={theme}
+      className="sala-module-scope fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
       onClick={(event) => {
         if (event.target === event.currentTarget && !pending) onClose();
       }}

@@ -29,6 +29,8 @@ import {
 import { getMesas } from '../api/services/mesas.service';
 import { queryKeys } from '../api/queryKeys';
 import { isApiError } from '../api/error';
+import { PermisoSala } from '../auth/permissions';
+import { useSalaAuth } from '../context/SalaAuthContext';
 import { useSalaSocket } from '../hooks/useSalaSocket';
 import { formatTiempoOcupada } from '../components/MesaCard/utils';
 import { cn } from '../lib/utils';
@@ -106,6 +108,12 @@ export function ListaEsperaView({
   now: propNow,
   onAsignarMesaDisponible,
 }: ListaEsperaViewProps = {}): React.JSX.Element {
+  const { can } = useSalaAuth();
+  const canViewEspera = can(PermisoSala.WAITLIST_ENTRIES_VIEW);
+  const canViewMesas = can(PermisoSala.TABLES_VIEW);
+  const canCreate = can(PermisoSala.WAITLIST_ENTRIES_CREATE);
+  const canUpdateStatus = can(PermisoSala.WAITLIST_ENTRIES_UPDATE_STATUS);
+
   const id = useId();
   const queryClient = useQueryClient();
   const [ahora, setAhora] = useState<Date>(() => propNow ?? new Date());
@@ -166,17 +174,20 @@ export function ListaEsperaView({
   const esperaQuery = useQuery({
     queryKey: queryKeys.espera.list(estadoParam),
     queryFn: () => getListaEspera(estadoParam ? { estado: estadoParam } : undefined),
+    enabled: canViewEspera,
   });
 
   // Consulta de activos para contadores rápidos superiores
   const activosQuery = useQuery({
     queryKey: queryKeys.espera.list(undefined),
     queryFn: () => getListaEspera(),
+    enabled: canViewEspera,
   });
 
   const mesasQuery = useQuery({
     queryKey: queryKeys.mesas.list(),
     queryFn: () => getMesas(),
+    enabled: canViewMesas,
   });
 
   const mesasMap = useMemo(() => {
@@ -412,16 +423,18 @@ export function ListaEsperaView({
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              data-testid="btn-asignar-mesa-alerta"
-              disabled={estadoMutation.isPending}
-              onClick={handleAsignarDesdeAlerta}
-              className="h-control px-4 bg-primary hover:bg-primary-hover text-white text-sm font-medium rounded-control transition-colors inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-primary"
-            >
-              <UserCheck className="w-4 h-4" aria-hidden="true" />
-              <span>Asignar mesa</span>
-            </button>
+            {canUpdateStatus && (
+              <button
+                type="button"
+                data-testid="btn-asignar-mesa-alerta"
+                disabled={estadoMutation.isPending}
+                onClick={handleAsignarDesdeAlerta}
+                className="h-control px-4 bg-primary hover:bg-primary-hover text-white text-sm font-medium rounded-control transition-colors inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                <UserCheck className="w-4 h-4" aria-hidden="true" />
+                <span>Asignar mesa</span>
+              </button>
+            )}
             <button
               type="button"
               aria-label="Cerrar alerta de mesa disponible"
@@ -465,158 +478,160 @@ export function ListaEsperaView({
       </section>
 
       {/* Formulario rápido para registrar cliente en lista de espera (RF-021) */}
-      <section
-        aria-label="Registrar cliente en lista de espera"
-        data-testid="formulario-registro-espera"
-        className="bg-surface border border-border rounded-card p-4 sm:p-6 shadow-subtle space-y-4"
-      >
-        <div>
-          <h3 className="text-lg font-bold text-ink">Agregar cliente a la fila presencial</h3>
-          <p className="text-sm text-muted mt-0.5">
-            Registra comensales sin reserva para asignarles mesa en orden de llegada (FIFO).
-          </p>
-        </div>
-
-        {formApiError && (
-          <div
-            role="alert"
-            data-testid="espera-form-api-error"
-            className="bg-red-50 border border-red-200 text-red-800 rounded-control p-3 text-sm flex items-center gap-2"
-          >
-            <AlertCircle className="w-4 h-4 text-red-600 shrink-0" aria-hidden="true" />
-            <span>{formApiError}</span>
+      {canCreate && (
+        <section
+          aria-label="Registrar cliente en lista de espera"
+          data-testid="formulario-registro-espera"
+          className="bg-surface border border-border rounded-card p-4 sm:p-6 shadow-subtle space-y-4"
+        >
+          <div>
+            <h3 className="text-lg font-bold text-ink">Agregar cliente a la fila presencial</h3>
+            <p className="text-sm text-muted mt-0.5">
+              Registra comensales sin reserva para asignarles mesa en orden de llegada (FIFO).
+            </p>
           </div>
-        )}
 
-        <form onSubmit={handleSubmitRegistro} noValidate className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {/* Nombre del cliente */}
-            <div className="flex flex-col gap-1">
-              <label htmlFor={`${id}-nombre`} className="text-sm font-medium text-ink">
-                Nombre del cliente <span className="text-red-500">*</span>
-              </label>
-              <input
-                id={`${id}-nombre`}
-                name="nombreCliente"
-                type="text"
-                value={nombreCliente}
-                disabled={crearMutation.isPending}
-                aria-invalid={Boolean(formErrors.nombreCliente)}
-                onChange={(e) => setNombreCliente(e.target.value)}
-                placeholder="Ej. Gabriel Torres"
-                className={cn(
-                  'h-control px-3 bg-surface border border-border rounded-control text-sm text-text placeholder:text-muted focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary disabled:bg-gray-100 disabled:cursor-not-allowed',
-                  formErrors.nombreCliente &&
-                    'border-red-500 focus:border-red-500 focus:ring-red-500',
-                )}
-              />
-              {formErrors.nombreCliente && (
-                <span role="alert" className="text-xs text-red-600">
-                  {formErrors.nombreCliente}
-                </span>
-              )}
+          {formApiError && (
+            <div
+              role="alert"
+              data-testid="espera-form-api-error"
+              className="bg-red-50 border border-red-200 text-red-800 rounded-control p-3 text-sm flex items-center gap-2"
+            >
+              <AlertCircle className="w-4 h-4 text-red-600 shrink-0" aria-hidden="true" />
+              <span>{formApiError}</span>
             </div>
+          )}
 
-            {/* Teléfono de contacto */}
-            <div className="flex flex-col gap-1">
-              <label htmlFor={`${id}-telefono`} className="text-sm font-medium text-ink">
-                Teléfono de contacto <span className="text-red-500">*</span>
-              </label>
-              <input
-                id={`${id}-telefono`}
-                name="telefonoContacto"
-                type="tel"
-                value={telefonoContacto}
-                disabled={crearMutation.isPending}
-                aria-invalid={Boolean(formErrors.telefonoContacto)}
-                onChange={(e) => setTelefonoContacto(e.target.value)}
-                placeholder="Ej. +52 999 111 2233"
-                className={cn(
-                  'h-control px-3 bg-surface border border-border rounded-control text-sm text-text placeholder:text-muted focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary disabled:bg-gray-100 disabled:cursor-not-allowed',
-                  formErrors.telefonoContacto &&
-                    'border-red-500 focus:border-red-500 focus:ring-red-500',
-                )}
-              />
-              {formErrors.telefonoContacto && (
-                <span role="alert" className="text-xs text-red-600">
-                  {formErrors.telefonoContacto}
-                </span>
-              )}
-            </div>
-
-            {/* Cantidad de personas */}
-            <div className="flex flex-col gap-1">
-              <label htmlFor={`${id}-personas`} className="text-sm font-medium text-ink">
-                Cantidad de personas <span className="text-red-500">*</span>
-              </label>
-              <div className="flex items-center gap-1.5">
+          <form onSubmit={handleSubmitRegistro} noValidate className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* Nombre del cliente */}
+              <div className="flex flex-col gap-1">
+                <label htmlFor={`${id}-nombre`} className="text-sm font-medium text-ink">
+                  Nombre del cliente <span className="text-red-500">*</span>
+                </label>
                 <input
-                  id={`${id}-personas`}
-                  name="cantidadPersonas"
-                  type="number"
-                  min={1}
-                  step={1}
-                  value={cantidadPersonas}
+                  id={`${id}-nombre`}
+                  name="nombreCliente"
+                  type="text"
+                  value={nombreCliente}
                   disabled={crearMutation.isPending}
-                  aria-invalid={Boolean(formErrors.cantidadPersonas)}
-                  onChange={(e) => setCantidadPersonas(e.target.value)}
+                  aria-invalid={Boolean(formErrors.nombreCliente)}
+                  onChange={(e) => setNombreCliente(e.target.value)}
+                  placeholder="Ej. Gabriel Torres"
                   className={cn(
-                    'h-control px-3 w-full bg-surface border border-border rounded-control text-sm text-text focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary disabled:bg-gray-100 disabled:cursor-not-allowed',
-                    formErrors.cantidadPersonas &&
+                    'h-control px-3 bg-surface border border-border rounded-control text-sm text-text placeholder:text-muted focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary disabled:bg-gray-100 disabled:cursor-not-allowed',
+                    formErrors.nombreCliente &&
                       'border-red-500 focus:border-red-500 focus:ring-red-500',
                   )}
                 />
-                <div className="flex items-center gap-1 shrink-0">
-                  {AFOROS_RAPIDOS.map((num) => {
-                    const isSelected = Number(cantidadPersonas) === num;
-                    return (
-                      <button
-                        key={num}
-                        type="button"
-                        disabled={crearMutation.isPending}
-                        onClick={() => setCantidadPersonas(String(num))}
-                        className={cn(
-                          'h-control px-2.5 text-xs font-medium rounded-control border transition-colors',
-                          isSelected
-                            ? 'bg-primary-soft border-primary text-primary font-semibold'
-                            : 'bg-surface border-border text-muted hover:text-ink',
-                        )}
-                      >
-                        {num}p
-                      </button>
-                    );
-                  })}
-                </div>
+                {formErrors.nombreCliente && (
+                  <span role="alert" className="text-xs text-red-600">
+                    {formErrors.nombreCliente}
+                  </span>
+                )}
               </div>
-              {formErrors.cantidadPersonas && (
-                <span role="alert" className="text-xs text-red-600">
-                  {formErrors.cantidadPersonas}
-                </span>
-              )}
-            </div>
-          </div>
 
-          <div className="flex justify-end">
-            <button
-              type="submit"
-              disabled={crearMutation.isPending}
-              className="h-control px-4 bg-primary hover:bg-primary-hover text-white text-sm font-medium rounded-control transition-colors inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-primary"
-            >
-              {crearMutation.isPending ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-                  <span>Registrando...</span>
-                </>
-              ) : (
-                <>
-                  <Plus className="w-4 h-4" aria-hidden="true" />
-                  <span>Registrar en espera</span>
-                </>
-              )}
-            </button>
-          </div>
-        </form>
-      </section>
+              {/* Teléfono de contacto */}
+              <div className="flex flex-col gap-1">
+                <label htmlFor={`${id}-telefono`} className="text-sm font-medium text-ink">
+                  Teléfono de contacto <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id={`${id}-telefono`}
+                  name="telefonoContacto"
+                  type="tel"
+                  value={telefonoContacto}
+                  disabled={crearMutation.isPending}
+                  aria-invalid={Boolean(formErrors.telefonoContacto)}
+                  onChange={(e) => setTelefonoContacto(e.target.value)}
+                  placeholder="Ej. +52 999 111 2233"
+                  className={cn(
+                    'h-control px-3 bg-surface border border-border rounded-control text-sm text-text placeholder:text-muted focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary disabled:bg-gray-100 disabled:cursor-not-allowed',
+                    formErrors.telefonoContacto &&
+                      'border-red-500 focus:border-red-500 focus:ring-red-500',
+                  )}
+                />
+                {formErrors.telefonoContacto && (
+                  <span role="alert" className="text-xs text-red-600">
+                    {formErrors.telefonoContacto}
+                  </span>
+                )}
+              </div>
+
+              {/* Cantidad de personas */}
+              <div className="flex flex-col gap-1">
+                <label htmlFor={`${id}-personas`} className="text-sm font-medium text-ink">
+                  Cantidad de personas <span className="text-red-500">*</span>
+                </label>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    id={`${id}-personas`}
+                    name="cantidadPersonas"
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={cantidadPersonas}
+                    disabled={crearMutation.isPending}
+                    aria-invalid={Boolean(formErrors.cantidadPersonas)}
+                    onChange={(e) => setCantidadPersonas(e.target.value)}
+                    className={cn(
+                      'h-control px-3 w-full bg-surface border border-border rounded-control text-sm text-text focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary disabled:bg-gray-100 disabled:cursor-not-allowed',
+                      formErrors.cantidadPersonas &&
+                        'border-red-500 focus:border-red-500 focus:ring-red-500',
+                    )}
+                  />
+                  <div className="flex items-center gap-1 shrink-0">
+                    {AFOROS_RAPIDOS.map((num) => {
+                      const isSelected = Number(cantidadPersonas) === num;
+                      return (
+                        <button
+                          key={num}
+                          type="button"
+                          disabled={crearMutation.isPending}
+                          onClick={() => setCantidadPersonas(String(num))}
+                          className={cn(
+                            'h-control px-2.5 text-xs font-medium rounded-control border transition-colors',
+                            isSelected
+                              ? 'bg-primary-soft border-primary text-primary font-semibold'
+                              : 'bg-surface border-border text-muted hover:text-ink',
+                          )}
+                        >
+                          {num}p
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                {formErrors.cantidadPersonas && (
+                  <span role="alert" className="text-xs text-red-600">
+                    {formErrors.cantidadPersonas}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                disabled={crearMutation.isPending}
+                className="h-control px-4 bg-primary hover:bg-primary-hover text-white text-sm font-medium rounded-control transition-colors inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                {crearMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                    <span>Registrando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-4 h-4" aria-hidden="true" />
+                    <span>Registrar en espera</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        </section>
+      )}
 
       {/* Panel de monitoreo de la fila presencial (FIFO) */}
       <div className="bg-surface border border-border rounded-card p-4 sm:p-6 shadow-subtle space-y-4">
@@ -727,7 +742,7 @@ export function ListaEsperaView({
                 onClick={() => {
                   void esperaQuery.refetch();
                 }}
-                className="h-control px-4 bg-primary hover:bg-primary-hover text-surface text-sm font-medium rounded-control transition-colors inline-flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                className="h-control px-4 bg-primary hover:bg-primary-hover text-white text-sm font-medium rounded-control transition-colors inline-flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-primary/20"
               >
                 <RotateCcw className="w-4 h-4" aria-hidden="true" />
                 <span>Reintentar</span>
@@ -851,7 +866,7 @@ export function ListaEsperaView({
                       </td>
 
                       <td className="block md:table-cell md:px-4 md:py-3.5">
-                        {esActivo ? (
+                        {esActivo && canUpdateStatus ? (
                           <div className="flex flex-wrap md:justify-end gap-2">
                             <button
                               type="button"

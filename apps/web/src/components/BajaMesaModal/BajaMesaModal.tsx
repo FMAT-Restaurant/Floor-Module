@@ -5,6 +5,8 @@ import { EstadoMesa, EstadoReserva, type MesaDto, type MesaEnVivoDto } from '@fl
 import { eliminarMesa, getMesa } from '../../api/services/mesas.service';
 import { getReservas } from '../../api/services/reservas.service';
 import { queryKeys } from '../../api/queryKeys';
+import { PermisoSala } from '../../auth/permissions';
+import { useSalaAuth } from '../../context/SalaAuthContext';
 import { isApiError } from '../../api/error';
 import { esReservaConfirmadaFutura } from '../../lib/reservas';
 import { Modal } from '../Modal';
@@ -16,6 +18,8 @@ interface BajaMesaModalProps {
 }
 
 export function BajaMesaModal({ mesa, onClose, onSuccess }: BajaMesaModalProps) {
+  const { can } = useSalaAuth();
+  const canViewReservas = can(PermisoSala.RESERVATIONS_VIEW);
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const mesaQuery = useQuery({
@@ -27,13 +31,14 @@ export function BajaMesaModal({ mesa, onClose, onSuccess }: BajaMesaModalProps) 
   const reservasQuery = useQuery({
     queryKey: queryKeys.reservas.list(filters),
     queryFn: () => getReservas(filters),
+    enabled: canViewReservas,
     staleTime: 0,
   });
   const actual = mesaQuery.data ?? mesa;
   const reservas =
     reservasQuery.data?.filter((reserva) => esReservaConfirmadaFutura(reserva)) ?? [];
-  const checking = mesaQuery.isFetching || reservasQuery.isFetching;
-  const checkFailed = mesaQuery.isError || reservasQuery.isError;
+  const checking = mesaQuery.isFetching || (canViewReservas && reservasQuery.isFetching);
+  const checkFailed = mesaQuery.isError || (canViewReservas && reservasQuery.isError);
   const bloqueada =
     !actual.activo ||
     actual.estadoFisico !== EstadoMesa.LIBRE ||
@@ -89,7 +94,9 @@ export function BajaMesaModal({ mesa, onClose, onSuccess }: BajaMesaModalProps) 
               disabled={checking || mutation.isPending}
               onClick={() => {
                 void mesaQuery.refetch();
-                void reservasQuery.refetch();
+                if (canViewReservas) {
+                  void reservasQuery.refetch();
+                }
               }}
               className="h-control mt-2 px-3 border border-red-200 rounded-control font-medium disabled:opacity-50"
             >
@@ -155,7 +162,7 @@ export function BajaMesaModal({ mesa, onClose, onSuccess }: BajaMesaModalProps) 
               checkFailed ||
               bloqueada ||
               !mesaQuery.data ||
-              !reservasQuery.data
+              (canViewReservas && !reservasQuery.data)
             }
             onClick={() => {
               if (mutation.isPending || checking || checkFailed || bloqueada) return;

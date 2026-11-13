@@ -9,20 +9,20 @@ import {
   type MesaParamDto,
 } from '@floor/shared';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
-import { ROLES_GESTION_SALA, ROLES_OPERACION_SALA, Roles } from '../../common/auth/auth.decorators';
+import { PermisoSala, RequirePermissions } from '../../common/auth/auth.decorators';
 import { AsignacionesService } from './asignaciones.service';
 
 const validarParams = new ZodValidationPipe(mesaParamSchema);
 const validarAsignacion = new ZodValidationPipe(asignarMeseroSchema);
 const validarFiltro = new ZodValidationPipe(listarAsignacionesQuerySchema);
 
-/** SPEC §5.3 · base path `/sala` aplicado globalmente en app.setup.ts. */
+/** SPEC §5.3 · base path `/api/v1/floor` aplicado globalmente en app.setup.ts. */
 @Controller()
 export class AsignacionesController {
   constructor(private readonly servicio: AsignacionesService) {}
 
   @Put('mesas/:mesaId/mesero')
-  @Roles(...ROLES_GESTION_SALA)
+  @RequirePermissions(PermisoSala.TABLES_ASSIGN_WAITER)
   asignar(
     @Param(validarParams) { mesaId }: MesaParamDto,
     @Body(validarAsignacion) cuerpo: AsignarMeseroRequestDto,
@@ -31,7 +31,7 @@ export class AsignacionesController {
   }
 
   @Get('asignaciones')
-  @Roles(...ROLES_OPERACION_SALA)
+  @RequirePermissions(PermisoSala.ASSIGNMENTS_VIEW)
   listar(@Query(validarFiltro) query: ListarAsignacionesQueryDto): Promise<AsignacionDto[]> {
     return this.servicio.listar(query);
   }

@@ -10,6 +10,8 @@ import {
 } from '@floor/shared';
 import { getMesasEnVivo } from '../api/services/mesas.service';
 import { queryKeys } from '../api/queryKeys';
+import { PermisoSala } from '../auth/permissions';
+import { useSalaAuth } from '../context/SalaAuthContext';
 import { MesaCard } from '../components/MesaCard';
 import { OcuparMesaModal } from '../components/OcuparMesaModal';
 import { AccionesMesa } from '../components/AccionesMesa';
@@ -39,6 +41,13 @@ export function PlanoSalaView({
   selectedMesaId,
   meserosCatalogo = fixtureMeserosCatalogo,
 }: PlanoSalaViewProps): React.JSX.Element {
+  const { can } = useSalaAuth();
+  const canViewTables = can(PermisoSala.TABLES_VIEW);
+  const canOccupy = can(PermisoSala.TABLES_OCCUPY);
+  const canViewUnions = can(PermisoSala.TABLE_UNIONS_VIEW);
+  const canCreateUnion = can(PermisoSala.TABLE_UNIONS_CREATE);
+  const canReleaseUnion = can(PermisoSala.TABLE_UNIONS_RELEASE);
+
   const [selectedZona, setSelectedZona] = useState<string>('Todas');
   const [localSelectedMesaId, setLocalSelectedMesaId] = useState<string | null>(null);
   const [mesaParaOcupar, setMesaParaOcupar] = useState<MesaEnVivoDto | null>(null);
@@ -62,6 +71,7 @@ export function PlanoSalaView({
   } = useQuery({
     queryKey: queryKeys.mesas.enVivo(),
     queryFn: () => getMesasEnVivo(),
+    enabled: canViewTables,
   });
 
   const metricas = useMemo(() => {
@@ -209,7 +219,7 @@ export function PlanoSalaView({
   };
 
   const handleAccionMesa = (mesa: MesaEnVivoDto) => {
-    if (mesa.estadoFisico === EstadoMesa.LIBRE) {
+    if (mesa.estadoFisico === EstadoMesa.LIBRE && canOccupy) {
       setMesaParaOcupar(mesa);
     }
     onAccionMesa?.(mesa);
@@ -254,16 +264,18 @@ export function PlanoSalaView({
         ) : (
           <span />
         )}
-        <button
-          type="button"
-          aria-pressed={modoUnion}
-          disabled={isLoading || isError}
-          onClick={() => (modoUnion ? salirModoUnion() : setModoUnion(true))}
-          className="h-control px-4 border border-border bg-surface text-text text-sm font-medium rounded-control hover:bg-canvas inline-flex items-center justify-center gap-2 whitespace-nowrap focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <Link2 className="w-4 h-4" aria-hidden="true" />
-          {modoUnion ? 'Cancelar unión' : 'Unir mesas'}
-        </button>
+        {canCreateUnion && (
+          <button
+            type="button"
+            aria-pressed={modoUnion}
+            disabled={isLoading || isError}
+            onClick={() => (modoUnion ? salirModoUnion() : setModoUnion(true))}
+            className="h-control px-4 border border-border bg-surface text-text text-sm font-medium rounded-control hover:bg-canvas inline-flex items-center justify-center gap-2 whitespace-nowrap focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Link2 className="w-4 h-4" aria-hidden="true" />
+            {modoUnion ? 'Cancelar unión' : 'Unir mesas'}
+          </button>
+        )}
       </div>
 
       {/* Pestañas de zona */}
@@ -341,7 +353,7 @@ export function PlanoSalaView({
             <button
               type="button"
               onClick={() => refetch()}
-              className="h-control px-4 bg-primary hover:bg-primary-hover text-surface text-sm font-medium rounded-control transition-colors inline-flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-primary/20"
+              className="h-control px-4 bg-primary hover:bg-primary-hover text-white text-sm font-medium rounded-control transition-colors inline-flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-primary/20"
             >
               <RotateCcw className="w-4 h-4" aria-hidden="true" />
               Reintentar
@@ -385,12 +397,13 @@ export function PlanoSalaView({
                 hideActions={modoUnion}
                 onSelect={handleSelectMesa}
                 onAccion={handleAccionMesa}
-                mesasUnidas={mesasUnidas}
+                mesasUnidas={canViewUnions ? mesasUnidas : undefined}
+                showUnionBadge={canViewUnions}
                 meseroNombre={meserosCatalogo.find((m) => m.meseroId === mesa.meseroId)?.nombre}
                 acciones={
                   <>
                     <AccionesMesa mesa={mesa} meserosCatalogo={meserosCatalogo} />
-                    {mesa.unionId && (
+                    {mesa.unionId && canReleaseUnion && (
                       <button
                         type="button"
                         onClick={() =>
@@ -413,7 +426,7 @@ export function PlanoSalaView({
       )}
 
       {/* FE-009: panel inferior de unión con aforo consolidado y mesero responsable */}
-      {modoUnion && (
+      {modoUnion && canCreateUnion && (
         <UnirMesasPanel
           mesas={mesasSeleccionadas}
           meserosCatalogo={meserosCatalogo}
@@ -423,7 +436,7 @@ export function PlanoSalaView({
       )}
 
       {/* FE-009: confirmación para disolver una unión activa */}
-      {unionALiberar && (
+      {unionALiberar && canReleaseUnion && (
         <LiberarUnionModal
           unionId={unionALiberar.unionId}
           numerosMesa={unionALiberar.numerosMesa}
@@ -435,7 +448,7 @@ export function PlanoSalaView({
       {/* Modal de Ocupación de Mesa */}
       <OcuparMesaModal
         mesa={mesaParaOcupar}
-        isOpen={Boolean(mesaParaOcupar)}
+        isOpen={Boolean(mesaParaOcupar) && canOccupy}
         onClose={() => setMesaParaOcupar(null)}
         onSuccess={handleOcupacionSuccess}
         meserosCatalogo={meserosCatalogo}

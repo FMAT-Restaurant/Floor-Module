@@ -176,19 +176,20 @@ salaModule/
 - **Outbox:** tabla `outbox_evento(id uuid, routing_key text, payload jsonb, correlation_id text, creado_en timestamptz, publicado_en timestamptz null, intentos int)`.
 - **Configuración:** variables de entorno (`DATABASE_URL`, `RABBITMQ_URL`, `PORT`, `RESERVA_PROXIMA_VENTANA_MINUTOS`, `CORS_ORIGIN`).
 
-## 8. Autenticación y autorización
+## 8. Autenticación, autorización e integración Shell / Kong
 
-- **Autenticación perimetral:** El API Gateway (Kong) valida la firma (`HS256`, emisor canónico `iss: "urn:fmat:restaurant:auth"`) y expiración del JWT emitido por Auth-Backend, y aplica sanitización perimetral anti-spoofing (`REQ-AUTH-019`), eliminando cabeceras `X-User-*` provenientes de clientes externos.
-- **Identidad propagada a Sala:** Kong inyecta hacia la red interna las siguientes cabeceras verificadas:
-  - `X-User-Id`: UUID v4 del usuario (claim `sub`).
-  - `X-Staff-Id`: Código de nómina del empleado con máscara fija `XYYYYYY` (ej: `"M000104"`) o `"ADMIN"` / `"ADM000001"`.
-  - `X-User-Roles`: Lista de roles asignados separada por comas (ej: `"MESERO"` o `"HOST,MESERO"`).
-  - `X-User-Permissions`: Lista de permisos específicos asignados separada por comas.
-  - `X-Password-Temporary`: Filtrado perimetralmente por Kong. Si el claim `mustChangePassword` es `true`, Kong rechaza la petición con HTTP 403 `PASSWORD_CHANGE_REQUIRED` antes de alcanzar Sala, garantizando que ninguna solicitud con contraseña provisional llegue al backend.
-- **Desarrollo local independiente:** En ausencia del Gateway perimetral, `@floor/api` implementa un `JwtAuthGuard` local que valida el encabezado `Authorization: Bearer <token>` mediante la clave simétrica compartida `JWT_SECRET=fmat-restaurant-auth-secret-key-2026` (`HS256`, con emisor `urn:fmat:restaurant:auth`).
-- **Autorización:** `RolesGuard` aplica la matriz de permisos de SPEC §1.1 contrastando con los roles canónicos (`ADMINISTRADOR`, `HOST`, `MESERO`, `ROL_CAPITAN`).
-- **WebSocket:** El cliente envía el token en el handshake dentro del objeto `auth: { token: 'Bearer <token>' }` (o query param fallback `?token=...`). El gateway valida el token y vincula la identidad y roles al socket.
-- **Sincronización asíncrona de personal (RabbitMQ):** Auth publica eventos en el topic exchange `restaurant.staff.events` con routing keys `staff.*` (`staff.created`, `staff.roles.updated`, `staff.status.changed`, `staff.deleted`) con payload `{ userId, staffId, firstName, lastName, roles, isActive }`, evitando llamadas síncronas HTTP entre servicios.
+- **Autenticación perimetral (Kong API Gateway):** Kong expone las rutas REST en `http://localhost:8000/api/v1/floor` (`strip_path: false`) apuntando al alias de red interno `floor-backend:8085` en `restaurant-network`. Valida firma `HS256` (`iss: "urn:fmat:restaurant:auth"`), expiración del JWT emitido por `Auth-Backend`, aplica sanitización anti-spoofing (`REQ-AUTH-019`) eliminando cabeceras `X-User-*` externas e inyecta cabeceras verificadas hacia Sala (reenviando además `Authorization`):
+  - `X-User-Id`: UUID del usuario (claim `sub`).
+  - `X-Staff-Id`: Identificador de nómina (`string | number`).
+  - `X-User-Roles`: Lista de roles separada por comas (`ADMINISTRADOR`, `ADMIN`, `HOST`, `MESERO`, `CAPITAN`, etc.).
+  - `X-User-Permissions`: Lista de permisos específicos separada por comas (19 permisos `sala:*` o wildcard `'*'`).
+  - `X-Password-Temporary`: Filtrado perimetralmente por Kong (`mustChangePassword`).
+- **Identidad y precedencia en `@floor/api` (`IdentityGuard`):** Cuando llegan cabeceras confiables propagadas por Kong (`X-User-Id` y al menos un rol o permiso en `X-User-Roles` / `X-User-Permissions`), éstas tienen precedencia sobre `Authorization` para aprovechar el perímetro incluso cuando Kong reenvía el Bearer JWT. En desarrollo independiente sin Kong, valida `Authorization: Bearer <token>` HS256 usando `JWT_SECRET`.
+- **Autorización PBAC (`PermissionsGuard`):** Sustituye al antiguo `RolesGuard`. Evalúa el decorador `@RequirePermissions(PermisoSala.*)` contra las 19 claves `sala:*` (`SPEC §1.1`), concediendo bypass únicamente a `userType === 'ADMIN'`, roles `ADMINISTRADOR`/`ADMIN` o permiso wildcard `'*'`.
+- **Microfrontend federado (`salaApp`):** `@floor/web` se expone mediante `@originjs/vite-plugin-federation` en el puerto `:5174` (`/assets/remoteEntry.js`, `exposes: { './App': './src/App.tsx' }`, `shared: ['react', 'react-dom']`), servido en contenedores por Nginx `:80 -> 5174` con CORS habilitado y `try_files $uri =404` en `/assets/`.
+- **Integración con `Auth-Frontend` Shell (`:3000`):** `App.tsx` acepta `{ token, currentUser, theme }`, lee la sesión compartida `localStorage` `'fmat_restaurant_auth_session'` como respaldo, sincroniza variables CSS `[data-theme="dark"]` sin modificar `body` global, reutiliza o provee `QueryClientProvider` y `SalaSocketProvider` de forma autónoma y aplica `SalaAuthContext` para ocultar pestañas y acciones no autorizadas.
+- **Conectividad REST y WebSocket:** En ejecución federada/producción, si `VITE_API_BASE_URL` está vacío se autodetecta `<protocol>//<window.location.hostname>:8000/api/v1/floor` (Kong API Gateway, fallback `http://localhost:8000/api/v1/floor`), y los WebSockets de Socket.IO namespace `/sala` apuntan directo al backend usando `VITE_WS_URL` o autodetectando el host remoto desde `import.meta.url` en puerto `:8085` (fallback `http://localhost:8085/sala`), ya que Kong no expone ruta `/socket.io`. El cliente envía `auth: { token: 'Bearer <token>' }` en el handshake.
+- **Sincronización asíncrona de personal (RabbitMQ):** Auth publica eventos en el topic exchange `restaurant.staff.events` con routing keys `staff.*` (`staff.created`, `staff.roles.updated`, `staff.status.changed`, `staff.deleted`).
 
 ## 9. Observabilidad
 
@@ -203,7 +204,7 @@ salaModule/
 
 | Entorno | Descripción | Estado |
 |---|---|---|
-| Local | `docker compose up -d` (Postgres + RabbitMQ) + `pnpm dev` (web :3000, api :3001). | Implementado |
+| Local | `docker compose up -d` (Postgres + RabbitMQ) + `pnpm dev` (web :5174, api :8085). | Implementado |
 | CI | GitHub Actions en push/PR a `main` y `develop`, `workflow_dispatch` y cron semanal. | Implementado |
 | Staging / Producción | Imagen Docker por app (`apps/api/Dockerfile`, `apps/web/Dockerfile`) con builds cacheados por Turborepo. | Implementado |
 

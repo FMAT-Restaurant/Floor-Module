@@ -27,6 +27,11 @@ let outbox: OutboxService;
 
 type Json = Record<string, unknown>;
 
+const PERMISOS_POR_ROL: Record<string, string> = {
+  HOST: 'sala:tables:view,sala:tables:update_status,sala:table_unions:view,sala:table_unions:create,sala:table_unions:release',
+  MESERO: 'sala:tables:view,sala:tables:update_status,sala:table_unions:view',
+};
+
 async function peticion<T = Json>(
   metodo: string,
   ruta: string,
@@ -40,6 +45,7 @@ async function peticion<T = Json>(
       'x-user-id': USUARIO,
       'x-staff-id': 'HOST-01',
       'x-user-roles': roles,
+      'x-user-permissions': PERMISOS_POR_ROL[roles] ?? '',
     },
     body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo),
   });

@@ -1,4 +1,12 @@
-export { EstadoMesa, EstadoReserva, EstadoEspera, EstadoUnion, RoleEnum } from './enums/index.js';
+export {
+  EstadoMesa,
+  EstadoReserva,
+  EstadoEspera,
+  EstadoUnion,
+  RoleEnum,
+  PermisoSala,
+  SALA_PERMISSIONS,
+} from './enums/index.js';
 
 export { EVENT_TOPICS } from './events/index.js';
 

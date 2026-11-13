@@ -43,6 +43,8 @@ async function peticion<T = Json>(
       'content-type': 'application/json',
       'x-user-id': HOST_USER_ID,
       'x-user-roles': 'HOST',
+      'x-user-permissions':
+        'sala:reservations:view,sala:reservations:create,sala:reservations:update,sala:reservations:cancel,sala:reservations:mark_no_show',
       ...headersExtra,
     },
     body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo),
@@ -489,6 +491,7 @@ describe('API /api/v1/floor/reservas (BE-007 · BE-008)', () => {
       const headersMesero = {
         'x-user-id': MESERO_USER_ID,
         'x-user-roles': 'MESERO',
+        'x-user-permissions': 'sala:reservations:view',
       };
 
       const consultaMesero = await peticion<Json[]>('GET', RUTA, undefined, headersMesero);
@@ -548,6 +551,7 @@ describe('API /api/v1/floor/reservas (BE-007 · BE-008)', () => {
         {
           'x-user-id': MESERO_USER_ID,
           'x-user-roles': 'MESERO',
+          'x-user-permissions': 'sala:reservations:view',
         },
       );
       expect(intentoMesero.status).toBe(403);

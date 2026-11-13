@@ -44,18 +44,34 @@ Satisface: RNF-007, RNF-008, RNF-009, RNF-011
 | 413 | Payload excede 64 KB. |
 | 500 | Error no controlado (`ERROR_INTERNO`), sin filtrar detalles internos de persistencia. |
 
-### 1.1 Matriz de autorización (Roles canónicos de Auth)
+### 1.1 Matriz de autorización (PBAC con 19 permisos canónicos `sala:*`)
 
-| Acción | `ADMINISTRADOR` | `HOST` | `MESERO` | `ROL_CAPITAN` |
-|---|:---:|:---:|:---:|:---:|
-| CRUD mesas | ✔ | | | |
-| Consultar plano / reservas / espera | ✔ | ✔ | ✔ | ✔ |
-| Ocupar mesa (normal o forzada) | ✔ | ✔ | ✔ | ✔ |
-| Cambiar estado físico (`Ocupada` ↔ `Limpieza` ↔ `Libre`) | ✔ | ✔ | ✔ | ✔ |
-| Asignar / reasignar mesero | ✔ | ✔ | | ✔ |
-| Reservas (crear/reprogramar/cancelar/no-show) | ✔ | ✔ | | ✔ |
-| Uniones (crear y liberar) | ✔ | ✔ | | ✔ |
-| Lista de espera | ✔ | ✔ | | ✔ |
+El microservicio aplica **PBAC estricto** mediante `@RequirePermissions(PermisoSala.*)` en `@floor/api` (`PermissionsGuard`) y gating por permiso en `@floor/web` (`SalaAuthContext`), usando los 19 permisos definidos en [docs/permisos-auth-sala.md](../docs/permisos-auth-sala.md) y `@floor/shared`:
+
+| Permiso (`PermisoSala`) | Capacidad |
+|---|---|
+| `sala:tables:view` | Consultar catálogo de mesas (`GET /mesas`, `/mesas/:id`, `/mesas/estado-en-vivo`, pestaña Plano) |
+| `sala:tables:create` | Crear mesa (`POST /mesas`, pestaña Configuración de mesas) |
+| `sala:tables:update` | Editar mesa (`PATCH /mesas/:id`, pestaña Configuración de mesas) |
+| `sala:tables:delete` | Dar de baja mesa (`DELETE /mesas/:id`, pestaña Configuración de mesas) |
+| `sala:tables:occupy` | Ocupar mesa libre normal o forzada (`POST /mesas/:id/ocupar`) |
+| `sala:tables:update_status` | Registrar salida o marcar limpia (`PATCH /mesas/:id/estado`) |
+| `sala:tables:assign_waiter` | Asignar o reasignar mesero (`POST /mesas/:id/asignacion-mesero`) |
+| `sala:assignments:view` | Consultar asignación e historial de meseros (`GET /mesas/:id/asignacion*`) |
+| `sala:table_unions:view` | Ver uniones activas y badges de unión (`GET /uniones*`) |
+| `sala:table_unions:create` | Crear unión de mesas (`POST /uniones`) |
+| `sala:table_unions:release` | Liberar unión activa (`POST /uniones/:id/liberar`) |
+| `sala:reservations:view` | Consultar reservas y disponibilidad (`GET /reservas*`, pestaña Reservas) |
+| `sala:reservations:create` | Crear reserva (`POST /reservas`) |
+| `sala:reservations:update` | Reprogramar reserva (`PATCH /reservas/:id`) |
+| `sala:reservations:cancel` | Cancelar reserva (`POST /reservas/:id/cancelar`) |
+| `sala:reservations:mark_no_show` | Registrar No-show (`POST /reservas/:id/no-show`) |
+| `sala:waitlist_entries:view` | Consultar lista de espera (`GET /espera`, pestaña Lista de espera) |
+| `sala:waitlist_entries:create` | Registrar cliente en lista de espera (`POST /espera`) |
+| `sala:waitlist_entries:update_status` | Sentar, regresar a espera o cancelar turno (`PATCH /espera/:id/estado`) |
+
+- **Bypass administrativo:** Conceden acceso total `userType === 'ADMIN'`, roles `ADMINISTRADOR` / `ADMIN` y el permiso wildcard `'*'`.
+- **Rol operativo predeterminado:** `HOST` recibe los permisos operativos asignados desde `Auth-Backend`; cualquier ausencia de permiso específico oculta la acción en UI y responde HTTP 403 en API.
 
 ---
 

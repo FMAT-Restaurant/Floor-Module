@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { EstadoEspera, EstadoMesa, EstadoReserva, EstadoUnion, RoleEnum } from '../enums/index.js';
+import {
+  EstadoEspera,
+  EstadoMesa,
+  EstadoReserva,
+  EstadoUnion,
+  PermisoSala,
+  RoleEnum,
+  SALA_PERMISSIONS,
+} from '../enums/index.js';
 import {
   actualizarEstadoEsperaSchema,
   actualizarEstadoMesaSchema,
@@ -28,6 +36,7 @@ import {
   ocuparMesaResponseSchema,
   ocuparMesaSchema,
   openApiSpec,
+  permissionSchema,
   reservaDtoSchema,
   roleSchema,
   unionDtoSchema,
@@ -521,10 +530,13 @@ describe('Zod Validation Schemas (SH-002)', () => {
     it('debe validar roles canónicos definidos en RoleEnum', () => {
       const rolesCanonicos = [
         RoleEnum.ADMINISTRADOR,
+        RoleEnum.ADMIN,
         RoleEnum.HOST,
+        RoleEnum.GESTOR_MENU,
         RoleEnum.ALMACENISTA,
         RoleEnum.MESERO,
         RoleEnum.CHEF_MASTER,
+        RoleEnum.CAJERO,
       ];
       for (const rol of rolesCanonicos) {
         expect(roleSchema.safeParse(rol).success).toBe(true);
@@ -576,13 +588,29 @@ describe('Zod Validation Schemas (SH-002)', () => {
       );
     });
 
-    it('debe permitir omitir x-password-temporary en gatewayAuthHeadersSchema', () => {
+    it('debe permitir omitir x-password-temporary y x-user-permissions en gatewayAuthHeadersSchema', () => {
       const headers = {
         'x-user-id': MOCK_UUID_1,
         'x-staff-id': 'M000104',
         'x-user-roles': 'MESERO',
       };
       expect(gatewayAuthHeadersSchema.safeParse(headers).success).toBe(true);
+      expect(
+        gatewayAuthHeadersSchema.safeParse({
+          ...headers,
+          'x-user-permissions': 'sala:tables:view,sala:reservations:view',
+        }).success,
+      ).toBe(true);
+    });
+
+    it('debe validar permissionSchema y el catálogo oficial de 19 permisos de sala con dos puntos', () => {
+      expect(SALA_PERMISSIONS).toHaveLength(19);
+      for (const permiso of Object.values(PermisoSala)) {
+        expect(permissionSchema.safeParse(permiso).success).toBe(true);
+      }
+      expect(permissionSchema.safeParse('*').success).toBe(true);
+      expect(permissionSchema.safeParse('sala.tables.view').success).toBe(false);
+      expect(permissionSchema.safeParse('').success).toBe(false);
     });
 
     it('debe rechazar gatewayAuthHeadersSchema con x-user-id no UUID', () => {

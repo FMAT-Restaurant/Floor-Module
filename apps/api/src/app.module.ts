@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { IdentityGuard } from './common/guards/identity.guard';
-import { RolesGuard } from './common/guards/roles.guard';
+import { PermissionsGuard } from './common/guards/permissions.guard';
 import { CorrelationInterceptor } from './common/interceptors/correlation.interceptor';
 import { EventsModule } from './events/events.module';
 import { GatewaysModule } from './gateways/gateways.module';
@@ -37,7 +37,7 @@ import { PrismaModule } from './prisma/prisma.module';
     },
     {
       provide: APP_GUARD,
-      useClass: RolesGuard,
+      useClass: PermissionsGuard,
     },
   ],
 })

@@ -24,10 +24,16 @@ const USUARIO_HOST = 'e1000000-0000-4000-8000-000000000001';
 const AHORA_FIJO = new Date('2030-01-15T12:00:00.000Z');
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+const PERMISOS_POR_ROL: Record<string, string> = {
+  HOST: 'sala:tables:view,sala:tables:update_status,sala:waitlist_entries:view,sala:waitlist_entries:create,sala:waitlist_entries:update_status',
+  MESERO: 'sala:tables:view,sala:tables:update_status,sala:waitlist_entries:view',
+};
+
 const TOKEN_RECEPCION = firmarTokenJwtHs256({
   sub: USUARIO_HOST,
   staffId: 'H000101',
   roles: ['HOST'],
+  permissions: PERMISOS_POR_ROL.HOST.split(','),
   iss: 'urn:fmat:restaurant:auth',
 });
 
@@ -51,6 +57,7 @@ async function peticion<T = Json>(
       'x-user-id': USUARIO_HOST,
       'x-staff-id': 'H000101',
       'x-user-roles': roles,
+      'x-user-permissions': PERMISOS_POR_ROL[roles] ?? '',
     },
     body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo),
   });

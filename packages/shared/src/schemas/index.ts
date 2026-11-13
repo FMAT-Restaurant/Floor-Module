@@ -102,7 +102,9 @@ export { healthDtoSchema, type HealthDto } from './operacion.js';
 
 export {
   gatewayAuthHeadersSchema,
+  permissionSchema,
   roleSchema,
   type GatewayAuthHeadersDto,
+  type PermissionDto,
   type RoleDto,
 } from './auth.js';

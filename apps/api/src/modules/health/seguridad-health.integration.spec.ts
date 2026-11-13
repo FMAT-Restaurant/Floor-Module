@@ -35,7 +35,7 @@ const ASIGNACION_MOCK: AsignacionDto = {
   activo: true,
 };
 
-describe('Integración HTTP BE-011: IdentityGuard, RolesGuard, CorrelationInterceptor y /health', () => {
+describe('Integración HTTP BE-011: IdentityGuard, PermissionsGuard, CorrelationInterceptor y /health', () => {
   let app: NestExpressApplication;
   let baseUrl: string;
 
@@ -162,9 +162,9 @@ describe('Integración HTTP BE-011: IdentityGuard, RolesGuard, CorrelationInterc
       const res = await fetch(`${baseUrl}/${PREFIJO_GLOBAL}/mesas`, {
         headers: {
           'X-User-Id': MESERO_ID,
-          'X-Staff-Id': 'M000104',
-          'X-User-Roles': 'MESERO',
-          'X-User-Permissions': 'mesas:read',
+          'X-Staff-Id': 'H000104',
+          'X-User-Roles': 'HOST',
+          'X-User-Permissions': 'sala:tables:view',
           'X-Password-Temporary': 'false',
         },
       });
@@ -212,8 +212,9 @@ describe('Integración HTTP BE-011: IdentityGuard, RolesGuard, CorrelationInterc
     it('autentica por fallback local usando JWT HS256 con iss urn:fmat:restaurant:auth', async () => {
       const token = firmarJwtHs256({
         sub: MESERO_ID,
-        staffId: 'M000104',
-        roles: ['MESERO'],
+        staffId: 'H000104',
+        roles: ['HOST'],
+        permissions: ['sala:tables:view'],
         iss: JWT_ISSUER,
       });
 
@@ -243,14 +244,18 @@ describe('Integración HTTP BE-011: IdentityGuard, RolesGuard, CorrelationInterc
     });
   });
 
-  describe('RolesGuard y Matriz de Autorización (SPEC §1.1)', () => {
-    it('rechaza con 403 NO_AUTORIZADO cuando MESERO intenta crear, editar o dar de baja una mesa', async () => {
+  describe('PermissionsGuard y Catálogo PBAC estricto', () => {
+    it('rechaza con 403 NO_AUTORIZADO cuando un usuario sin permisos de sala (ej. MESERO) intenta acceder o mutar mesas', async () => {
       const headersMesero = {
         'content-type': 'application/json',
         'X-User-Id': MESERO_ID,
         'X-User-Roles': 'MESERO',
+        'X-User-Permissions': 'orders:orders:view,orders:orders:create',
       };
 
+      const resGet = await fetch(`${baseUrl}/${PREFIJO_GLOBAL}/mesas`, {
+        headers: headersMesero,
+      });
       const resPost = await fetch(`${baseUrl}/${PREFIJO_GLOBAL}/mesas`, {
         method: 'POST',
         headers: headersMesero,
@@ -266,6 +271,7 @@ describe('Integración HTTP BE-011: IdentityGuard, RolesGuard, CorrelationInterc
         headers: headersMesero,
       });
 
+      expect(resGet.status).toBe(403);
       expect(resPost.status).toBe(403);
       expect(await resPost.json()).toMatchObject({
         statusCode: 403,
@@ -275,12 +281,13 @@ describe('Integración HTTP BE-011: IdentityGuard, RolesGuard, CorrelationInterc
       expect(resDelete.status).toBe(403);
     });
 
-    it('permite a ADMINISTRADOR ejecutar el CRUD de mesas (POST, PATCH, DELETE)', async () => {
+    it('permite a ADMINISTRADOR ejecutar el CRUD de mesas (POST, PATCH, DELETE) mediante bypass total', async () => {
       const headersAdmin = {
         'content-type': 'application/json',
         'X-User-Id': ADMIN_ID,
         'X-Staff-Id': 'ADMIN',
         'X-User-Roles': 'ADMINISTRADOR',
+        'X-User-Permissions': '*',
       };
 
       const resPost = await fetch(`${baseUrl}/${PREFIJO_GLOBAL}/mesas`, {
@@ -303,49 +310,67 @@ describe('Integración HTTP BE-011: IdentityGuard, RolesGuard, CorrelationInterc
       expect(resDelete.status).toBe(204);
     });
 
-    it('rechaza con 403 a MESERO en PUT /mesas/:mesaId/mesero pero autoriza a HOST y ROL_CAPITAN', async () => {
+    it('permite bypass por wildcard * aunque el rol no sea ADMINISTRADOR', async () => {
+      const resWildcard = await fetch(`${baseUrl}/${PREFIJO_GLOBAL}/mesas`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'X-User-Id': ADMIN_ID,
+          'X-User-Roles': 'HOST',
+          'X-User-Permissions': '*',
+        },
+        body: JSON.stringify({ numeroMesa: 12, capacidad: 4, zona: 'Interior' }),
+      });
+
+      expect(resWildcard.status).toBe(201);
+    });
+
+    it('autoriza PUT /mesas/:mesaId/mesero solo si posee sala:tables:assign_waiter', async () => {
       const body = JSON.stringify({ meseroId: MESERO_ID });
 
-      const resMesero = await fetch(`${baseUrl}/${PREFIJO_GLOBAL}/mesas/${MESA_ID}/mesero`, {
+      const resSinPermiso = await fetch(`${baseUrl}/${PREFIJO_GLOBAL}/mesas/${MESA_ID}/mesero`, {
         method: 'PUT',
         headers: {
           'content-type': 'application/json',
           'X-User-Id': MESERO_ID,
           'X-User-Roles': 'MESERO',
+          'X-User-Permissions': 'sala:tables:view',
         },
         body,
       });
-      const resCapitan = await fetch(`${baseUrl}/${PREFIJO_GLOBAL}/mesas/${MESA_ID}/mesero`, {
+      const resConPermiso = await fetch(`${baseUrl}/${PREFIJO_GLOBAL}/mesas/${MESA_ID}/mesero`, {
         method: 'PUT',
         headers: {
           'content-type': 'application/json',
           'X-User-Id': ADMIN_ID,
-          'X-User-Roles': 'ROL_CAPITAN',
+          'X-User-Roles': 'HOST',
+          'X-User-Permissions': 'sala:tables:assign_waiter',
         },
         body,
       });
 
-      expect(resMesero.status).toBe(403);
-      expect(resCapitan.status).toBe(200);
+      expect(resSinPermiso.status).toBe(403);
+      expect(resConPermiso.status).toBe(200);
     });
 
-    it('permite a MESERO consultar mesa por ID, cambiar estado físico y listar asignaciones', async () => {
-      const headersMesero = {
+    it('autoriza consulta de mesa, cambio de estado y listado de asignaciones con los permisos PBAC exactos', async () => {
+      const headersHost = {
         'content-type': 'application/json',
         'X-User-Id': MESERO_ID,
-        'X-User-Roles': 'MESERO',
+        'X-User-Roles': 'HOST',
+        'X-User-Permissions': 'sala:tables:view,sala:tables:update_status,sala:assignments:view',
       };
 
       const resDetalle = await fetch(`${baseUrl}/${PREFIJO_GLOBAL}/mesas/${MESA_ID}`, {
-        headers: headersMesero,
+        headers: headersHost,
       });
       const resEstado = await fetch(`${baseUrl}/${PREFIJO_GLOBAL}/mesas/${MESA_ID}/estado`, {
         method: 'PATCH',
-        headers: headersMesero,
+        headers: headersHost,
         body: JSON.stringify({ estado: 'Libre' }),
       });
       const resAsignaciones = await fetch(`${baseUrl}/${PREFIJO_GLOBAL}/asignaciones`, {
-        headers: headersMesero,
+        headers: headersHost,
       });
 
       expect(resDetalle.status).toBe(200);

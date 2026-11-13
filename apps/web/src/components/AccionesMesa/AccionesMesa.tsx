@@ -5,6 +5,8 @@ import { EstadoMesa, type MesaEnVivoDto, type MeseroCatalogoItem } from '@floor/
 import { asignarMesero, cambiarEstadoMesa } from '../../api/services/mesas.service';
 import { queryKeys } from '../../api/queryKeys';
 import { isApiError } from '../../api/error';
+import { PermisoSala } from '../../auth/permissions';
+import { useSalaAuth } from '../../context/SalaAuthContext';
 import { Modal } from '../Modal';
 
 export interface AccionesMesaProps {
@@ -24,6 +26,9 @@ function mutationError(error: unknown, action: string): string {
 }
 
 export function AccionesMesa({ mesa, meserosCatalogo }: AccionesMesaProps) {
+  const { can } = useSalaAuth();
+  const canUpdateStatus = can(PermisoSala.TABLES_UPDATE_STATUS);
+  const canAssignWaiter = can(PermisoSala.TABLES_ASSIGN_WAITER);
   const queryClient = useQueryClient();
   const selectId = useId();
   const [modal, setModal] = useState<'salida' | 'mesero' | null>(null);
@@ -68,10 +73,11 @@ export function AccionesMesa({ mesa, meserosCatalogo }: AccionesMesaProps) {
   });
 
   const pending = estadoMutation.isPending || meseroMutation.isPending;
-  const puedeCambiarEstado = mesa.activo && !mesa.unionId;
+  const puedeCambiarEstado = canUpdateStatus && mesa.activo && !mesa.unionId;
   const esSalida = mesa.estadoFisico === EstadoMesa.OCUPADA;
   const esLimpieza = mesa.estadoFisico === EstadoMesa.LIMPIEZA_PENDIENTE;
   const puedeAsignar =
+    canAssignWaiter &&
     mesa.activo &&
     meserosActivos.some((m) => m.meseroId === meseroId) &&
     meseroId !== mesa.meseroId;
@@ -88,7 +94,7 @@ export function AccionesMesa({ mesa, meserosCatalogo }: AccionesMesaProps) {
 
   return (
     <div className="space-y-2" aria-label={`Acciones de Mesa ${mesa.numeroMesa}`}>
-      {(esSalida || esLimpieza) && (
+      {canUpdateStatus && (esSalida || esLimpieza) && (
         <button
           type="button"
           className={`${primaryClass} w-full`}
@@ -118,20 +124,22 @@ export function AccionesMesa({ mesa, meserosCatalogo }: AccionesMesaProps) {
           Libera la unión para registrar la salida de estas mesas.
         </p>
       )}
-      <button
-        type="button"
-        className={`${secondaryClass} w-full`}
-        disabled={pending || !mesa.activo}
-        onClick={(event) => {
-          event.currentTarget.focus();
-          clearFeedback();
-          setMeseroId(mesa.meseroId ?? '');
-          setModal('mesero');
-        }}
-      >
-        <UserRound className="w-4 h-4" aria-hidden="true" />
-        {mesa.meseroId ? 'Reasignar mesero' : 'Asignar mesero'}
-      </button>
+      {canAssignWaiter && (
+        <button
+          type="button"
+          className={`${secondaryClass} w-full`}
+          disabled={pending || !mesa.activo}
+          onClick={(event) => {
+            event.currentTarget.focus();
+            clearFeedback();
+            setMeseroId(mesa.meseroId ?? '');
+            setModal('mesero');
+          }}
+        >
+          <UserRound className="w-4 h-4" aria-hidden="true" />
+          {mesa.meseroId ? 'Reasignar mesero' : 'Asignar mesero'}
+        </button>
+      )}
       {notice && (
         <p role="status" className="text-xs text-emerald-800">
           {notice}

@@ -16,7 +16,7 @@ import {
   type MesaParamDto,
   type OcuparMesaResponseDto,
 } from '@floor/shared';
-import { Roles, ROLES_OPERACION_SALA } from '../../common/auth/auth.decorators';
+import { PermisoSala, RequirePermissions } from '../../common/auth/auth.decorators';
 import { resolverMeseroId, UsuarioActual } from '../../common/decorators/usuario-actual.decorator';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { OcuparMesaDto, ocuparMesaDtoSchema } from './dto/ocupar-mesa.dto';
@@ -27,7 +27,7 @@ export class MesaEstadoController {
   constructor(private readonly servicio: MesaEstadoService) {}
 
   @Patch(':mesaId/estado')
-  @Roles(...ROLES_OPERACION_SALA)
+  @RequirePermissions(PermisoSala.TABLES_UPDATE_STATUS)
   @HttpCode(HttpStatus.OK)
   actualizarEstado(
     @Param(new ZodValidationPipe(mesaParamSchema)) params: MesaParamDto,
@@ -37,7 +37,7 @@ export class MesaEstadoController {
   }
 
   @Post(':mesaId/ocupar')
-  @Roles(...ROLES_OPERACION_SALA)
+  @RequirePermissions(PermisoSala.TABLES_OCCUPY)
   @HttpCode(HttpStatus.OK)
   ocupar(
     @Param(new ZodValidationPipe(mesaParamSchema)) params: MesaParamDto | string,

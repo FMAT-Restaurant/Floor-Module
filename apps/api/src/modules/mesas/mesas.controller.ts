@@ -23,7 +23,7 @@ import {
   type MesaParamDto,
 } from '@floor/shared';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
-import { ROL, ROLES_OPERACION_SALA, Roles } from '../../common/auth/auth.decorators';
+import { PermisoSala, RequirePermissions } from '../../common/auth/auth.decorators';
 import { MesasService } from './mesas.service';
 
 const validarQuery = new ZodValidationPipe(listarMesasQuerySchema);
@@ -31,38 +31,38 @@ const validarParams = new ZodValidationPipe(mesaParamSchema);
 const validarCreacion = new ZodValidationPipe(crearMesaSchema);
 const validarActualizacion = new ZodValidationPipe(actualizarMesaSchema);
 
-/** SPEC §5.1 · base path `/sala` aplicado globalmente en app.setup.ts. */
+/** SPEC §5.1 · base path `/api/v1/floor` aplicado globalmente en app.setup.ts. */
 @Controller('mesas')
 export class MesasController {
   constructor(private readonly servicio: MesasService) {}
 
   @Get()
-  @Roles(...ROLES_OPERACION_SALA)
+  @RequirePermissions(PermisoSala.TABLES_VIEW)
   listar(@Query(validarQuery) query: ListarMesasQueryDto): Promise<MesaDto[]> {
     return this.servicio.listar(query);
   }
 
   // Debe declararse antes de ':mesaId', o "estado-en-vivo" se interpretaría como un id.
   @Get('estado-en-vivo')
-  @Roles(...ROLES_OPERACION_SALA)
+  @RequirePermissions(PermisoSala.TABLES_VIEW)
   listarEnVivo(): Promise<MesaEnVivoDto[]> {
     return this.servicio.listarEnVivo();
   }
 
   @Get(':mesaId')
-  @Roles(...ROLES_OPERACION_SALA)
+  @RequirePermissions(PermisoSala.TABLES_VIEW)
   obtener(@Param(validarParams) { mesaId }: MesaParamDto): Promise<MesaDto> {
     return this.servicio.obtener(mesaId);
   }
 
   @Post()
-  @Roles(ROL.ADMINISTRADOR)
+  @RequirePermissions(PermisoSala.TABLES_CREATE)
   crear(@Body(validarCreacion) cuerpo: CrearMesaRequestDto): Promise<MesaDto> {
     return this.servicio.crear(cuerpo);
   }
 
   @Patch(':mesaId')
-  @Roles(ROL.ADMINISTRADOR)
+  @RequirePermissions(PermisoSala.TABLES_UPDATE)
   actualizar(
     @Param(validarParams) { mesaId }: MesaParamDto,
     @Body(validarActualizacion) cuerpo: ActualizarMesaRequestDto,
@@ -71,7 +71,7 @@ export class MesasController {
   }
 
   @Delete(':mesaId')
-  @Roles(ROL.ADMINISTRADOR)
+  @RequirePermissions(PermisoSala.TABLES_DELETE)
   @HttpCode(HttpStatus.NO_CONTENT)
   darDeBaja(@Param(validarParams) { mesaId }: MesaParamDto): Promise<void> {
     return this.servicio.darDeBaja(mesaId);

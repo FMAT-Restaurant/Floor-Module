@@ -440,4 +440,31 @@ describe('API Client Unit Tests & Error Handling', () => {
       expect(retryFn(2, error500)).toBe(false);
     });
   });
+
+  describe('Shell Session Integration', () => {
+    it('reads accessToken from localStorage fmat_restaurant_auth_session', async () => {
+      window.localStorage.setItem(
+        'fmat_restaurant_auth_session',
+        JSON.stringify({
+          accessToken: 'shell-jwt-token-999',
+          user: { id: 'u1', roles: ['HOST'], permissions: ['sala:tables:view'] },
+        }),
+      );
+
+      let receivedAuthHeader: string | null = null;
+      server.use(
+        http.get('*/test-shell-auth', ({ request }) => {
+          receivedAuthHeader = request.headers.get('authorization');
+          return HttpResponse.json({ ok: true });
+        }),
+      );
+
+      try {
+        await apiClient.get<{ ok: boolean }>('http://localhost:3000/test-shell-auth');
+        expect(receivedAuthHeader).toBe('Bearer shell-jwt-token-999');
+      } finally {
+        window.localStorage.removeItem('fmat_restaurant_auth_session');
+      }
+    });
+  });
 });

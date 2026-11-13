@@ -25,7 +25,7 @@ import {
   type ReservaDto,
   type ReservaParamDto,
 } from '@floor/shared';
-import { ROLES_GESTION_SALA, ROLES_OPERACION_SALA, Roles } from '../../common/auth/auth.decorators';
+import { PermisoSala, RequirePermissions } from '../../common/auth/auth.decorators';
 import { ZodValidationPipe, type EsquemaValidable } from '../../common/pipes/zod-validation.pipe';
 import { ReservasService } from './reservas.service';
 
@@ -70,14 +70,14 @@ export class ReservasController {
   constructor(private readonly servicio: ReservasService) {}
 
   @Get()
-  @Roles(...ROLES_OPERACION_SALA)
+  @RequirePermissions(PermisoSala.RESERVATIONS_VIEW)
   listar(@Query(validarFiltroListado) query: ListarReservasQueryDto): Promise<ReservaDto[]> {
     return this.servicio.listar(query);
   }
 
   // Debe declararse antes de ':reservaId' para que 'disponibilidad' no se interprete como un UUID.
   @Get('disponibilidad')
-  @Roles(...ROLES_OPERACION_SALA)
+  @RequirePermissions(PermisoSala.RESERVATIONS_VIEW)
   consultarDisponibilidad(
     @Query(validarDisponibilidad) query: ConsultarDisponibilidadQueryDto,
   ): Promise<MesaDto[]> {
@@ -85,19 +85,19 @@ export class ReservasController {
   }
 
   @Get(':reservaId')
-  @Roles(...ROLES_OPERACION_SALA)
+  @RequirePermissions(PermisoSala.RESERVATIONS_VIEW)
   obtener(@Param(validarParams) { reservaId }: ReservaParamDto): Promise<ReservaDto> {
     return this.servicio.obtener(reservaId);
   }
 
   @Post()
-  @Roles(...ROLES_GESTION_SALA)
+  @RequirePermissions(PermisoSala.RESERVATIONS_CREATE)
   crear(@Body(validarCreacion) cuerpo: CrearReservaRequestDto): Promise<CrearReservaResponseDto> {
     return this.servicio.crear(cuerpo);
   }
 
   @Patch(':reservaId')
-  @Roles(...ROLES_GESTION_SALA)
+  @RequirePermissions(PermisoSala.RESERVATIONS_UPDATE)
   actualizar(
     @Param(validarParams) { reservaId }: ReservaParamDto,
     @Body(validarActualizacion) cuerpo: ActualizarReservaRequestDto,
@@ -106,20 +106,20 @@ export class ReservasController {
   }
 
   @Post(':reservaId/cancelar')
-  @Roles(...ROLES_GESTION_SALA)
+  @RequirePermissions(PermisoSala.RESERVATIONS_CANCEL)
   @HttpCode(HttpStatus.OK)
   cancelar(@Param(validarParams) { reservaId }: ReservaParamDto): Promise<ReservaDto> {
     return this.servicio.cancelar(reservaId);
   }
 
   @Delete(':reservaId')
-  @Roles(...ROLES_GESTION_SALA)
+  @RequirePermissions(PermisoSala.RESERVATIONS_CANCEL)
   eliminar(@Param(validarParams) { reservaId }: ReservaParamDto): Promise<ReservaDto> {
     return this.servicio.cancelar(reservaId);
   }
 
   @Post(':reservaId/no-show')
-  @Roles(...ROLES_GESTION_SALA)
+  @RequirePermissions(PermisoSala.RESERVATIONS_MARK_NO_SHOW)
   @HttpCode(HttpStatus.OK)
   marcarNoShow(@Param(validarParams) { reservaId }: ReservaParamDto): Promise<ReservaDto> {
     return this.servicio.marcarComoNoShow(reservaId);

@@ -20,7 +20,7 @@ import {
   type UnionDto,
   type UnionParamDto,
 } from '@floor/shared';
-import { Roles, ROLES_GESTION_SALA, ROLES_OPERACION_SALA } from '../../common/auth/auth.decorators';
+import { PermisoSala, RequirePermissions } from '../../common/auth/auth.decorators';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { UnionesService } from './uniones.service';
 
@@ -33,7 +33,7 @@ export class UnionesController {
   constructor(private readonly servicio: UnionesService) {}
 
   @Get()
-  @Roles(...ROLES_OPERACION_SALA)
+  @RequirePermissions(PermisoSala.TABLE_UNIONS_VIEW)
   listar(
     @Query(new ZodValidationPipe(listarUnionesQuerySchema)) query: ListarUnionesQueryDto,
   ): Promise<UnionDto[]> {
@@ -41,7 +41,7 @@ export class UnionesController {
   }
 
   @Post()
-  @Roles(...ROLES_GESTION_SALA)
+  @RequirePermissions(PermisoSala.TABLE_UNIONS_CREATE)
   @HttpCode(HttpStatus.CREATED)
   crear(
     @Body(new ZodValidationPipe(crearUnionSchema)) cuerpo: CrearUnionRequestDto,
@@ -51,7 +51,7 @@ export class UnionesController {
   }
 
   @Post(':unionId/liberar')
-  @Roles(...ROLES_GESTION_SALA)
+  @RequirePermissions(PermisoSala.TABLE_UNIONS_RELEASE)
   @HttpCode(HttpStatus.OK)
   liberar(
     @Param(new ZodValidationPipe(unionParamSchema)) params: UnionParamDto,

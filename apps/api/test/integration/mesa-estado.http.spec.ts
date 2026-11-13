@@ -40,6 +40,7 @@ async function peticion<T = Json>(
       'x-user-id': MESERO_AUTENTICADO,
       'x-staff-id': 'HOST-01',
       'x-user-roles': 'HOST',
+      'x-user-permissions': 'sala:tables:view,sala:tables:occupy,sala:tables:update_status',
       ...cabecerasExtra,
     },
     body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo),

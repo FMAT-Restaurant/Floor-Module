@@ -86,6 +86,35 @@ describe('IdentityGuard (BE-011, SPEC §1, ARCHITECTURE §8, ADR-007)', () => {
       });
     });
 
+    it('prioriza cabeceras validadas de Kong aun cuando Kong también reenvía Authorization Bearer', () => {
+      process.env.JWT_SECRET = 'secreto-distinto-al-de-kong';
+      const tokenConOtroSecreto = firmarJwtHs256(
+        {
+          sub: USER_ID,
+          roles: ['HOST'],
+          permissions: ['sala:tables:view'],
+          iss: JWT_ISSUER,
+        },
+        'secreto-de-auth-y-kong',
+      );
+      const guard = new IdentityGuard();
+      const { context, request } = crearContexto({
+        authorization: `Bearer ${tokenConOtroSecreto}`,
+        'x-user-id': USER_ID,
+        'x-staff-id': 'ADM000001',
+        'x-user-roles': 'ADMINISTRADOR',
+        'x-user-permissions': '*',
+      });
+
+      expect(guard.canActivate(context)).toBe(true);
+      expect(request.user).toEqual({
+        userId: USER_ID,
+        staffId: 'ADM000001',
+        roles: ['ADMINISTRADOR'],
+        permissions: ['*'],
+      });
+    });
+
     it('rechaza con 403 PASSWORD_CHANGE_REQUIRED cuando X-Password-Temporary es true', () => {
       const guard = new IdentityGuard();
       const { context } = crearContexto({
@@ -118,8 +147,8 @@ describe('IdentityGuard (BE-011, SPEC §1, ARCHITECTURE §8, ADR-007)', () => {
       ['falta X-User-Roles', { 'x-user-id': USER_ID }],
       ['X-User-Roles sin roles válidos', { 'x-user-id': USER_ID, 'x-user-roles': ' , ' }],
       [
-        'X-User-Roles con roles fuera del enum canónico',
-        { 'x-user-id': USER_ID, 'x-user-roles': 'CAJERO, INVITADO' },
+        'X-User-Roles con roles fuera del enum canónico y sin permisos',
+        { 'x-user-id': USER_ID, 'x-user-roles': 'INVITADO, DESCONOCIDO' },
       ],
     ])('rechaza con 401 NO_AUTENTICADO cuando %s y no hay JWT', (_caso, headers) => {
       const guard = new IdentityGuard();

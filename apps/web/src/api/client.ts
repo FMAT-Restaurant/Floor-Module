@@ -12,32 +12,95 @@ export function setBaseUrl(url: string | null): void {
   customBaseUrl = url;
 }
 
+export const AUTH_SESSION_STORAGE_KEY = 'fmat_restaurant_auth_session';
+const GATEWAY_DEFAULT_BASE_URL = 'http://localhost:8000/api/v1/floor';
+
+let federatedToken: string | null = null;
+
+export function setFederatedToken(token: string | null | undefined): void {
+  federatedToken = typeof token === 'string' && token.trim() ? token.trim() : null;
+}
+
+export function readRawShellSession(): Record<string, unknown> | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  try {
+    const raw = window.localStorage?.getItem(AUTH_SESSION_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed: unknown = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+function getDevFallbackToken(): string | null {
+  return import.meta.env.MODE !== 'test' ? import.meta.env.VITE_DEV_AUTH_TOKEN || null : null;
+}
+
+export function resolveGatewayBaseUrl(
+  loc: Pick<Location, 'protocol' | 'hostname'> | undefined = typeof window !== 'undefined'
+    ? window.location
+    : undefined,
+): string {
+  if (loc?.hostname) {
+    const protocolo =
+      loc.protocol === 'https:' || loc.protocol === 'http:' ? loc.protocol : 'http:';
+    return `${protocolo}//${loc.hostname}:8000/api/v1/floor`;
+  }
+  return GATEWAY_DEFAULT_BASE_URL;
+}
+
 export function getBaseUrl(): string {
   if (customBaseUrl !== null) {
     return customBaseUrl;
   }
-  return import.meta.env.VITE_API_BASE_URL || '/sala';
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL;
+  }
+  if (import.meta.env.MODE === 'test' || import.meta.env.VITE_USE_MOCKS === 'true') {
+    return '/sala';
+  }
+  return resolveGatewayBaseUrl();
 }
 
 export function getSessionToken(): string | null {
   if (inMemoryToken !== null) {
     return inMemoryToken;
   }
+  if (federatedToken !== null) {
+    return federatedToken;
+  }
   if (typeof window !== 'undefined') {
     try {
-      const storedToken =
-        window.sessionStorage?.getItem('auth_token') ||
-        window.sessionStorage?.getItem('token') ||
-        window.localStorage?.getItem('auth_token') ||
-        window.localStorage?.getItem('token');
-      if (storedToken) {
-        return storedToken;
+      const sessionToken =
+        window.sessionStorage?.getItem('auth_token') || window.sessionStorage?.getItem('token');
+      if (sessionToken) {
+        return sessionToken;
+      }
+
+      const rawSession = readRawShellSession();
+      const shellToken =
+        rawSession && typeof rawSession.accessToken === 'string'
+          ? rawSession.accessToken.trim()
+          : '';
+      if (shellToken) {
+        return shellToken;
+      }
+
+      const legacyLocalToken =
+        window.localStorage?.getItem('auth_token') || window.localStorage?.getItem('token');
+      if (legacyLocalToken) {
+        return legacyLocalToken;
       }
     } catch {
-      return import.meta.env.MODE !== 'test' ? import.meta.env.VITE_DEV_AUTH_TOKEN || null : null;
+      return getDevFallbackToken();
     }
   }
-  return import.meta.env.MODE !== 'test' ? import.meta.env.VITE_DEV_AUTH_TOKEN || null : null;
+  return getDevFallbackToken();
 }
 
 export function setSessionToken(token: string | null): void {

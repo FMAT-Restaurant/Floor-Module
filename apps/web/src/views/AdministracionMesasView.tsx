@@ -4,6 +4,8 @@ import { ArrowDown, ArrowUp, ArrowUpDown, MoreHorizontal, Plus, Search } from 'l
 import { EstadoMesa, type MesaDto } from '@floor/shared';
 import { getMesas } from '../api/services/mesas.service';
 import { queryKeys } from '../api/queryKeys';
+import { PermisoSala } from '../auth/permissions';
+import { useSalaAuth } from '../context/SalaAuthContext';
 import { MesaFormModal } from '../components/MesaFormModal';
 import { BajaMesaModal } from '../components/BajaMesaModal';
 import { cn } from '../lib/utils';
@@ -40,15 +42,24 @@ function EstadoBadge({ mesa }: { readonly mesa: MesaDto }) {
 
 function MesaAcciones({
   mesa,
+  canEdit,
+  canDelete,
   onAction,
 }: {
   readonly mesa: MesaDto;
+  readonly canEdit: boolean;
+  readonly canDelete: boolean;
   readonly onAction: (type: 'editar' | 'baja', mesa: MesaDto) => void;
 }) {
   const summaryRef = useRef<HTMLElement>(null);
   const detailsRef = useRef<HTMLDetailsElement>(null);
   const [opensUp, setOpensUp] = useState(false);
-  if (!mesa.activo) return <span className="text-xs text-muted">Sin acciones</span>;
+  const availableActions = (['editar', 'baja'] as const).filter((type) =>
+    type === 'editar' ? canEdit : canDelete,
+  );
+  if (!mesa.activo || availableActions.length === 0) {
+    return <span className="text-xs text-muted">Sin acciones</span>;
+  }
   return (
     <details
       ref={detailsRef}
@@ -80,7 +91,7 @@ function MesaAcciones({
           opensUp ? 'bottom-full mb-1' : 'top-full mt-1',
         )}
       >
-        {(['editar', 'baja'] as const).map((type) => (
+        {availableActions.map((type) => (
           <button
             key={type}
             type="button"
@@ -103,6 +114,11 @@ function MesaAcciones({
 }
 
 export function AdministracionMesasView() {
+  const { can } = useSalaAuth();
+  const canViewTables = can(PermisoSala.TABLES_VIEW);
+  const canCreate = can(PermisoSala.TABLES_CREATE);
+  const canUpdate = can(PermisoSala.TABLES_UPDATE);
+  const canDelete = can(PermisoSala.TABLES_DELETE);
   const id = useId();
   const [search, setSearch] = useState('');
   const [showInactive, setShowInactive] = useState(false);
@@ -115,6 +131,7 @@ export function AdministracionMesasView() {
   const query = useQuery({
     queryKey: queryKeys.mesas.list(filters),
     queryFn: () => getMesas(filters),
+    enabled: canViewTables,
   });
   const mesas = query.data ?? emptyMesas;
 
@@ -175,19 +192,21 @@ export function AdministracionMesasView() {
               />
             </div>
           </div>
-          <button
-            type="button"
-            disabled={query.isPending || query.isError}
-            onClick={(event) => {
-              event.currentTarget.focus();
-              setNotice(null);
-              setModal({ type: 'crear' });
-            }}
-            className="h-control px-4 bg-primary hover:bg-primary-hover text-white rounded-control text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-primary"
-          >
-            <Plus className="w-4 h-4" aria-hidden="true" />
-            Crear mesa
-          </button>
+          {canCreate && (
+            <button
+              type="button"
+              disabled={canViewTables && (query.isPending || query.isError)}
+              onClick={(event) => {
+                event.currentTarget.focus();
+                setNotice(null);
+                setModal({ type: 'crear' });
+              }}
+              className="h-control px-4 bg-primary hover:bg-primary-hover text-white rounded-control text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <Plus className="w-4 h-4" aria-hidden="true" />
+              Crear mesa
+            </button>
+          )}
         </div>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <label className="inline-flex items-center gap-2 text-sm min-w-0">
@@ -230,7 +249,7 @@ export function AdministracionMesasView() {
           {notice}
         </p>
       )}
-      {query.isPending && (
+      {query.isLoading && (
         <div
           aria-busy="true"
           aria-label="Cargando mesas"
@@ -266,8 +285,7 @@ export function AdministracionMesasView() {
         </div>
       )}
 
-      {!query.isPending &&
-        !query.isError &&
+      {(!canViewTables || (!query.isLoading && !query.isError)) &&
         (filtered.length === 0 ? (
           <div className="bg-surface border border-border rounded-card p-8 text-center space-y-2">
             <h3 className="text-lg font-semibold text-ink">
@@ -354,7 +372,12 @@ export function AdministracionMesasView() {
                         <EstadoBadge mesa={mesa} />
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <MesaAcciones mesa={mesa} onAction={openAction} />
+                        <MesaAcciones
+                          mesa={mesa}
+                          canEdit={canUpdate}
+                          canDelete={canDelete}
+                          onAction={openAction}
+                        />
                       </td>
                     </tr>
                   ))}
@@ -375,7 +398,12 @@ export function AdministracionMesasView() {
                     <p className="text-sm text-muted break-words min-w-0 flex-1">
                       {mesa.capacidad} personas · {mesa.zona}
                     </p>
-                    <MesaAcciones mesa={mesa} onAction={openAction} />
+                    <MesaAcciones
+                      mesa={mesa}
+                      canEdit={canUpdate}
+                      canDelete={canDelete}
+                      onAction={openAction}
+                    />
                   </div>
                 </li>
               ))}
@@ -383,7 +411,7 @@ export function AdministracionMesasView() {
           </>
         ))}
 
-      {modal && modal.type !== 'baja' && (
+      {modal && modal.type !== 'baja' && (modal.type === 'crear' ? canCreate : canUpdate) && (
         <MesaFormModal
           key={modal.type === 'editar' ? modal.mesa.mesaId : 'crear'}
           mesa={modal.type === 'editar' ? modal.mesa : null}
@@ -397,7 +425,7 @@ export function AdministracionMesasView() {
           }}
         />
       )}
-      {modal?.type === 'baja' && (
+      {modal?.type === 'baja' && canDelete && (
         <BajaMesaModal
           mesa={modal.mesa}
           onClose={() => setModal(null)}

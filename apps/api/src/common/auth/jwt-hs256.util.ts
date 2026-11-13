@@ -231,7 +231,9 @@ export function verificarJwtHs256(
   const staffId =
     typeof payload.staffId === 'string' && payload.staffId.trim().length > 0
       ? payload.staffId.trim()
-      : undefined;
+      : typeof payload.staffId === 'number' && Number.isFinite(payload.staffId)
+        ? String(payload.staffId)
+        : undefined;
 
   return {
     sub: rawSub,
