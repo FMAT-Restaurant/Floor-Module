@@ -148,13 +148,14 @@ describe('BE-011 · Integración Seguridad, Correlación y Health Check', () => 
     });
   });
 
-  it('protege endpoints con IdentityGuard (401) y RolesGuard (403) y propaga x-correlation-id', async () => {
+  it('protege endpoints con IdentityGuard (401) y PermissionsGuard (403) y propaga x-correlation-id', async () => {
     const sinAuth = await fetch(`${baseUrl}/${PREFIJO_GLOBAL}/mesas`);
     expect(sinAuth.status).toBe(401);
 
     const tokenMesero = firmarJwtHs256({
       sub: MESERO_ID,
       roles: ['MESERO'],
+      permissions: ['orders:orders:view'],
       iss: JWT_ISSUER,
     });
 

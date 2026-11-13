@@ -14,7 +14,7 @@ RUN pnpm install --frozen-lockfile
 
 # Etapa 2: Compilación de @floor/shared y bundle estático de @floor/web
 FROM deps AS builder
-ARG VITE_API_BASE_URL=/api/v1/floor
+ARG VITE_API_BASE_URL=
 ARG VITE_USE_MOCKS=false
 ARG VITE_RESTAURANT_TIME_ZONE=America/Merida
 ARG VITE_RESERVA_NO_SHOW_TOLERANCIA_MINUTOS=15

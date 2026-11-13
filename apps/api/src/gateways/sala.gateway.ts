@@ -56,14 +56,18 @@ export interface JoinSalaAck {
 
 const DEFAULT_CORS_ORIGINS = [
   'http://localhost:3000',
-  'http://localhost:3001',
   'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:8000',
+  'http://localhost:3001',
 ];
 
 /**
  * Resuelve los orígenes permitidos para CORS a partir de `CORS_ORIGIN`.
  */
-export function resolverCorsOrigin(corsOriginEnv = process.env.CORS_ORIGIN): string | string[] {
+export function resolverCorsOrigin(
+  corsOriginEnv = process.env.CORS_ORIGIN,
+): boolean | string | string[] {
   if (!corsOriginEnv || !corsOriginEnv.trim()) {
     return [...DEFAULT_CORS_ORIGINS];
   }
@@ -74,6 +78,9 @@ export function resolverCorsOrigin(corsOriginEnv = process.env.CORS_ORIGIN): str
 
   if (origenes.length === 0) {
     return [...DEFAULT_CORS_ORIGINS];
+  }
+  if (origenes.includes('*')) {
+    return true;
   }
   return origenes.length === 1 ? origenes[0] : origenes;
 }

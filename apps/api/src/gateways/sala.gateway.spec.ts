@@ -164,26 +164,31 @@ describe('SalaWebSocketGateway y utilidades JWT (BE-005)', () => {
 
   describe('CORS y validación de salas temáticas', () => {
     it('resuelve CORS_ORIGIN con valores por defecto, un solo origen o múltiples orígenes', () => {
-      expect(resolverCorsOrigin(undefined)).toEqual([
-        'http://localhost:3000',
-        'http://localhost:3001',
-        'http://localhost:5173',
-      ]);
-      expect(resolverCorsOrigin('   ')).toEqual([
-        'http://localhost:3000',
-        'http://localhost:3001',
-        'http://localhost:5173',
-      ]);
-      expect(resolverCorsOrigin(' , , ')).toEqual([
-        'http://localhost:3000',
-        'http://localhost:3001',
-        'http://localhost:5173',
-      ]);
-      expect(resolverCorsOrigin('https://pos.fmat.mx')).toBe('https://pos.fmat.mx');
-      expect(resolverCorsOrigin('http://localhost:3000, https://pos.fmat.mx')).toEqual([
-        'http://localhost:3000',
-        'https://pos.fmat.mx',
-      ]);
+      const originalCors = process.env.CORS_ORIGIN;
+      delete process.env.CORS_ORIGIN;
+      try {
+        const expectedDefaults = [
+          'http://localhost:3000',
+          'http://localhost:5173',
+          'http://localhost:5174',
+          'http://localhost:8000',
+          'http://localhost:3001',
+        ];
+        expect(resolverCorsOrigin(undefined)).toEqual(expectedDefaults);
+        expect(resolverCorsOrigin('   ')).toEqual(expectedDefaults);
+        expect(resolverCorsOrigin(' , , ')).toEqual(expectedDefaults);
+        expect(resolverCorsOrigin('https://pos.fmat.mx')).toBe('https://pos.fmat.mx');
+        expect(resolverCorsOrigin('http://localhost:3000, https://pos.fmat.mx')).toEqual([
+          'http://localhost:3000',
+          'https://pos.fmat.mx',
+        ]);
+        expect(resolverCorsOrigin('*')).toBe(true);
+        expect(resolverCorsOrigin('http://localhost:3000, *')).toBe(true);
+      } finally {
+        if (originalCors !== undefined) {
+          process.env.CORS_ORIGIN = originalCors;
+        }
+      }
     });
 
     it('valida y normaliza los distintos formatos de payload para unirse a salas temáticas', () => {

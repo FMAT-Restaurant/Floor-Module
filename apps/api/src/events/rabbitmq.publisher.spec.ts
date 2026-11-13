@@ -217,4 +217,26 @@ describe('RabbitMqPublisher (BE-004 · SPEC §6.1, ADR-003, ADR-006)', () => {
     expect(connection.close).toHaveBeenCalledTimes(1);
     expect(publisher.isConnected()).toBe(false);
   });
+
+  it('programa reconexión automática cuando la conexión AMQP se cierra inesperadamente con autoConnect activo', async () => {
+    const { connectFn, connectionHandlers } = crearAmqpMocks();
+    const publisher = new RabbitMqPublisher({
+      connectFn,
+      autoConnect: true,
+      reconnectDelayMs: 25,
+    });
+
+    await publisher.onModuleInit();
+    expect(publisher.isConnected()).toBe(true);
+    expect(connectFn).toHaveBeenCalledTimes(1);
+
+    connectionHandlers.get('close')?.();
+    expect(publisher.isConnected()).toBe(false);
+
+    await new Promise((resolve) => setTimeout(resolve, 60));
+
+    expect(connectFn).toHaveBeenCalledTimes(2);
+    expect(publisher.isConnected()).toBe(true);
+    await publisher.onModuleDestroy();
+  });
 });

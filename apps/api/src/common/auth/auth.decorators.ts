@@ -1,43 +1,41 @@
 import { SetMetadata } from '@nestjs/common';
-import { RoleEnum } from '@floor/shared';
+import { PermisoSala, RoleEnum } from '@floor/shared';
 
 export const IS_PUBLIC_KEY = 'isPublic';
-export const ROLES_KEY = 'roles';
+export const PERMISSIONS_KEY = 'permissions';
+
+export { PermisoSala };
 
 /**
- * Marca un controlador o endpoint como público, omitiendo IdentityGuard y RolesGuard
+ * Marca un controlador o endpoint como público, omitiendo IdentityGuard y PermissionsGuard
  * (por ejemplo, GET /health).
  */
 export const Public = (): MethodDecorator & ClassDecorator => SetMetadata(IS_PUBLIC_KEY, true);
 
 /**
- * Declara los roles autorizados para ejecutar un controlador o endpoint según SPEC.md §1.1.
+ * Declara los permisos PBAC (`modulo:recurso:accion`) requeridos para ejecutar
+ * un controlador o endpoint según el catálogo oficial de Auth-Backend.
  */
-export const Roles = (...roles: string[]): MethodDecorator & ClassDecorator =>
-  SetMetadata(ROLES_KEY, roles);
+export const RequirePermissions = (
+  ...permissions: (PermisoSala | string)[]
+): MethodDecorator & ClassDecorator => SetMetadata(PERMISSIONS_KEY, permissions);
 
 /**
- * Roles canónicos del ecosistema FMAT-Restaurant (SPEC.md §1.1, ARCHITECTURE.md §8).
+ * Roles canónicos del ecosistema FMAT-Restaurant (ARCHITECTURE.md §8).
  */
 export const ROL = {
   ADMINISTRADOR: RoleEnum.ADMINISTRADOR,
+  ADMIN: RoleEnum.ADMIN,
   HOST: RoleEnum.HOST,
+  GESTOR_MENU: RoleEnum.GESTOR_MENU,
+  ALMACENISTA: RoleEnum.ALMACENISTA,
   MESERO: RoleEnum.MESERO,
+  CHEF_MASTER: RoleEnum.CHEF_MASTER,
+  CAJERO: RoleEnum.CAJERO,
   CAPITAN: 'ROL_CAPITAN',
 } as const;
 
 export type RolCanonico = (typeof ROL)[keyof typeof ROL];
-
-/** Roles con acceso a lectura del plano y operación general de mesas (SPEC §1.1). */
-export const ROLES_OPERACION_SALA: readonly string[] = [
-  ROL.ADMINISTRADOR,
-  ROL.HOST,
-  ROL.MESERO,
-  ROL.CAPITAN,
-];
-
-/** Roles con acceso a gestión de meseros, reservas, uniones y lista de espera (SPEC §1.1). */
-export const ROLES_GESTION_SALA: readonly string[] = [ROL.ADMINISTRADOR, ROL.HOST, ROL.CAPITAN];
 
 /** Identidad autenticada adjunta al request HTTP tras pasar por IdentityGuard. */
 export interface AuthenticatedUser {

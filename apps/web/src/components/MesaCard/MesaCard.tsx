@@ -11,6 +11,7 @@ export interface MesaCardProps {
   readonly onAccion?: (mesa: MesaEnVivoDto) => void;
   readonly now?: Date;
   readonly mesasUnidas?: readonly number[];
+  readonly showUnionBadge?: boolean;
   readonly meseroNombre?: string;
   readonly acciones?: React.ReactNode;
   /** Deshabilita la selección de la card (p. ej. mesas no unibles en modo unión). */
@@ -61,6 +62,7 @@ export function MesaCard({
   onAccion,
   now,
   mesasUnidas,
+  showUnionBadge = true,
   meseroNombre,
   acciones,
   disabled = false,
@@ -123,7 +125,7 @@ export function MesaCard({
               {estadoVisual.texto}
             </span>
 
-            {mesa.unionId && (
+            {mesa.unionId && showUnionBadge && (
               <span className="bg-orange-50 text-primary border border-orange-200 text-xs font-medium px-2 py-0.5 rounded-full">
                 {textoUnion}
               </span>

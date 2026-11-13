@@ -50,13 +50,31 @@ function stripTrailingSlashes(str: string): string {
   return result;
 }
 
+const DEFAULT_WS_BASE_URL = 'http://localhost:8085';
+
+export function resolveRemoteWsOrigin(moduleUrl: string = import.meta.url): string {
+  try {
+    const parsed = new URL(moduleUrl);
+    if ((parsed.protocol === 'http:' || parsed.protocol === 'https:') && parsed.hostname) {
+      return `${parsed.protocol}//${parsed.hostname}:8085`;
+    }
+  } catch {
+    // Entornos sin URL HTTP válida (p. ej. file:// en Vitest)
+  }
+  return DEFAULT_WS_BASE_URL;
+}
+
 export function getSalaSocketUrl(customBaseUrl?: string): string {
   let base = customBaseUrl || import.meta.env.VITE_WS_URL;
   if (!base) {
-    if (typeof window !== 'undefined' && window.location?.origin) {
-      base = window.location.origin;
+    if (import.meta.env.MODE === 'test' || import.meta.env.VITE_USE_MOCKS === 'true') {
+      if (typeof window !== 'undefined' && window.location?.origin) {
+        base = window.location.origin;
+      } else {
+        base = 'http://localhost:3000';
+      }
     } else {
-      base = 'http://localhost:3000';
+      base = resolveRemoteWsOrigin();
     }
   }
   const cleanBase = stripTrailingSlashes(base);

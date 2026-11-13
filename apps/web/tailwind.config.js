@@ -5,17 +5,17 @@ export default {
     extend: {
       colors: {
         primary: {
-          DEFAULT: '#C2410C',
-          hover: '#9A3412',
-          soft: '#FFF7ED',
+          DEFAULT: 'rgb(var(--color-primary-rgb) / <alpha-value>)',
+          hover: 'rgb(var(--color-primary-hover-rgb) / <alpha-value>)',
+          soft: 'rgb(var(--color-primary-soft-rgb) / <alpha-value>)',
         },
-        accent: '#F97316',
-        ink: '#111827',
-        text: '#374151',
-        muted: '#6B7280',
-        border: '#E5E7EB',
-        canvas: '#F8FAFC',
-        surface: '#FFFFFF',
+        accent: 'rgb(var(--color-accent-rgb) / <alpha-value>)',
+        ink: 'rgb(var(--color-ink-rgb) / <alpha-value>)',
+        text: 'rgb(var(--color-text-rgb) / <alpha-value>)',
+        muted: 'rgb(var(--color-muted-rgb) / <alpha-value>)',
+        border: 'rgb(var(--color-border-rgb) / <alpha-value>)',
+        canvas: 'rgb(var(--color-canvas-rgb) / <alpha-value>)',
+        surface: 'rgb(var(--color-surface-rgb) / <alpha-value>)',
       },
       borderRadius: {
         control: '8px',

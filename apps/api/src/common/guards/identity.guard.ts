@@ -68,6 +68,26 @@ export class IdentityGuard implements CanActivate {
       lanzarErrorPasswordTemporal();
     }
 
+    const tieneHeadersKong =
+      leerCabecera(headers, HEADER_USER_ID) !== undefined ||
+      leerCabecera(headers, HEADER_USER_ROLES) !== undefined ||
+      leerCabecera(headers, HEADER_USER_PERMISSIONS) !== undefined;
+
+    // Prioridad perimetral: cuando Kong inyecta headers X-User-*, consumimos su identidad
+    // validada (incluso si Kong también reenvía Authorization: Bearer ...).
+    if (tieneHeadersKong) {
+      const identidadKong = this.extraerIdentidadDesdeKong(headers);
+      if (identidadKong !== null) {
+        request.user = identidadKong;
+        return true;
+      }
+      throw new DomainException(
+        HttpStatus.UNAUTHORIZED,
+        CODIGO_ERROR.NO_AUTENTICADO,
+        'Credenciales de identidad faltantes o inválidas',
+      );
+    }
+
     const tieneHeaderAuth = leerCabecera(headers, 'authorization') !== undefined;
     if (tieneHeaderAuth) {
       const identidadJwt = this.extraerIdentidadDesdeJwt(headers);
@@ -80,12 +100,6 @@ export class IdentityGuard implements CanActivate {
         CODIGO_ERROR.NO_AUTENTICADO,
         'Credenciales de identidad faltantes o inválidas',
       );
-    }
-
-    const identidadKong = this.extraerIdentidadDesdeKong(headers);
-    if (identidadKong !== null) {
-      request.user = identidadKong;
-      return true;
     }
 
     throw new DomainException(
@@ -106,8 +120,9 @@ export class IdentityGuard implements CanActivate {
   private extraerIdentidadDesdeKong(headers: Record<string, unknown>): AuthenticatedUser | null {
     const rawUserId = leerCabecera(headers, HEADER_USER_ID);
     const rawRoles = leerCabecera(headers, HEADER_USER_ROLES);
+    const rawPermissions = leerCabecera(headers, HEADER_USER_PERMISSIONS);
 
-    if (rawUserId === undefined && rawRoles === undefined) {
+    if (rawUserId === undefined && rawRoles === undefined && rawPermissions === undefined) {
       return null;
     }
 
@@ -116,18 +131,18 @@ export class IdentityGuard implements CanActivate {
     }
 
     const roles = extraerRolesValidos(rawRoles);
-    if (roles.length === 0) {
+    const permissions = parsearListaSeparadaPorComas(rawPermissions);
+    if (roles.length === 0 && permissions.length === 0) {
       return null;
     }
 
     const rawStaffId = leerCabecera(headers, HEADER_STAFF_ID);
-    const rawPermissions = leerCabecera(headers, HEADER_USER_PERMISSIONS);
 
     return {
       userId: rawUserId.trim(),
       staffId: rawStaffId && rawStaffId.length > 0 ? rawStaffId : undefined,
       roles,
-      permissions: parsearListaSeparadaPorComas(rawPermissions),
+      permissions,
     };
   }
 
@@ -145,7 +160,7 @@ export class IdentityGuard implements CanActivate {
     const verificado = verificarJwtHs256(coincidencia[1], {
       lanzarEnPasswordTemporal: true,
     });
-    if (!verificado || verificado.roles.length === 0) {
+    if (!verificado || (verificado.roles.length === 0 && verificado.permissions.length === 0)) {
       return null;
     }
 

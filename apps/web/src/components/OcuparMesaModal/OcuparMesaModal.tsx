@@ -17,6 +17,8 @@ import { getReservas } from '../../api/services/reservas.service';
 import { getListaEspera } from '../../api/services/espera.service';
 import { queryKeys } from '../../api/queryKeys';
 import { isApiError } from '../../api/error';
+import { PermisoSala } from '../../auth/permissions';
+import { useSalaAuth } from '../../context/SalaAuthContext';
 import { Modal } from '../Modal';
 import { cn } from '../../lib/utils';
 
@@ -39,6 +41,9 @@ export function OcuparMesaModal({
   reservasCatalogo,
   esperaCatalogo,
 }: OcuparMesaModalProps): React.JSX.Element | null {
+  const { can } = useSalaAuth();
+  const canViewReservas = can(PermisoSala.RESERVATIONS_VIEW);
+  const canViewEspera = can(PermisoSala.WAITLIST_ENTRIES_VIEW);
   const queryClient = useQueryClient();
 
   const [comensales, setComensales] = useState<number | ''>(1);
@@ -65,13 +70,13 @@ export function OcuparMesaModal({
   const reservasQuery = useQuery({
     queryKey: queryKeys.reservas.list(reservasFilters),
     queryFn: () => getReservas(reservasFilters),
-    enabled: isOpen && Boolean(mesa) && reservasCatalogo === undefined,
+    enabled: isOpen && Boolean(mesa) && reservasCatalogo === undefined && canViewReservas,
   });
 
   const esperaQuery = useQuery({
     queryKey: queryKeys.espera.list(undefined),
     queryFn: () => getListaEspera(),
-    enabled: isOpen && Boolean(mesa) && esperaCatalogo === undefined,
+    enabled: isOpen && Boolean(mesa) && esperaCatalogo === undefined && canViewEspera,
   });
 
   // Catálogo filtrado de reservas confirmadas activas de la mesa seleccionada
@@ -320,7 +325,7 @@ export function OcuparMesaModal({
             value={meseroId}
             disabled={ocuparMutation.isPending}
             onChange={(e) => setMeseroId(e.target.value)}
-            className="h-10 px-3 rounded-control border border-border focus:ring-2 focus:ring-primary w-full bg-white outline-none transition-colors text-ink text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
+            className="h-10 px-3 rounded-control border border-border focus:ring-2 focus:ring-primary w-full bg-surface outline-none transition-colors text-ink text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
             required
           >
             <option value="">Selecciona un mesero...</option>
@@ -370,48 +375,52 @@ export function OcuparMesaModal({
               )}
 
               {/* Selector de Reserva */}
-              <div>
-                <label htmlFor="reservaId" className="block text-xs font-medium text-text mb-1">
-                  Reserva asociada (opcional)
-                </label>
-                <select
-                  id="reservaId"
-                  name="reservaId"
-                  value={reservaId}
-                  disabled={ocuparMutation.isPending}
-                  onChange={(e) => handleSelectReserva(e.target.value)}
-                  className="h-9 px-2.5 text-xs rounded-control border border-border focus:ring-2 focus:ring-primary w-full bg-white outline-none text-ink disabled:bg-gray-100"
-                >
-                  <option value="">Sin reserva vinculada</option>
-                  {reservasDisponibles.map((res) => (
-                    <option key={res.reservaId} value={res.reservaId}>
-                      {res.nombreContacto} · {res.cantidadPersonas} pers. ({res.horaInicio})
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {(canViewReservas || reservasCatalogo !== undefined) && (
+                <div>
+                  <label htmlFor="reservaId" className="block text-xs font-medium text-text mb-1">
+                    Reserva asociada (opcional)
+                  </label>
+                  <select
+                    id="reservaId"
+                    name="reservaId"
+                    value={reservaId}
+                    disabled={ocuparMutation.isPending}
+                    onChange={(e) => handleSelectReserva(e.target.value)}
+                    className="h-9 px-2.5 text-xs rounded-control border border-border focus:ring-2 focus:ring-primary w-full bg-surface outline-none text-ink disabled:bg-gray-100"
+                  >
+                    <option value="">Sin reserva vinculada</option>
+                    {reservasDisponibles.map((res) => (
+                      <option key={res.reservaId} value={res.reservaId}>
+                        {res.nombreContacto} · {res.cantidadPersonas} pers. ({res.horaInicio})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {/* Selector de Lista de Espera */}
-              <div>
-                <label htmlFor="esperaId" className="block text-xs font-medium text-text mb-1">
-                  Turno en lista de espera (opcional)
-                </label>
-                <select
-                  id="esperaId"
-                  name="esperaId"
-                  value={esperaId}
-                  disabled={ocuparMutation.isPending}
-                  onChange={(e) => handleSelectEspera(e.target.value)}
-                  className="h-9 px-2.5 text-xs rounded-control border border-border focus:ring-2 focus:ring-primary w-full bg-white outline-none text-ink disabled:bg-gray-100"
-                >
-                  <option value="">Sin turno en lista de espera</option>
-                  {esperaDisponible.map((esp) => (
-                    <option key={esp.esperaId} value={esp.esperaId}>
-                      {esp.nombreCliente} · {esp.cantidadPersonas} pers.
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {(canViewEspera || esperaCatalogo !== undefined) && (
+                <div>
+                  <label htmlFor="esperaId" className="block text-xs font-medium text-text mb-1">
+                    Turno en lista de espera (opcional)
+                  </label>
+                  <select
+                    id="esperaId"
+                    name="esperaId"
+                    value={esperaId}
+                    disabled={ocuparMutation.isPending}
+                    onChange={(e) => handleSelectEspera(e.target.value)}
+                    className="h-9 px-2.5 text-xs rounded-control border border-border focus:ring-2 focus:ring-primary w-full bg-surface outline-none text-ink disabled:bg-gray-100"
+                  >
+                    <option value="">Sin turno en lista de espera</option>
+                    {esperaDisponible.map((esp) => (
+                      <option key={esp.esperaId} value={esp.esperaId}>
+                        {esp.nombreCliente} · {esp.cantidadPersonas} pers.
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -422,7 +431,7 @@ export function OcuparMesaModal({
             type="button"
             onClick={onClose}
             disabled={ocuparMutation.isPending}
-            className="h-10 px-4 bg-white border border-border text-text rounded-control hover:bg-gray-50 text-sm font-medium transition-colors disabled:opacity-50"
+            className="h-10 px-4 bg-surface border border-border text-text rounded-control hover:bg-canvas text-sm font-medium transition-colors disabled:opacity-50"
           >
             Cancelar
           </button>

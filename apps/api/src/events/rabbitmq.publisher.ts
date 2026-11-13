@@ -21,8 +21,11 @@ export interface RabbitMqPublisherOptions {
   url?: string;
   exchange?: string;
   autoConnect?: boolean;
+  reconnectDelayMs?: number;
   connectFn?: typeof amqp.connect;
 }
+
+const DEFAULT_RECONNECT_DELAY_MS = 5000;
 
 /**
  * BE-004 · Conector y publicador AMQP hacia RabbitMQ (SPEC.md §6.1, ADR-003, ADR-006).
@@ -35,11 +38,15 @@ export class RabbitMqPublisher implements OnModuleInit, OnModuleDestroy {
   private readonly url: string;
   private readonly exchange: string;
   private readonly autoConnect: boolean;
+  private readonly reconnectDelayMs: number;
   private readonly connectFn: typeof amqp.connect;
 
   private connection: amqp.AmqpConnection | null = null;
   private channel: amqp.AmqpChannel | null = null;
   private connectingPromise: Promise<amqp.AmqpChannel> | null = null;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private destroyed = false;
+  private manualDisconnect = false;
 
   constructor(
     @Optional()
@@ -53,10 +60,12 @@ export class RabbitMqPublisher implements OnModuleInit, OnModuleDestroy {
       (process.env.NODE_ENV === 'test'
         ? process.env.RABBITMQ_AUTO_CONNECT === 'true'
         : process.env.RABBITMQ_AUTO_CONNECT !== 'false');
+    this.reconnectDelayMs = options?.reconnectDelayMs ?? DEFAULT_RECONNECT_DELAY_MS;
     this.connectFn = options?.connectFn ?? amqp.connect;
   }
 
   async onModuleInit(): Promise<void> {
+    this.destroyed = false;
     if (!this.autoConnect) {
       return;
     }
@@ -64,6 +73,7 @@ export class RabbitMqPublisher implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleDestroy(): Promise<void> {
+    this.destroyed = true;
     await this.disconnect();
   }
 
@@ -83,6 +93,8 @@ export class RabbitMqPublisher implements OnModuleInit, OnModuleDestroy {
    * no está disponible al arrancar la aplicación).
    */
   async connect(): Promise<boolean> {
+    this.manualDisconnect = false;
+    this.clearReconnectTimer();
     try {
       await this.ensureChannel();
       return true;
@@ -95,6 +107,7 @@ export class RabbitMqPublisher implements OnModuleInit, OnModuleDestroy {
           error: mensaje,
         }),
       );
+      this.scheduleReconnect();
       return false;
     }
   }
@@ -103,6 +116,8 @@ export class RabbitMqPublisher implements OnModuleInit, OnModuleDestroy {
    * Cierra limpiamente el canal y la conexión AMQP.
    */
   async disconnect(): Promise<void> {
+    this.manualDisconnect = true;
+    this.clearReconnectTimer();
     const currentChannel = this.channel;
     const currentConnection = this.connection;
     this.channel = null;
@@ -204,6 +219,7 @@ export class RabbitMqPublisher implements OnModuleInit, OnModuleDestroy {
     connection.on('close', () => {
       this.channel = null;
       this.connection = null;
+      this.scheduleReconnect();
     });
 
     const channel = await connection.createChannel();
@@ -224,6 +240,34 @@ export class RabbitMqPublisher implements OnModuleInit, OnModuleDestroy {
 
     this.connection = connection;
     this.channel = channel;
+    this.clearReconnectTimer();
     return channel;
+  }
+
+  private clearReconnectTimer(): void {
+    if (this.reconnectTimer !== null) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+  }
+
+  private scheduleReconnect(): void {
+    if (
+      !this.autoConnect ||
+      this.destroyed ||
+      this.manualDisconnect ||
+      this.reconnectTimer !== null ||
+      this.reconnectDelayMs <= 0
+    ) {
+      return;
+    }
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      if (!this.autoConnect || this.destroyed || this.manualDisconnect || this.isConnected()) {
+        return;
+      }
+      void this.connect();
+    }, this.reconnectDelayMs);
+    this.reconnectTimer.unref?.();
   }
 }

@@ -1,13 +1,26 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import federation from '@originjs/vite-plugin-federation';
 
 const backendTarget = process.env.VITE_BACKEND_TARGET || 'http://localhost:8085';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    federation({
+      name: 'salaApp',
+      filename: 'remoteEntry.js',
+      exposes: {
+        './App': './src/App.tsx',
+      },
+      shared: ['react', 'react-dom'],
+    }),
+  ],
   server: {
-    host: true,
-    port: 3000,
+    host: '0.0.0.0',
+    port: 5174,
+    strictPort: true,
+    cors: true,
     proxy: {
       '/sala/': {
         target: backendTarget,
@@ -24,5 +37,16 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
+  },
+  preview: {
+    host: '0.0.0.0',
+    port: 5174,
+    strictPort: true,
+    cors: true,
+  },
+  build: {
+    target: 'esnext',
+    minify: false,
+    cssCodeSplit: false,
   },
 });

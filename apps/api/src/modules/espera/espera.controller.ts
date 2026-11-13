@@ -20,20 +20,20 @@ import {
   type EsperaParamDto,
   type ListarEsperaQueryDto,
 } from '@floor/shared';
-import { Roles, ROLES_GESTION_SALA, ROLES_OPERACION_SALA } from '../../common/auth/auth.decorators';
+import { PermisoSala, RequirePermissions } from '../../common/auth/auth.decorators';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { EsperaService } from './espera.service';
 
 /**
  * BE-010 · SPEC §5.6 · RF-020 · RF-021 · RF-022:
- * Endpoints REST de la lista de espera presencial (`/sala/espera`).
+ * Endpoints REST de la lista de espera presencial (`/api/v1/floor/espera`).
  */
 @Controller('espera')
 export class EsperaController {
   constructor(private readonly servicio: EsperaService) {}
 
   @Post()
-  @Roles(...ROLES_GESTION_SALA)
+  @RequirePermissions(PermisoSala.WAITLIST_ENTRIES_CREATE)
   @HttpCode(HttpStatus.CREATED)
   crear(
     @Body(new ZodValidationPipe(crearEsperaSchema)) cuerpo: CrearEsperaRequestDto,
@@ -42,7 +42,7 @@ export class EsperaController {
   }
 
   @Get()
-  @Roles(...ROLES_OPERACION_SALA)
+  @RequirePermissions(PermisoSala.WAITLIST_ENTRIES_VIEW)
   listar(
     @Query(new ZodValidationPipe(listarEsperaQuerySchema)) query: ListarEsperaQueryDto,
   ): Promise<EsperaDto[]> {
@@ -50,7 +50,7 @@ export class EsperaController {
   }
 
   @Patch(':esperaId/estado')
-  @Roles(...ROLES_GESTION_SALA)
+  @RequirePermissions(PermisoSala.WAITLIST_ENTRIES_UPDATE_STATUS)
   @HttpCode(HttpStatus.OK)
   actualizarEstado(
     @Param(new ZodValidationPipe(esperaParamSchema)) params: EsperaParamDto,
