@@ -22,4 +22,8 @@ export const queryKeys = {
     all: ['uniones'] as const,
     list: (estado?: string) => [...queryKeys.uniones.all, 'list', estado] as const,
   },
+  staff: {
+    all: ['staff'] as const,
+    meseros: () => [...queryKeys.staff.all, 'meseros'] as const,
+  },
 };

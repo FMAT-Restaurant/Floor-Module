@@ -28,6 +28,7 @@ export interface OcuparMesaModalProps {
   readonly onClose: () => void;
   readonly onSuccess?: (response: OcuparMesaResponseDto) => void;
   readonly meserosCatalogo?: readonly MeseroCatalogoItem[];
+  readonly meserosError?: string | null;
   readonly reservasCatalogo?: readonly ReservaDto[];
   readonly esperaCatalogo?: readonly EsperaDto[];
 }
@@ -38,6 +39,7 @@ export function OcuparMesaModal({
   onClose,
   onSuccess,
   meserosCatalogo = fixtureMeserosCatalogo,
+  meserosError = null,
   reservasCatalogo,
   esperaCatalogo,
 }: OcuparMesaModalProps): React.JSX.Element | null {
@@ -319,27 +321,41 @@ export function OcuparMesaModal({
           <label htmlFor="meseroId" className="block text-sm font-medium text-text mb-1">
             Mesero responsable <span className="text-red-500">*</span>
           </label>
-          <select
-            id="meseroId"
-            name="meseroId"
-            value={meseroId}
-            disabled={ocuparMutation.isPending}
-            onChange={(e) => setMeseroId(e.target.value)}
-            className="h-10 px-3 rounded-control border border-border focus:ring-2 focus:ring-primary w-full bg-surface outline-none transition-colors text-ink text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
-            required
-          >
-            <option value="">Selecciona un mesero...</option>
-            {meserosCatalogo.map((mesero) => (
-              <option key={mesero.meseroId} value={mesero.meseroId}>
-                {mesero.nombre}
-              </option>
-            ))}
-          </select>
-          {!meseroValido && (
-            <p className="text-xs text-muted mt-1">
-              Selecciona al mesero responsable asignado a esta mesa.
-            </p>
-          )}
+          {(() => {
+            const meserosActivos = meserosCatalogo.filter((mesero) => mesero.activo);
+            return (
+              <>
+                <select
+                  id="meseroId"
+                  name="meseroId"
+                  value={meseroId}
+                  disabled={ocuparMutation.isPending || meserosActivos.length === 0}
+                  onChange={(e) => setMeseroId(e.target.value)}
+                  className="h-10 px-3 rounded-control border border-border focus:ring-2 focus:ring-primary w-full bg-surface outline-none transition-colors text-ink text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  required
+                >
+                  <option value="">Selecciona un mesero...</option>
+                  {meserosActivos.map((mesero) => (
+                    <option key={mesero.meseroId} value={mesero.meseroId}>
+                      {mesero.nombre}
+                    </option>
+                  ))}
+                </select>
+                {meserosActivos.length === 0 ? (
+                  <p
+                    role={meserosError ? 'alert' : undefined}
+                    className={`text-xs mt-1 ${meserosError ? 'text-amber-800' : 'text-muted'}`}
+                  >
+                    {meserosError ?? 'No hay meseros disponibles para asignar.'}
+                  </p>
+                ) : !meseroValido ? (
+                  <p className="text-xs text-muted mt-1">
+                    Selecciona al mesero responsable asignado a esta mesa.
+                  </p>
+                ) : null}
+              </>
+            );
+          })()}
         </div>
 
         {/* Opciones avanzadas (colapsable) */}

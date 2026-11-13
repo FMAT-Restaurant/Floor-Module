@@ -1,7 +1,17 @@
 import { http, HttpResponse } from 'msw';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { apiClient, ApiError, buildUrl, isApiError, setBaseUrl, setSessionToken } from './index';
+import {
+  apiClient,
+  ApiError,
+  buildAuthUrl,
+  buildUrl,
+  isApiError,
+  setAuthBaseUrl,
+  setBaseUrl,
+  setSessionToken,
+} from './index';
 import { queryClient } from './queryClient';
+import { getMeserosCatalogo, mapAuthStaffToMeseroCatalogo } from './services/staff.service';
 import {
   cambiarEstadoMesa,
   crearMesa,
@@ -42,6 +52,7 @@ afterEach(() => {
   mockDb.reset();
   setSessionToken(null);
   setBaseUrl(null);
+  setAuthBaseUrl(null);
 });
 
 afterAll(() => {
@@ -157,6 +168,13 @@ describe('API Client Unit Tests & Error Handling', () => {
       setBaseUrl('/sala');
       const url = buildUrl('/mesas', { zona: 'Terraza', activo: true });
       expect(url).toBe('/sala/mesas?zona=Terraza&activo=true');
+    });
+
+    it('resolves Auth staff URLs with buildAuthUrl independently of floor baseUrl', () => {
+      setBaseUrl('/sala');
+      setAuthBaseUrl('http://localhost:8000/api/v1/');
+      const url = buildAuthUrl('/staff', { role: 'MESERO', isActive: true });
+      expect(url).toBe('http://localhost:8000/api/v1/staff?role=MESERO&isActive=true');
     });
   });
 
@@ -417,6 +435,66 @@ describe('API Client Unit Tests & Error Handling', () => {
           estado: EstadoEspera.CANCELADO,
         });
         expect(res.estado).toBe(EstadoEspera.CANCELADO);
+      });
+    });
+
+    describe('Staff Auth Service (Meseros)', () => {
+      it('getMeserosCatalogo fetches active waiters from /api/v1/staff and maps them cleanly', async () => {
+        let capturedQuery = '';
+        server.use(
+          http.get('*/api/v1/staff', ({ request }) => {
+            capturedQuery = new URL(request.url).search;
+            return HttpResponse.json([
+              {
+                id: 'a1111111-1111-4111-8111-111111111111',
+                staffId: 'M000104',
+                firstName: 'Lucía',
+                lastName: 'Fernández',
+                roles: ['MESERO'],
+                isActive: true,
+              },
+              {
+                id: 'a2222222-2222-4222-8222-222222222222',
+                staffId: 'M000105',
+                firstName: null,
+                lastName: null,
+                roles: ['MESERO'],
+              },
+            ]);
+          }),
+        );
+
+        const catalogo = await getMeserosCatalogo();
+        expect(capturedQuery).toBe('?role=MESERO&isActive=true');
+        expect(catalogo).toEqual([
+          {
+            meseroId: 'a1111111-1111-4111-8111-111111111111',
+            nombre: 'Lucía Fernández',
+            activo: true,
+          },
+          {
+            meseroId: 'a2222222-2222-4222-8222-222222222222',
+            nombre: 'M000105',
+            activo: true,
+          },
+        ]);
+      });
+
+      it('mapAuthStaffToMeseroCatalogo handles envelopes, deduplication and missing fields', () => {
+        expect(
+          mapAuthStaffToMeseroCatalogo({
+            data: [
+              { id: ' uuid-1 ', firstName: ' Ana ', lastName: ' Ruiz ', isActive: false },
+              { id: 'uuid-1', firstName: 'Duplicado', isActive: true },
+              { id: '   ' },
+              { id: 'uuid-2', firstName: null, staffId: '' },
+            ],
+          }),
+        ).toEqual([
+          { meseroId: 'uuid-1', nombre: 'Ana Ruiz', activo: false },
+          { meseroId: 'uuid-2', nombre: 'uuid-2', activo: true },
+        ]);
+        expect(mapAuthStaffToMeseroCatalogo(null)).toEqual([]);
       });
     });
   });

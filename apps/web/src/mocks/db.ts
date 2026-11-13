@@ -400,6 +400,12 @@ export class MockDatabase {
   }
 
   // --- MESEROS & ASIGNACIONES ---
+  getMeseros(isActive?: boolean): MeseroCatalogoItem[] {
+    const list =
+      isActive === undefined ? this.meseros : this.meseros.filter((m) => m.activo === isActive);
+    return clone(list);
+  }
+
   getAsignaciones(query?: ListarAsignacionesQueryDto): AsignacionDto[] {
     let list = this.asignaciones;
     if (query?.activo !== undefined) {

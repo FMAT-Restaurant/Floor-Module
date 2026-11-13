@@ -11,6 +11,39 @@ import {
 } from './utils';
 
 export const meserosHandlers = [
+  // GET /api/v1/staff (simulación de directorio de meseros en Auth)
+  http.get('*/api/v1/staff', ({ request }) => {
+    try {
+      const auth = validateAuthHeaders(request, ROLES_LECTURA_GENERAL);
+      if (!auth.ok) return auth.response;
+
+      const queryParams = extractQueryParams(request.url);
+      if (queryParams.role && queryParams.role !== 'MESERO') {
+        return HttpResponse.json([], { status: 200 });
+      }
+
+      const isActive =
+        queryParams.isActive === undefined ? undefined : queryParams.isActive === 'true';
+
+      const meseros = mockDb.getMeseros(isActive);
+      return HttpResponse.json(
+        meseros.map((mesero) => {
+          const [firstName, ...rest] = mesero.nombre.split(' ');
+          return {
+            id: mesero.meseroId,
+            firstName,
+            lastName: rest.join(' '),
+            roles: ['MESERO'],
+            isActive: mesero.activo,
+          };
+        }),
+        { status: 200 },
+      );
+    } catch (err) {
+      return handleMockError(err, 'Error al consultar meseros en Auth');
+    }
+  }),
+
   // PUT /sala/mesas/:mesaId/mesero
   http.put('*/sala/mesas/:mesaId/mesero', async ({ params, request }) => {
     try {

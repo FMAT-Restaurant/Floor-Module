@@ -12,6 +12,7 @@ import { Modal } from '../Modal';
 export interface AccionesMesaProps {
   readonly mesa: MesaEnVivoDto;
   readonly meserosCatalogo: readonly MeseroCatalogoItem[];
+  readonly meserosError?: string | null;
 }
 
 const secondaryClass =
@@ -25,7 +26,7 @@ function mutationError(error: unknown, action: string): string {
     : `${action}. Revisa tu conexión e inténtalo de nuevo.`;
 }
 
-export function AccionesMesa({ mesa, meserosCatalogo }: AccionesMesaProps) {
+export function AccionesMesa({ mesa, meserosCatalogo, meserosError = null }: AccionesMesaProps) {
   const { can } = useSalaAuth();
   const canUpdateStatus = can(PermisoSala.TABLES_UPDATE_STATUS);
   const canAssignWaiter = can(PermisoSala.TABLES_ASSIGN_WAITER);
@@ -207,8 +208,11 @@ export function AccionesMesa({ mesa, meserosCatalogo }: AccionesMesaProps) {
                   ))}
                 </select>
                 {meserosActivos.length === 0 && (
-                  <p className="text-sm text-muted mt-2">
-                    No hay meseros disponibles para asignar.
+                  <p
+                    role={meserosError ? 'alert' : undefined}
+                    className={`text-sm mt-2 ${meserosError ? 'text-amber-800' : 'text-muted'}`}
+                  >
+                    {meserosError ?? 'No hay meseros disponibles para asignar.'}
                   </p>
                 )}
               </div>
