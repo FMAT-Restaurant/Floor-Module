@@ -67,9 +67,14 @@ export class MesasRepository {
     return filas.map(aRegistro);
   }
 
-  async listarEnVivo(): Promise<MesaEnVivoRegistro[]> {
+  async listarEnVivo(meseroId?: string): Promise<MesaEnVivoRegistro[]> {
+    const where: Prisma.MesaWhereInput = { activo: true };
+    if (meseroId) {
+      where.asignaciones = { some: { meseroId, activo: true } };
+    }
+
     const filas = await this.prisma.mesa.findMany({
-      where: { activo: true },
+      where,
       orderBy: { numeroMesa: 'asc' },
       include: {
         asignaciones: { where: { activo: true }, select: { meseroId: true }, take: 1 },

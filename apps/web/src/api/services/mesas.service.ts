@@ -23,6 +23,10 @@ export async function getMesasEnVivo(): Promise<MesaEnVivoDto[]> {
   return apiClient.get<MesaEnVivoDto[]>('/mesas/estado-en-vivo');
 }
 
+export async function getMisMesas(): Promise<MesaEnVivoDto[]> {
+  return apiClient.get<MesaEnVivoDto[]>('/mesas/mias');
+}
+
 export async function getMesa(id: string): Promise<MesaDto> {
   return apiClient.get<MesaDto>(`/mesas/${id}`);
 }

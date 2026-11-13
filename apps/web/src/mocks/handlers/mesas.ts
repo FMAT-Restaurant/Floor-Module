@@ -55,6 +55,19 @@ export const mesasHandlers = [
     }
   }),
 
+  // GET /sala/mesas/mias
+  http.get('*/sala/mesas/mias', ({ request }) => {
+    try {
+      const auth = validateAuthHeaders(request, ROLES_LECTURA_GENERAL);
+      if (!auth.ok) return auth.response;
+
+      const misMesas = mockDb.getMisMesas(auth.auth.userId);
+      return HttpResponse.json(misMesas, { status: 200 });
+    } catch (err) {
+      return handleMockError(err, 'Error al consultar mis mesas asignadas');
+    }
+  }),
+
   // GET /sala/mesas/:mesaId
   http.get('*/sala/mesas/:mesaId', ({ params, request }) => {
     try {

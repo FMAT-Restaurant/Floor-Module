@@ -234,6 +234,49 @@
         }
       }
     },
+    "/sala/mesas/mias": {
+      "get": {
+        "tags": ["Mesas"],
+        "summary": "Consultar mis mesas asignadas",
+        "description": "Obtiene el estado en vivo de las mesas activas cuya asignación vigente pertenece al usuario autenticado (claim sub / cabecera X-User-Id).",
+        "operationId": "listarMisMesas",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/HeaderUserId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderStaffId"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderUserRoles"
+          },
+          {
+            "$ref": "#/components/parameters/HeaderPasswordTemporary"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Mesas activas asignadas al mesero autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MesaEnVivoDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
     "/sala/mesas/{mesaId}": {
       "get": {
         "tags": ["Mesas"],

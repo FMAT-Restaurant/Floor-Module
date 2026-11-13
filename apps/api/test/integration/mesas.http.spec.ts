@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import { EstadoMesa, Prisma, PrismaClient } from '@prisma/client';
 import { AppModule } from '../../src/app.module';
 import { configurarApp, PREFIJO_GLOBAL } from '../../src/app.setup';
+import { firmarJwtHs256, JWT_ISSUER } from '../../src/common/guards/identity.guard';
 import { Reloj } from '../../src/common/reloj/reloj';
 
 /**
@@ -442,6 +443,94 @@ describe('API /sala/mesas (BE-001)', () => {
       const { cuerpo } = await peticion<Json[]>('GET', `${RUTA}/estado-en-vivo`);
 
       expect(cuerpo.map((m) => m.numeroMesa)).toEqual([1]);
+    });
+  });
+
+  describe('GET /sala/mesas/mias (RF-004, RF-023, RN-08, RN-16)', () => {
+    const OTRO_MESERO_ID = 'b2000000-0000-4000-8000-000000000002';
+
+    it('devuelve solo las mesas activas con asignación vigente del usuario autenticado (JWT o Kong)', async () => {
+      const ocupadaDesde = new Date('2030-01-15T11:15:00.000Z');
+      const propiaOcupada = await crearMesaDb({
+        numeroMesa: 1,
+        estadoFisico: EstadoMesa.Ocupada,
+        ocupadaDesde,
+      });
+      const propiaLibreConReserva = await crearMesaDb({ numeroMesa: 2 });
+      const deOtroMesero = await crearMesaDb({ numeroMesa: 3, estadoFisico: EstadoMesa.Ocupada });
+      const asignacionCerrada = await crearMesaDb({ numeroMesa: 4 });
+      const inactivaPropia = await crearMesaDb({ numeroMesa: 5, activo: false });
+
+      await prisma.asignacionMesero.createMany({
+        data: [
+          {
+            mesaId: propiaOcupada.id,
+            meseroId: MESERO_ID,
+            fechaHoraInicio: ocupadaDesde,
+            activo: true,
+          },
+          {
+            mesaId: propiaLibreConReserva.id,
+            meseroId: MESERO_ID,
+            fechaHoraInicio: new Date('2030-01-15T10:00:00.000Z'),
+            activo: true,
+          },
+          {
+            mesaId: deOtroMesero.id,
+            meseroId: OTRO_MESERO_ID,
+            fechaHoraInicio: ocupadaDesde,
+            activo: true,
+          },
+          {
+            mesaId: asignacionCerrada.id,
+            meseroId: MESERO_ID,
+            fechaHoraInicio: new Date('2030-01-15T08:00:00.000Z'),
+            fechaHoraFin: new Date('2030-01-15T09:00:00.000Z'),
+            activo: false,
+          },
+          {
+            mesaId: inactivaPropia.id,
+            meseroId: MESERO_ID,
+            fechaHoraInicio: new Date('2030-01-15T09:00:00.000Z'),
+            activo: true,
+          },
+        ],
+      });
+      await insertarReserva(propiaLibreConReserva.id, 10);
+
+      const tokenMesero = firmarJwtHs256({
+        sub: MESERO_ID,
+        staffId: 'M000104',
+        roles: ['MESERO'],
+        permissions: ['sala:tables:view'],
+        iss: JWT_ISSUER,
+      });
+
+      const res = await fetch(`${baseUrl}${RUTA}/mias`, {
+        headers: {
+          Authorization: `Bearer ${tokenMesero}`,
+        },
+      });
+      const cuerpo = (await res.json()) as Json[];
+
+      expect(res.status).toBe(200);
+      expect(cuerpo).toHaveLength(2);
+      expect(cuerpo[0]).toMatchObject({
+        mesaId: propiaOcupada.id,
+        numeroMesa: 1,
+        estadoFisico: 'Ocupada',
+        ocupadaDesde: '2030-01-15T11:15:00.000Z',
+        meseroId: MESERO_ID,
+        tieneReservaProxima: false,
+      });
+      expect(cuerpo[1]).toMatchObject({
+        mesaId: propiaLibreConReserva.id,
+        numeroMesa: 2,
+        estadoFisico: 'Libre',
+        ocupadaDesde: null,
+        meseroId: MESERO_ID,
+        tieneReservaProxima: true,
+      });
     });
   });
 });

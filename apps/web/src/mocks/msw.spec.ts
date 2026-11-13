@@ -71,6 +71,16 @@ describe('MSW Integration: REST Endpoints and Realistic Mock Responses', () => {
       expect(data[0]).toHaveProperty('meseroId');
     });
 
+    it('GET /sala/mesas/mias returns only active tables assigned to the authenticated user', async () => {
+      const res = await fetch('http://localhost:3000/sala/mesas/mias', {
+        headers: createGatewayAuthHeaders(FIXTURE_AUTH_USERS.MESERO_ANA),
+      });
+      expect(res.status).toBe(200);
+      const data: MesaEnVivoDto[] = await res.json();
+      expect(data.length).toBeGreaterThan(0);
+      expect(data.every((m) => m.meseroId === FIXTURE_MESERO_IDS.ANA)).toBe(true);
+    });
+
     it('GET /sala/mesas/:mesaId returns specific table or 404', async () => {
       const resOk = await fetch(`http://localhost:3000/sala/mesas/${FIXTURE_MESA_IDS.MESA_1}`);
       expect(resOk.status).toBe(200);

@@ -24,6 +24,7 @@ import {
 } from '@floor/shared';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { PermisoSala, RequirePermissions } from '../../common/auth/auth.decorators';
+import { resolverMeseroId, UsuarioActual } from '../../common/decorators/usuario-actual.decorator';
 import { MesasService } from './mesas.service';
 
 const validarQuery = new ZodValidationPipe(listarMesasQuerySchema);
@@ -42,11 +43,17 @@ export class MesasController {
     return this.servicio.listar(query);
   }
 
-  // Debe declararse antes de ':mesaId', o "estado-en-vivo" se interpretaría como un id.
+  // Debe declararse antes de ':mesaId', o "estado-en-vivo" / "mias" se interpretarían como un id.
   @Get('estado-en-vivo')
   @RequirePermissions(PermisoSala.TABLES_VIEW)
   listarEnVivo(): Promise<MesaEnVivoDto[]> {
     return this.servicio.listarEnVivo();
+  }
+
+  @Get('mias')
+  @RequirePermissions(PermisoSala.TABLES_VIEW)
+  listarMias(@UsuarioActual() usuarioActual?: unknown): Promise<MesaEnVivoDto[]> {
+    return this.servicio.listarMias(resolverMeseroId(usuarioActual));
   }
 
   @Get(':mesaId')

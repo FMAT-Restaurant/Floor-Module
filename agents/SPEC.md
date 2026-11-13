@@ -50,7 +50,7 @@ El microservicio aplica **PBAC estricto** mediante `@RequirePermissions(PermisoS
 
 | Permiso (`PermisoSala`) | Capacidad |
 |---|---|
-| `sala:tables:view` | Consultar catálogo de mesas (`GET /mesas`, `/mesas/:id`, `/mesas/estado-en-vivo`, pestaña Plano) |
+| `sala:tables:view` | Consultar catálogo de mesas (`GET /mesas`, `/mesas/:id`, `/mesas/estado-en-vivo`, `/mesas/mias`, pestaña Plano) |
 | `sala:tables:create` | Crear mesa (`POST /mesas`, pestaña Configuración de mesas) |
 | `sala:tables:update` | Editar mesa (`PATCH /mesas/:id`, pestaña Configuración de mesas) |
 | `sala:tables:delete` | Dar de baja mesa (`DELETE /mesas/:id`, pestaña Configuración de mesas) |
@@ -253,6 +253,7 @@ stateDiagram-v2
 |---|---|---|---|---|
 | GET | `/sala/mesas` | query `zona?`, `estado?`, `incluirInactivas?=false` | 200 `MesaDto[]` | — |
 | GET | `/sala/mesas/estado-en-vivo` | — | 200 `MesaEnVivoDto[]` | — |
+| GET | `/sala/mesas/mias` | — (usa identidad `X-User-Id` / `sub` del token) | 200 `MesaEnVivoDto[]` | 401, 403 |
 | GET | `/sala/mesas/{mesaId}` | — | 200 `MesaDto` | 404 |
 | POST | `/sala/mesas` | `{ numeroMesa: number; capacidad: number; zona: string }` | 201 `MesaDto` | 400, 409 `NUMERO_MESA_DUPLICADO` |
 | PATCH | `/sala/mesas/{mesaId}` | `Partial<{ numeroMesa; capacidad; zona }>` | 200 `MesaDto` | 400, 404, 409 |

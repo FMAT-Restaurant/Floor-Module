@@ -662,6 +662,7 @@ describe('Zod Validation Schemas (SH-002)', () => {
       const expectedPaths = [
         '/sala/mesas',
         '/sala/mesas/estado-en-vivo',
+        '/sala/mesas/mias',
         '/sala/mesas/{mesaId}',
         '/sala/mesas/{mesaId}/ocupar',
         '/sala/mesas/{mesaId}/estado',

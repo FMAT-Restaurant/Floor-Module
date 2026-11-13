@@ -296,5 +296,37 @@ describe('MesasService', () => {
       });
       expect(libre).toMatchObject({ ocupadaDesde: null, meseroId: null });
     });
+
+    it('listarMias filtra mesas en vivo usando el UUID v4 del mesero autenticado', async () => {
+      const desde = new Date('2030-01-15T11:30:00.000Z');
+      repositorio.listarEnVivo.mockResolvedValue([
+        {
+          ...mesa({ estadoFisico: EstadoMesa.OCUPADA, ocupadaDesde: desde }),
+          meseroId: MESERO_ID,
+        },
+      ]);
+      repositorio.reservasConfirmadasEntre.mockResolvedValue([
+        { mesaId: MESA_ID, inicio: minutos(15) },
+      ]);
+
+      const resultado = await servicio.listarMias(`  ${MESERO_ID}  `);
+
+      expect(repositorio.listarEnVivo).toHaveBeenCalledWith(MESERO_ID);
+      expect(resultado).toHaveLength(1);
+      expect(resultado[0]).toMatchObject({
+        mesaId: MESA_ID,
+        meseroId: MESERO_ID,
+        ocupadaDesde: '2030-01-15T11:30:00.000Z',
+        tieneReservaProxima: true,
+      });
+    });
+
+    it('listarMias rechaza con 401 NO_AUTENTICADO si el meseroId no es un UUID v4 válido', async () => {
+      const error = await capturar(servicio.listarMias('mesero-invalido'));
+
+      expect(error.getStatus()).toBe(401);
+      expect(error.getResponse()).toMatchObject({ code: CODIGO_ERROR.NO_AUTENTICADO });
+      expect(repositorio.listarEnVivo).not.toHaveBeenCalled();
+    });
   });
 });

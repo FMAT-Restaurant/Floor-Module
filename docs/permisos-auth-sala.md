@@ -13,10 +13,11 @@ Listado de permisos requeridos por el módulo **Sala y Reservas** bajo el format
 
 ### `sala:tables:view`
 - **Etiqueta para UI:** Ver plano y mesas
-- **Descripción:** Consultar el catálogo de mesas, su detalle individual y el estado operativo en tiempo real del plano de sala.
+- **Descripción:** Consultar el catálogo de mesas, su detalle individual, el estado operativo en tiempo real del plano de sala y las mesas asignadas al mesero autenticado.
 - **Endpoint / elemento UI que protege:**
   - `GET /api/v1/floor/mesas`
   - `GET /api/v1/floor/mesas/estado-en-vivo`
+  - `GET /api/v1/floor/mesas/mias`
   - `GET /api/v1/floor/mesas/:mesaId`
   - WebSocket `/sala` (evento `mesa.estado_actualizado`)
   - UI: Pestaña `"Plano de sala"`, tarjetas de mesa (`MesaCard`), botón `"Ver mesa"` y vista de lectura de tabla en `"Configuración de mesas"`.
