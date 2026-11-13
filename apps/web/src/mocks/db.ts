@@ -167,6 +167,10 @@ export class MockDatabase {
     return clone(this.mesas.filter((m) => m.activo));
   }
 
+  getMisMesas(meseroId: string): MesaEnVivoDto[] {
+    return clone(this.mesas.filter((m) => m.activo && m.meseroId === meseroId));
+  }
+
   getMesa(mesaId: string): MesaDto {
     const found = this.mesas.find((m) => m.mesaId === mesaId);
     if (!found) {

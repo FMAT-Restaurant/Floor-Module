@@ -8,6 +8,7 @@ import {
   getMesa,
   getMesas,
   getMesasEnVivo,
+  getMisMesas,
   ocuparMesa,
 } from './services/mesas.service';
 import {
@@ -282,6 +283,12 @@ describe('API Client Unit Tests & Error Handling', () => {
         const enVivo = await getMesasEnVivo();
         expect(Array.isArray(enVivo)).toBe(true);
         expect(enVivo[0]).toHaveProperty('tieneReservaProxima');
+      });
+
+      it('getMisMesas fetches live tables assigned to the authenticated user', async () => {
+        const mias = await getMisMesas();
+        expect(Array.isArray(mias)).toBe(true);
+        expect(mias.every((m) => m.meseroId === FIXTURE_MESERO_IDS.CARLOS)).toBe(true);
       });
 
       it('getMesa fetches a single table by ID', async () => {

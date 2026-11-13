@@ -58,6 +58,11 @@ describe('Integración HTTP BE-011: IdentityGuard, PermissionsGuard, Correlation
       .mockResolvedValue([
         { ...MESA_MOCK, tieneReservaProxima: false, ocupadaDesde: null, meseroId: null },
       ]),
+    listarMias: jest
+      .fn()
+      .mockResolvedValue([
+        { ...MESA_MOCK, tieneReservaProxima: false, ocupadaDesde: null, meseroId: MESERO_ID },
+      ]),
     obtener: jest.fn().mockResolvedValue(MESA_MOCK),
     crear: jest.fn().mockResolvedValue(MESA_MOCK),
     actualizar: jest.fn().mockResolvedValue(MESA_MOCK),
@@ -376,6 +381,27 @@ describe('Integración HTTP BE-011: IdentityGuard, PermissionsGuard, Correlation
       expect(resDetalle.status).toBe(200);
       expect(resEstado.status).toBe(200);
       expect(resAsignaciones.status).toBe(200);
+    });
+
+    it('GET /mesas/mias exige sala:tables:view y propaga la identidad autenticada sin confundir con :mesaId', async () => {
+      const resSinPermiso = await fetch(`${baseUrl}/${PREFIJO_GLOBAL}/mesas/mias`, {
+        headers: {
+          'X-User-Id': MESERO_ID,
+          'X-User-Roles': 'MESERO',
+          'X-User-Permissions': 'orders:orders:view',
+        },
+      });
+      expect(resSinPermiso.status).toBe(403);
+
+      const resConPermiso = await fetch(`${baseUrl}/${PREFIJO_GLOBAL}/mesas/mias`, {
+        headers: {
+          'X-User-Id': MESERO_ID,
+          'X-User-Roles': 'MESERO',
+          'X-User-Permissions': 'sala:tables:view',
+        },
+      });
+      expect(resConPermiso.status).toBe(200);
+      expect(mesasServiceMock.listarMias).toHaveBeenCalledWith(MESERO_ID);
     });
   });
 

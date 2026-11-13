@@ -61,6 +61,7 @@ describe('BE-011 · Integración Seguridad, Correlación y Health Check', () => 
       .useValue({
         listar: jest.fn().mockResolvedValue([MESA_MOCK]),
         listarEnVivo: jest.fn().mockResolvedValue([]),
+        listarMias: jest.fn().mockResolvedValue([]),
         obtener: jest.fn().mockResolvedValue(MESA_MOCK),
         crear: jest.fn().mockResolvedValue(MESA_MOCK),
         actualizar: jest.fn().mockResolvedValue(MESA_MOCK),

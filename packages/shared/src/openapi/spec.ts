@@ -184,6 +184,23 @@ export const openApiSpec = {
         },
       },
     },
+    '/sala/mesas/mias': {
+      get: {
+        tags: ['Mesas'],
+        summary: 'Consultar mis mesas asignadas',
+        description:
+          'Obtiene el estado en vivo de las mesas activas cuya asignación vigente pertenece al usuario autenticado (claim sub / cabecera X-User-Id).',
+        operationId: 'listarMisMesas',
+        parameters: [...gatewayAuthHeaderRefs],
+        responses: {
+          '200': jsonArrayResponse(
+            '#/components/schemas/MesaEnVivoDto',
+            'Mesas activas asignadas al mesero autenticado',
+          ),
+          ...authResponses,
+        },
+      },
+    },
     '/sala/mesas/{mesaId}': {
       get: {
         tags: ['Mesas'],

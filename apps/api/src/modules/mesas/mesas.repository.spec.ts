@@ -401,4 +401,35 @@ describe('MesasRepository.transicionarEstado y ocuparMesa (RN-01, RN-04, RN-06, 
     const repoSinQueryRaw = new MesasRepository({} as unknown as PrismaService);
     expect(await repoSinQueryRaw.maxPersonasReservaConfirmadaFutura(MESA_ID, ahora)).toBe(0);
   });
+
+  it('listarEnVivo filtra por meseroId con asignación activa cuando se especifica (GET /mesas/mias)', async () => {
+    const filaMesa = {
+      id: MESA_ID,
+      numeroMesa: 3,
+      capacidad: 4,
+      zona: 'Terraza',
+      estadoFisico: EstadoMesaPrisma.Ocupada,
+      unionMesaId: null,
+      activo: true,
+      ocupadaDesde: new Date('2030-01-15T11:30:00.000Z'),
+      asignaciones: [{ meseroId: MESERO_ID }],
+    };
+    const findMany = jest.fn().mockResolvedValue([filaMesa]);
+    const repo = new MesasRepository({ mesa: { findMany } } as unknown as PrismaService);
+
+    const resultado = await repo.listarEnVivo(MESERO_ID);
+
+    expect(findMany).toHaveBeenCalledWith({
+      where: {
+        activo: true,
+        asignaciones: { some: { meseroId: MESERO_ID, activo: true } },
+      },
+      orderBy: { numeroMesa: 'asc' },
+      include: {
+        asignaciones: { where: { activo: true }, select: { meseroId: true }, take: 1 },
+      },
+    });
+    expect(resultado).toHaveLength(1);
+    expect(resultado[0]?.meseroId).toBe(MESERO_ID);
+  });
 });

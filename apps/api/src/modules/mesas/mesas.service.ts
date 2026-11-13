@@ -8,6 +8,7 @@ import {
   type MesaDto,
   type MesaEnVivoDto,
 } from '@floor/shared';
+import { esUuidV4Valido } from '../../common/auth/jwt-hs256.util';
 import { CODIGO_ERROR } from '../../common/errors/codigos-error';
 import { DomainException } from '../../common/errors/domain.exception';
 import { Reloj, obtenerAhoraRestaurante } from '../../common/reloj/reloj';
@@ -46,10 +47,26 @@ export class MesasService {
 
   /** RF-023 · RN-08: todas las mesas activas con su estado en vivo. */
   async listarEnVivo(): Promise<MesaEnVivoDto[]> {
+    return this.obtenerMesasEnVivo();
+  }
+
+  /** RF-023 · RN-08 · RN-16: mesas activas asignadas actualmente al usuario autenticado. */
+  async listarMias(meseroId: string): Promise<MesaEnVivoDto[]> {
+    if (!esUuidV4Valido(meseroId)) {
+      throw new DomainException(
+        HttpStatus.UNAUTHORIZED,
+        CODIGO_ERROR.NO_AUTENTICADO,
+        'No se encontró identidad verificada del usuario para consultar sus mesas',
+      );
+    }
+    return this.obtenerMesasEnVivo(meseroId.trim());
+  }
+
+  private async obtenerMesasEnVivo(meseroId?: string): Promise<MesaEnVivoDto[]> {
     const ahora = obtenerAhoraRestaurante(this.reloj);
     const hasta = new Date(ahora.getTime() + this.ventanaMinutos * MS_POR_MINUTO);
     const [mesas, reservas] = await Promise.all([
-      this.repositorio.listarEnVivo(),
+      this.repositorio.listarEnVivo(meseroId),
       this.repositorio.reservasConfirmadasEntre(ahora, hasta),
     ]);
     const reservasPorMesa = agruparPorMesa(reservas);
