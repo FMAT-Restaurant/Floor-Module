@@ -1,8 +1,11 @@
 import { describe, expect, it, afterEach, vi } from 'vitest';
 import {
+  getAuthBaseUrl,
   getBaseUrl,
   getSessionToken,
+  resolveGatewayAuthBaseUrl,
   resolveGatewayBaseUrl,
+  setAuthBaseUrl,
   setBaseUrl,
   setFederatedToken,
 } from '../api/client';
@@ -28,6 +31,7 @@ describe('auth permissions helpers', () => {
     window.localStorage.clear();
     setFederatedToken(null);
     setBaseUrl(null);
+    setAuthBaseUrl(null);
     vi.unstubAllEnvs();
   });
 
@@ -146,14 +150,17 @@ describe('auth permissions helpers', () => {
 
   it('defaults REST base URL to Kong Gateway and WS URL to backend port 8085 in non-test mode', () => {
     vi.stubEnv('VITE_API_BASE_URL', '');
+    vi.stubEnv('VITE_AUTH_API_BASE_URL', '');
     vi.stubEnv('VITE_WS_URL', '');
     vi.stubEnv('VITE_USE_MOCKS', '');
 
     expect(getBaseUrl()).toBe('/sala');
+    expect(getAuthBaseUrl()).toBe('/api/v1');
     expect(getSalaSocketUrl()).toBe(`${window.location.origin}/sala`);
 
     vi.stubEnv('MODE', 'production');
     expect(getBaseUrl()).toBe('http://localhost:8000/api/v1/floor');
+    expect(getAuthBaseUrl()).toBe('http://localhost:8000/api/v1');
     expect(getSalaSocketUrl()).toBe('http://localhost:8085/sala');
     expect(resolveRemoteWsOrigin('http://192.168.1.50:5174/assets/remoteEntry.js')).toBe(
       'http://192.168.1.50:8085',
@@ -162,5 +169,14 @@ describe('auth permissions helpers', () => {
     expect(resolveGatewayBaseUrl({ protocol: 'http:', hostname: '192.168.1.25' })).toBe(
       'http://192.168.1.25:8000/api/v1/floor',
     );
+    expect(resolveGatewayAuthBaseUrl({ protocol: 'https:', hostname: '192.168.1.25' })).toBe(
+      'https://192.168.1.25:8000/api/v1',
+    );
+
+    vi.stubEnv('VITE_API_BASE_URL', 'https://gw.example.com/api/v1/floor/');
+    expect(getAuthBaseUrl()).toBe('https://gw.example.com/api/v1');
+
+    vi.stubEnv('VITE_AUTH_API_BASE_URL', 'https://auth.example.com/api/v1');
+    expect(getAuthBaseUrl()).toBe('https://auth.example.com/api/v1');
   });
 });

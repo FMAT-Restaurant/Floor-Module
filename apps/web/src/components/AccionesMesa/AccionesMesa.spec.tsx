@@ -243,6 +243,18 @@ describe('FE-005 · AccionesMesa', () => {
     expect(screen.getByText('No hay meseros disponibles para asignar.')).toBeInTheDocument();
   });
 
+  it('muestra el mensaje de error de Auth cuando el catálogo llega vacío por error', () => {
+    renderActions(FIXTURE_MESA_IDS.MESA_1, {
+      meserosCatalogo: [],
+      meserosError:
+        'Tu rol aún no tiene acceso al directorio de meseros en Auth (GET /api/v1/staff).',
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Asignar mesero' }));
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Tu rol aún no tiene acceso al directorio de meseros en Auth (GET /api/v1/staff).',
+    );
+  });
+
   it('impide cambios sobre mesas inactivas', () => {
     renderActions(FIXTURE_MESA_IDS.MESA_4, {
       mesa: { ...mockDb.getMesaEnVivo(FIXTURE_MESA_IDS.MESA_4), activo: false },

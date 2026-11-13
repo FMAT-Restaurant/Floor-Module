@@ -81,6 +81,31 @@ describe('MSW Integration: REST Endpoints and Realistic Mock Responses', () => {
       expect(data.every((m) => m.meseroId === FIXTURE_MESERO_IDS.ANA)).toBe(true);
     });
 
+    it('GET /api/v1/staff filters waiters from Auth mock and enforces read permissions', async () => {
+      const resOk = await fetch('http://localhost:3000/api/v1/staff?role=MESERO&isActive=true');
+      expect(resOk.status).toBe(200);
+      const staff = (await resOk.json()) as Array<{
+        id: string;
+        roles: string[];
+        isActive: boolean;
+      }>;
+      expect(staff.length).toBeGreaterThan(0);
+      expect(staff.every((item) => item.roles.includes('MESERO') && item.isActive)).toBe(true);
+
+      const resOtherRole = await fetch('http://localhost:3000/api/v1/staff?role=HOST');
+      expect(resOtherRole.status).toBe(200);
+      expect(await resOtherRole.json()).toEqual([]);
+
+      const resForbidden = await fetch('http://localhost:3000/api/v1/staff?role=MESERO', {
+        headers: {
+          'x-user-id': FIXTURE_MESERO_IDS.CARLOS,
+          'x-staff-id': 'C000001',
+          'x-user-roles': 'CUSTOMER',
+        },
+      });
+      expect(resForbidden.status).toBe(403);
+    });
+
     it('GET /sala/mesas/:mesaId returns specific table or 404', async () => {
       const resOk = await fetch(`http://localhost:3000/sala/mesas/${FIXTURE_MESA_IDS.MESA_1}`);
       expect(resOk.status).toBe(200);
