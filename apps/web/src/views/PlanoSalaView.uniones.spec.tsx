@@ -71,6 +71,7 @@ describe('PlanoSalaView · FE-009 uniones de mesas', () => {
     expect(within(panel).getByTestId('aforo-total')).toHaveTextContent('6 personas');
     expect(unir).toBeDisabled(); // aún falta el mesero
 
+    await within(panel).findByRole('option', { name: 'Ana Martínez' });
     fireEvent.change(within(panel).getByLabelText('Mesero responsable'), {
       target: { value: FIXTURE_MESERO_IDS.ANA },
     });
@@ -84,6 +85,7 @@ describe('PlanoSalaView · FE-009 uniones de mesas', () => {
     fireEvent.click(cardButton(1));
     fireEvent.click(cardButton(2));
     const panel = screen.getByRole('region', { name: 'Unión de mesas' });
+    await within(panel).findByRole('option', { name: 'Ana Martínez' });
     fireEvent.change(within(panel).getByLabelText('Mesero responsable'), {
       target: { value: FIXTURE_MESERO_IDS.ANA },
     });
@@ -116,6 +118,7 @@ describe('PlanoSalaView · FE-009 uniones de mesas', () => {
     fireEvent.click(cardButton(1));
     fireEvent.click(cardButton(2));
     const panel = screen.getByRole('region', { name: 'Unión de mesas' });
+    await within(panel).findByRole('option', { name: 'Ana Martínez' });
     fireEvent.change(within(panel).getByLabelText('Mesero responsable'), {
       target: { value: FIXTURE_MESERO_IDS.ANA },
     });
@@ -156,6 +159,7 @@ describe('PlanoSalaView · FE-009 uniones de mesas', () => {
     fireEvent.click(cardButton(1));
     fireEvent.click(cardButton(2));
     const panel = screen.getByRole('region', { name: 'Unión de mesas' });
+    await within(panel).findByRole('option', { name: 'Ana Martínez' });
     fireEvent.change(within(panel).getByLabelText('Mesero responsable'), {
       target: { value: FIXTURE_MESERO_IDS.ANA },
     });
@@ -212,6 +216,24 @@ describe('PlanoSalaView · FE-009 uniones de mesas', () => {
     expect(screen.queryByRole('region', { name: 'Unión de mesas' })).not.toBeInTheDocument();
     expect(
       within(screen.getByTestId('mesa-card-1')).getByRole('button', { name: 'Ver mesa' }),
+    ).toBeInTheDocument();
+  });
+
+  it('muestra aviso en panel de unión si el directorio de Auth no está disponible', async () => {
+    server.use(
+      http.get('*/api/v1/staff', () =>
+        HttpResponse.json({ statusCode: 403, message: 'Forbidden' }, { status: 403 }),
+      ),
+    );
+    renderPlano();
+    await entrarModoUnion();
+
+    const panel = screen.getByRole('region', { name: 'Unión de mesas' });
+    expect(within(panel).getByLabelText('Mesero responsable')).toBeDisabled();
+    expect(
+      await within(panel).findByText(
+        'Tu rol aún no tiene acceso al directorio de meseros en Auth (GET /api/v1/staff).',
+      ),
     ).toBeInTheDocument();
   });
 });

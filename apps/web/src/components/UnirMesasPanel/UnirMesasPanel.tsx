@@ -10,6 +10,7 @@ import { calcularAforoTotal, formatListaMesas } from '../../lib/uniones';
 export interface UnirMesasPanelProps {
   readonly mesas: readonly MesaEnVivoDto[];
   readonly meserosCatalogo: readonly MeseroCatalogoItem[];
+  readonly meserosError?: string | null;
   readonly onCancel: () => void;
   readonly onSuccess: (response: CrearUnionResponseDto, mesas: readonly MesaEnVivoDto[]) => void;
 }
@@ -66,6 +67,7 @@ function traducirError(error: unknown): PanelError {
 export function UnirMesasPanel({
   mesas,
   meserosCatalogo,
+  meserosError = null,
   onCancel,
   onSuccess,
 }: Readonly<UnirMesasPanelProps>): React.JSX.Element {
@@ -168,6 +170,14 @@ export function UnirMesasPanel({
               </option>
             ))}
           </select>
+          {meserosActivos.length === 0 && (
+            <p
+              role={meserosError ? 'alert' : undefined}
+              className={`text-xs mt-1 ${meserosError ? 'text-amber-800' : 'text-muted'}`}
+            >
+              {meserosError ?? 'No hay meseros disponibles para asignar.'}
+            </p>
+          )}
         </div>
         <div>
           <label htmlFor={comensalesFieldId} className="block text-sm font-medium text-text mb-1">

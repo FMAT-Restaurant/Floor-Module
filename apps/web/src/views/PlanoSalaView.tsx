@@ -3,12 +3,13 @@ import { useQuery } from '@tanstack/react-query';
 import { AlertCircle, LayoutGrid, Link2, RotateCcw, CheckCircle2, X } from 'lucide-react';
 import {
   EstadoMesa,
-  fixtureMeserosCatalogo,
   type MesaEnVivoDto,
   type MeseroCatalogoItem,
   type OcuparMesaResponseDto,
 } from '@floor/shared';
 import { getMesasEnVivo } from '../api/services/mesas.service';
+import { getMeserosCatalogo } from '../api/services/staff.service';
+import { isApiError } from '../api/error';
 import { queryKeys } from '../api/queryKeys';
 import { PermisoSala } from '../auth/permissions';
 import { useSalaAuth } from '../context/SalaAuthContext';
@@ -39,14 +40,18 @@ export function PlanoSalaView({
   onSelectMesa,
   onAccionMesa,
   selectedMesaId,
-  meserosCatalogo = fixtureMeserosCatalogo,
+  meserosCatalogo,
 }: PlanoSalaViewProps): React.JSX.Element {
   const { can } = useSalaAuth();
   const canViewTables = can(PermisoSala.TABLES_VIEW);
   const canOccupy = can(PermisoSala.TABLES_OCCUPY);
+  const canAssignWaiter = can(PermisoSala.TABLES_ASSIGN_WAITER);
   const canViewUnions = can(PermisoSala.TABLE_UNIONS_VIEW);
   const canCreateUnion = can(PermisoSala.TABLE_UNIONS_CREATE);
   const canReleaseUnion = can(PermisoSala.TABLE_UNIONS_RELEASE);
+  const shouldFetchMeseros =
+    meserosCatalogo === undefined &&
+    (canViewTables || canOccupy || canAssignWaiter || canCreateUnion);
 
   const [selectedZona, setSelectedZona] = useState<string>('Todas');
   const [localSelectedMesaId, setLocalSelectedMesaId] = useState<string | null>(null);
@@ -73,6 +78,25 @@ export function PlanoSalaView({
     queryFn: () => getMesasEnVivo(),
     enabled: canViewTables,
   });
+
+  const meserosQuery = useQuery({
+    queryKey: queryKeys.staff.meseros(),
+    queryFn: () => getMeserosCatalogo(),
+    enabled: shouldFetchMeseros,
+    staleTime: 60_000,
+  });
+
+  const catalogoMeseros = meserosCatalogo ?? meserosQuery.data ?? [];
+
+  const meserosError = useMemo(() => {
+    if (!shouldFetchMeseros || !meserosQuery.isError) {
+      return null;
+    }
+    if (isApiError(meserosQuery.error) && meserosQuery.error.statusCode === 403) {
+      return 'Tu rol aún no tiene acceso al directorio de meseros en Auth (GET /api/v1/staff).';
+    }
+    return 'No se pudo cargar la lista de meseros desde Auth.';
+  }, [shouldFetchMeseros, meserosQuery.isError, meserosQuery.error]);
 
   const metricas = useMemo(() => {
     const total = mesas.length;
@@ -399,10 +423,14 @@ export function PlanoSalaView({
                 onAccion={handleAccionMesa}
                 mesasUnidas={canViewUnions ? mesasUnidas : undefined}
                 showUnionBadge={canViewUnions}
-                meseroNombre={meserosCatalogo.find((m) => m.meseroId === mesa.meseroId)?.nombre}
+                meseroNombre={catalogoMeseros.find((m) => m.meseroId === mesa.meseroId)?.nombre}
                 acciones={
                   <>
-                    <AccionesMesa mesa={mesa} meserosCatalogo={meserosCatalogo} />
+                    <AccionesMesa
+                      mesa={mesa}
+                      meserosCatalogo={catalogoMeseros}
+                      meserosError={meserosError}
+                    />
                     {mesa.unionId && canReleaseUnion && (
                       <button
                         type="button"
@@ -429,7 +457,8 @@ export function PlanoSalaView({
       {modoUnion && canCreateUnion && (
         <UnirMesasPanel
           mesas={mesasSeleccionadas}
-          meserosCatalogo={meserosCatalogo}
+          meserosCatalogo={catalogoMeseros}
+          meserosError={meserosError}
           onCancel={salirModoUnion}
           onSuccess={handleUnionSuccess}
         />
@@ -451,7 +480,8 @@ export function PlanoSalaView({
         isOpen={Boolean(mesaParaOcupar) && canOccupy}
         onClose={() => setMesaParaOcupar(null)}
         onSuccess={handleOcupacionSuccess}
-        meserosCatalogo={meserosCatalogo}
+        meserosCatalogo={catalogoMeseros}
+        meserosError={meserosError}
       />
 
       {/* Toast informativo de éxito */}

@@ -3,17 +3,24 @@ import { ApiError } from './error';
 export interface RequestOptions extends Omit<RequestInit, 'body' | 'method'> {
   params?: Record<string, unknown> | URLSearchParams;
   token?: string | null;
+  baseUrl?: string;
 }
 
 let customBaseUrl: string | null = null;
+let customAuthBaseUrl: string | null = null;
 let inMemoryToken: string | null = null;
 
 export function setBaseUrl(url: string | null): void {
   customBaseUrl = url;
 }
 
+export function setAuthBaseUrl(url: string | null): void {
+  customAuthBaseUrl = url;
+}
+
 export const AUTH_SESSION_STORAGE_KEY = 'fmat_restaurant_auth_session';
 const GATEWAY_DEFAULT_BASE_URL = 'http://localhost:8000/api/v1/floor';
+const GATEWAY_DEFAULT_AUTH_BASE_URL = 'http://localhost:8000/api/v1';
 
 let federatedToken: string | null = null;
 
@@ -41,17 +48,35 @@ function getDevFallbackToken(): string | null {
   return import.meta.env.MODE !== 'test' ? import.meta.env.VITE_DEV_AUTH_TOKEN || null : null;
 }
 
-export function resolveGatewayBaseUrl(
+function resolveGatewayOrigin(
   loc: Pick<Location, 'protocol' | 'hostname'> | undefined = typeof window !== 'undefined'
     ? window.location
     : undefined,
-): string {
+): string | null {
   if (loc?.hostname) {
     const protocolo =
       loc.protocol === 'https:' || loc.protocol === 'http:' ? loc.protocol : 'http:';
-    return `${protocolo}//${loc.hostname}:8000/api/v1/floor`;
+    return `${protocolo}//${loc.hostname}:8000`;
   }
-  return GATEWAY_DEFAULT_BASE_URL;
+  return null;
+}
+
+export function resolveGatewayBaseUrl(loc?: Pick<Location, 'protocol' | 'hostname'>): string {
+  const origin = resolveGatewayOrigin(loc);
+  return origin ? `${origin}/api/v1/floor` : GATEWAY_DEFAULT_BASE_URL;
+}
+
+export function resolveGatewayAuthBaseUrl(loc?: Pick<Location, 'protocol' | 'hostname'>): string {
+  const origin = resolveGatewayOrigin(loc);
+  return origin ? `${origin}/api/v1` : GATEWAY_DEFAULT_AUTH_BASE_URL;
+}
+
+function deriveAuthBaseFromFloorUrl(floorUrl: string): string | null {
+  const cleaned = stripTrailingSlashes(floorUrl);
+  if (cleaned.endsWith('/api/v1/floor')) {
+    return cleaned.slice(0, -'/floor'.length);
+  }
+  return null;
 }
 
 export function getBaseUrl(): string {
@@ -65,6 +90,25 @@ export function getBaseUrl(): string {
     return '/sala';
   }
   return resolveGatewayBaseUrl();
+}
+
+export function getAuthBaseUrl(): string {
+  if (customAuthBaseUrl !== null) {
+    return customAuthBaseUrl;
+  }
+  if (import.meta.env.VITE_AUTH_API_BASE_URL) {
+    return import.meta.env.VITE_AUTH_API_BASE_URL;
+  }
+  if (import.meta.env.VITE_API_BASE_URL) {
+    const derived = deriveAuthBaseFromFloorUrl(import.meta.env.VITE_API_BASE_URL);
+    if (derived) {
+      return derived;
+    }
+  }
+  if (import.meta.env.MODE === 'test' || import.meta.env.VITE_USE_MOCKS === 'true') {
+    return '/api/v1';
+  }
+  return resolveGatewayAuthBaseUrl();
 }
 
 export function getSessionToken(): string | null {
@@ -189,10 +233,25 @@ function appendQueryParams(
   return `${url}${separator}${queryString}`;
 }
 
-export function buildUrl(path: string, params?: Record<string, unknown> | URLSearchParams): string {
-  const base = stripTrailingSlashes(getBaseUrl());
+function buildUrlWithBase(
+  path: string,
+  baseUrl: string,
+  params?: Record<string, unknown> | URLSearchParams,
+): string {
+  const base = stripTrailingSlashes(baseUrl);
   const fullPath = resolveFullPath(path, base);
   return appendQueryParams(fullPath, params);
+}
+
+export function buildUrl(path: string, params?: Record<string, unknown> | URLSearchParams): string {
+  return buildUrlWithBase(path, getBaseUrl(), params);
+}
+
+export function buildAuthUrl(
+  path: string,
+  params?: Record<string, unknown> | URLSearchParams,
+): string {
+  return buildUrlWithBase(path, getAuthBaseUrl(), params);
 }
 
 function createRequestHeaders(options: RequestOptions, hasBody: boolean): Headers {
@@ -271,8 +330,8 @@ async function request<T>(
   body?: unknown,
   options: RequestOptions = {},
 ): Promise<T> {
-  const { params, token: _token, headers: _headers, ...fetchInit } = options;
-  const url = buildUrl(path, params);
+  const { params, token: _token, headers: _headers, baseUrl, ...fetchInit } = options;
+  const url = buildUrlWithBase(path, baseUrl ?? getBaseUrl(), params);
   const headers = createRequestHeaders(options, body !== undefined);
   const serializedBody = serializeBody(body);
 

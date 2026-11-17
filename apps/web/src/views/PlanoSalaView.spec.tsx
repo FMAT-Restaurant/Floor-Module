@@ -58,7 +58,7 @@ describe('PlanoSalaView Component', () => {
       </QueryClientProvider>,
     );
     const card = await screen.findByTestId('mesa-card-3');
-    expect(within(card).getByText('Carlos Gómez')).toBeInTheDocument();
+    expect(await within(card).findByText('Carlos Gómez')).toBeInTheDocument();
     fireEvent.click(within(card).getByRole('button', { name: 'Reasignar mesero' }));
     fireEvent.change(screen.getByLabelText('Mesero responsable'), {
       target: { value: FIXTURE_MESERO_IDS.ANA },
@@ -240,6 +240,7 @@ describe('PlanoSalaView Component', () => {
 
     // Seleccionamos mesero
     const selectMesero = screen.getByLabelText(/mesero responsable/i);
+    await within(selectMesero).findByRole('option', { name: 'Carlos Gómez' });
     fireEvent.change(selectMesero, {
       target: { value: 'd1000000-0000-4000-8000-000000000001' },
     });
@@ -252,5 +253,86 @@ describe('PlanoSalaView Component', () => {
     expect(await screen.findByTestId('toast-ocupacion-exitosa')).toBeInTheDocument();
     expect(screen.getByText('Mesa 1 ocupada exitosamente.')).toBeInTheDocument();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('uses real Auth staff directory waiters in cards and assignment modal', async () => {
+    const customMeseroId = '99999999-9999-4999-8999-999999999999';
+    server.use(
+      http.get('*/api/v1/staff', () =>
+        HttpResponse.json([
+          {
+            id: customMeseroId,
+            staffId: 'M000999',
+            firstName: 'Lucía',
+            lastName: 'Fernández',
+            roles: ['MESERO'],
+            isActive: true,
+          },
+        ]),
+      ),
+      http.get('*/sala/mesas/estado-en-vivo', () =>
+        HttpResponse.json(
+          mockDb
+            .getMesasEnVivo()
+            .map((mesa) => (mesa.numeroMesa === 3 ? { ...mesa, meseroId: customMeseroId } : mesa)),
+        ),
+      ),
+    );
+
+    render(
+      <QueryClientProvider client={createTestQueryClient()}>
+        <PlanoSalaView />
+      </QueryClientProvider>,
+    );
+
+    const card3 = await screen.findByTestId('mesa-card-3');
+    expect(await within(card3).findByText('Lucía Fernández')).toBeInTheDocument();
+
+    fireEvent.click(await screen.findByLabelText('Mesa 1'));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Lucía Fernández' })).toHaveValue(customMeseroId);
+  });
+
+  it('keeps floor plan usable and explains 403/error if Auth /staff directory cannot be loaded', async () => {
+    server.use(
+      http.get('*/api/v1/staff', () =>
+        HttpResponse.json({ statusCode: 403, message: 'Forbidden resource' }, { status: 403 }),
+      ),
+    );
+
+    render(
+      <QueryClientProvider client={createTestQueryClient()}>
+        <PlanoSalaView />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(await screen.findByLabelText('Mesa 1'));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        'Tu rol aún no tiene acceso al directorio de meseros en Auth (GET /api/v1/staff).',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Carlos Gómez' })).not.toBeInTheDocument();
+  });
+
+  it('displays generic error notice in modal when Auth /staff directory fails with 500', async () => {
+    server.use(
+      http.get('*/api/v1/staff', () =>
+        HttpResponse.json({ statusCode: 500, message: 'Internal error' }, { status: 500 }),
+      ),
+    );
+
+    render(
+      <QueryClientProvider client={createTestQueryClient()}>
+        <PlanoSalaView />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(await screen.findByLabelText('Mesa 1'));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(
+      await screen.findByText('No se pudo cargar la lista de meseros desde Auth.'),
+    ).toBeInTheDocument();
   });
 });
